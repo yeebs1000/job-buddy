@@ -29,6 +29,7 @@
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "latest",
     "typescript": "latest",
     "vite": "latest",
