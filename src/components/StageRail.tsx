@@ -39,12 +39,19 @@ export function StageRail({ stage, outcome, rejectedAtStage, compact = false }: 
               : item === stage
                 ? "current"
                 : "upcoming";
+          const status = state === "rejected-at" ? `Rejected at ${labels[item]}` : {
+            complete: "Completed",
+            current: "Current stage",
+            upcoming: "Upcoming",
+            rejected: "Rejected",
+          }[state];
 
           return (
             <li data-state={state} key={item} style={{ "--stage-color": `var(--stage-${index + 1})` } as React.CSSProperties}>
               <span aria-hidden="true" className="stage-rail__mark" />
-              <span aria-current={item === stage ? "step" : undefined} className="stage-rail__label">
+              <span aria-current={!rejected && item === stage ? "step" : undefined} className="stage-rail__label">
                 {labels[item]}
+                <span className="sr-only">, {status}</span>
               </span>
             </li>
           );
