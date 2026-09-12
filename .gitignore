@@ -1,6 +1,7 @@
 # Local design sessions and scratch work
 .superpowers/
 work/
+.worktrees/
 
 # Dependencies and builds
 node_modules/
@@ -24,4 +25,3 @@ exports/
 .idea/
 .DS_Store
 Thumbs.db
-
