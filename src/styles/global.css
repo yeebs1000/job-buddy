@@ -1,0 +1,12 @@
+@import "./tokens.css";
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+}
+
+:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
