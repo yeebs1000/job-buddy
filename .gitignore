@@ -1,0 +1,27 @@
+# Local design sessions and scratch work
+.superpowers/
+work/
+
+# Dependencies and builds
+node_modules/
+dist/
+coverage/
+
+# Local databases, imports, and exports
+*.sqlite
+*.sqlite3
+*.db
+local-data/
+exports/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
