@@ -23,7 +23,7 @@ export interface ApplicationState {
   outcome: ApplicationOutcome | null;
 }
 
-function compareEvents(left: StageEvent, right: StageEvent): number {
+export function compareStageEvents(left: StageEvent, right: StageEvent): number {
   const leftTime = Date.parse(left.at);
   const rightTime = Date.parse(right.at);
   const leftInvalid = Number.isNaN(leftTime);
@@ -40,7 +40,7 @@ export function deriveApplicationState(events: StageEvent[]): ApplicationState {
   let stage: ApplicationStage | null = null;
   let outcome: ApplicationOutcome | null = null;
 
-  for (const event of events.filter((event) => event.accepted).sort(compareEvents)) {
+  for (const event of events.filter((event) => event.accepted).sort(compareStageEvents)) {
     if (outcome) break;
     if (event.toStage) stage = event.toStage;
     if (event.outcome) outcome = event.outcome;

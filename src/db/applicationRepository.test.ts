@@ -27,9 +27,14 @@ describe("applicationRepository", () => {
   it("updates application fields without allowing lifecycle history to be patched", async () => {
     await applicationRepository.create(sampleApplications[0]);
 
-    await applicationRepository.update(sampleApplications[0].id, { company: "Updated Aurora" });
+    await (applicationRepository.update as (id: string, patch: unknown) => Promise<unknown>)(sampleApplications[0].id, {
+      company: "Updated Aurora", stage: "offer", outcome: "hired", stageEvents: [],
+    });
 
-    expect((await applicationRepository.get(sampleApplications[0].id))?.company).toBe("Updated Aurora");
+    expect(await applicationRepository.get(sampleApplications[0].id)).toMatchObject({
+      company: "Updated Aurora", stage: "applied", outcome: null,
+      stageEvents: [expect.objectContaining({ id: "e1" })],
+    });
   });
 
   it("marks undone events unaccepted and restores the materialized state", async () => {
@@ -55,6 +60,22 @@ describe("applicationRepository", () => {
       origin: "manual", accepted: true,
     })).rejects.toThrow("fromStage");
     expect(await jobBuddyDb.stageEvents.get("event-conflict")).toBeUndefined();
+  });
+
+  it("validates fromStage using canonical ordering when an earlier event has an invalid timestamp", async () => {
+    const application = {
+      ...sampleApplications[0], id: "invalid-timestamp-ordering",
+      stageEvents: [{
+        ...sampleApplications[0].stageEvents[0], id: "invalid-applied", applicationId: "invalid-timestamp-ordering", at: "invalid",
+      }],
+    };
+    await applicationRepository.create(application);
+
+    await expect(applicationRepository.appendEvent({
+      id: "valid-review", applicationId: application.id, at: "2026-09-01T00:00:00Z",
+      fromStage: "applied", toStage: "review", origin: "manual", accepted: true,
+    })).rejects.toThrow("fromStage");
+    expect(await jobBuddyDb.stageEvents.get("valid-review")).toBeUndefined();
   });
 
   it("seeds demo data once without overwriting non-demo records", async () => {

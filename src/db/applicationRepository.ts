@@ -1,9 +1,10 @@
 import type { Application } from "../domain/application";
-import { deriveApplicationState, type StageEvent } from "../domain/stage";
+import { compareStageEvents, deriveApplicationState, type StageEvent } from "../domain/stage";
 import { jobBuddyDb, type StoredApplication } from "./database";
 
 export type PersistedApplication = StoredApplication & { stageEvents: StageEvent[] };
 type ApplicationPatch = Partial<Omit<Application, "id" | "stageEvents">>;
+type UnsafeApplicationPatch = ApplicationPatch & Partial<StoredApplication> & { stageEvents?: unknown };
 
 function stored(input: Application, events: StageEvent[] = input.stageEvents): StoredApplication {
   const { stageEvents: _, ...application } = input;
@@ -36,7 +37,8 @@ export const applicationRepository = {
   async update(id: string, patch: ApplicationPatch): Promise<PersistedApplication | undefined> {
     const current = await jobBuddyDb.applications.get(id);
     if (!current) return undefined;
-    const next = { ...current, ...patch, id, updatedAt: new Date().toISOString() };
+    const { id: _id, stage: _stage, outcome: _outcome, stageEvents: _events, ...safePatch } = patch as UnsafeApplicationPatch;
+    const next = { ...current, ...safePatch, id, updatedAt: new Date().toISOString() };
     await jobBuddyDb.applications.put(next);
     return materialize(next);
   },
@@ -53,7 +55,7 @@ export const applicationRepository = {
       const events = await jobBuddyDb.stageEvents.where("applicationId").equals(event.applicationId).toArray();
       if (event.accepted && event.fromStage) {
         const ordered = [...events.filter((item) => item.accepted), event]
-          .sort((left, right) => Date.parse(left.at) - Date.parse(right.at) || left.id.localeCompare(right.id));
+          .sort(compareStageEvents);
         const eventIndex = ordered.findIndex((item) => item.id === event.id);
         if (deriveApplicationState(ordered.slice(0, eventIndex)).stage !== event.fromStage) {
           throw new Error("Event fromStage conflicts with the application state");
