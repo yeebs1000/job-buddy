@@ -3,6 +3,8 @@
   --color-background: #f7f7f8;
   --color-surface: #ffffff;
   --color-text: #202124;
+  --color-muted: #667085;
+  --color-border: #d9dde3;
   --color-focus: #2563eb;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -12,4 +14,13 @@
   --success-500: #16a34a;
   --success-100: #dcfce7;
   --error-500: #dc2626;
+  --stage-1: #bbf7d0;
+  --stage-2: #86efac;
+  --stage-3: #4ade80;
+  --stage-4: #22c55e;
+  --stage-5: #16a34a;
+  --stage-6: #15803d;
+  --outcome-rejected: #dc2626;
+  --radius-sm: 0.75rem;
+  --radius-lg: 1.5rem;
 }
