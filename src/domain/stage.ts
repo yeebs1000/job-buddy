@@ -23,11 +23,24 @@ export interface ApplicationState {
   outcome: ApplicationOutcome | null;
 }
 
+function compareEvents(left: StageEvent, right: StageEvent): number {
+  const leftTime = Date.parse(left.at);
+  const rightTime = Date.parse(right.at);
+  const leftInvalid = Number.isNaN(leftTime);
+  const rightInvalid = Number.isNaN(rightTime);
+
+  if (leftInvalid || rightInvalid) {
+    return leftInvalid === rightInvalid ? left.id.localeCompare(right.id) : leftInvalid ? 1 : -1;
+  }
+
+  return leftTime - rightTime || left.id.localeCompare(right.id);
+}
+
 export function deriveApplicationState(events: StageEvent[]): ApplicationState {
   let stage: ApplicationStage | null = null;
   let outcome: ApplicationOutcome | null = null;
 
-  for (const event of events.filter((event) => event.accepted).sort((left, right) => left.at.localeCompare(right.at) || left.id.localeCompare(right.id))) {
+  for (const event of events.filter((event) => event.accepted).sort(compareEvents)) {
     if (outcome) break;
     if (event.toStage) stage = event.toStage;
     if (event.outcome) outcome = event.outcome;

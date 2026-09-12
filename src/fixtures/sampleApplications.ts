@@ -45,7 +45,8 @@ export const sampleApplications: Application[] = [
     research: { salary: { minimum: 6500, maximum: 8200, currency: "SGD", period: "monthly" }, companyRating: { score: 4.2, outOf: 5, source: "Fictional Reviews" } },
     stageEvents: [
       { id: "e5a", applicationId: "app-orchard-final", at: "2026-08-15T01:00:00Z", toStage: "applied", origin: "manual", accepted: true },
-      { id: "e5b", applicationId: "app-orchard-final", at: "2026-09-06T03:00:00Z", fromStage: "interview", toStage: "final", origin: "gmail", accepted: true, confidence: 0.95 },
+      { id: "e5b", applicationId: "app-orchard-final", at: "2026-09-01T03:00:00Z", fromStage: "applied", toStage: "interview", origin: "gmail", accepted: true, confidence: 0.95 },
+      { id: "e5c", applicationId: "app-orchard-final", at: "2026-09-06T03:00:00Z", fromStage: "interview", toStage: "final", origin: "gmail", accepted: true, confidence: 0.95 },
     ],
   },
   {
@@ -55,7 +56,8 @@ export const sampleApplications: Application[] = [
     research: { salary: { minimum: 36000, maximum: 45000, currency: "HKD", period: "monthly" }, companyRating: { score: 3.8, outOf: 5, source: "Fictional Reviews" } },
     stageEvents: [
       { id: "e6a", applicationId: "app-cobalt-offer", at: "2026-08-10T05:30:00Z", toStage: "applied", origin: "manual", accepted: true },
-      { id: "e6b", applicationId: "app-cobalt-offer", at: "2026-09-07T09:00:00Z", fromStage: "final", toStage: "offer", origin: "gmail", accepted: true, confidence: 0.99 },
+      { id: "e6b", applicationId: "app-cobalt-offer", at: "2026-09-03T09:00:00Z", fromStage: "applied", toStage: "final", origin: "gmail", accepted: true, confidence: 0.99 },
+      { id: "e6c", applicationId: "app-cobalt-offer", at: "2026-09-07T09:00:00Z", fromStage: "final", toStage: "offer", origin: "gmail", accepted: true, confidence: 0.99 },
     ],
   },
   {
@@ -65,7 +67,8 @@ export const sampleApplications: Application[] = [
     research: { salary: { minimum: 4500, maximum: 5800, currency: "SGD", period: "monthly" }, companyRating: { score: 3.6, outOf: 5, source: "Fictional Reviews" } },
     stageEvents: [
       { id: "e7a", applicationId: "app-river-rejected", at: "2026-08-12T04:30:00Z", toStage: "applied", origin: "manual", accepted: true },
-      { id: "e7b", applicationId: "app-river-rejected", at: "2026-09-02T04:30:00Z", fromStage: "review", outcome: "rejected", origin: "gmail", accepted: true, confidence: 0.97 },
+      { id: "e7b", applicationId: "app-river-rejected", at: "2026-08-28T04:30:00Z", fromStage: "applied", toStage: "review", origin: "gmail", accepted: true, confidence: 0.97 },
+      { id: "e7c", applicationId: "app-river-rejected", at: "2026-09-02T04:30:00Z", fromStage: "review", outcome: "rejected", origin: "gmail", accepted: true, confidence: 0.97 },
     ],
   },
   {
@@ -75,7 +78,8 @@ export const sampleApplications: Application[] = [
     research: { salary: { minimum: 22000, maximum: 28000, currency: "HKD", period: "monthly" }, companyRating: { score: 3.7, outOf: 5, source: "Fictional Reviews" } },
     stageEvents: [
       { id: "e8a", applicationId: "app-lantern-withdrawn", at: "2026-08-18T02:00:00Z", toStage: "applied", origin: "manual", accepted: true },
-      { id: "e8b", applicationId: "app-lantern-withdrawn", at: "2026-09-01T02:00:00Z", fromStage: "review", outcome: "withdrawn", origin: "manual", accepted: true },
+      { id: "e8b", applicationId: "app-lantern-withdrawn", at: "2026-08-25T02:00:00Z", fromStage: "applied", toStage: "review", origin: "gmail", accepted: true, confidence: 0.93 },
+      { id: "e8c", applicationId: "app-lantern-withdrawn", at: "2026-09-01T02:00:00Z", fromStage: "review", outcome: "withdrawn", origin: "manual", accepted: true },
     ],
   },
 ];
