@@ -7,10 +7,18 @@ export function ExportControls({ applications, filtered }: { applications: Appli
   const [scope, setScope] = useState<"all" | "filtered">("filtered");
   const [format, setFormat] = useState<ExportFormat>("xlsx");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const chosen = scope === "all" ? applications : filtered;
+  async function download() {
+    if (busy || !chosen.length) return;
+    setError(""); setBusy(true);
+    try { await downloadTracker(chosen, format, scope); }
+    catch { setError("Could not generate this download. Try again."); }
+    finally { setBusy(false); }
+  }
   return <div className="tracker-export"><div className="application-toolbar">
     <label>Export scope<select value={scope} onChange={e => setScope(e.target.value as typeof scope)}><option value="filtered">Current filtered set ({filtered.length})</option><option value="all">All applications, including archived ({applications.length})</option></select></label>
     <label>Export format<select value={format} onChange={e => setFormat(e.target.value as ExportFormat)}><option value="xlsx">Excel (.xlsx)</option><option value="csv">UTF-8 CSV (.csv)</option></select></label>
-    <button disabled={!chosen.length} onClick={() => { setError(""); try { downloadTracker(chosen, format, scope); } catch { setError("Could not generate this download. Try again."); } }}>Download tracker</button>
+    <button disabled={busy || !chosen.length} onClick={() => void download()}>{busy ? "Preparing download…" : "Download tracker"}</button>
   </div>{error && <p role="alert">{error}</p>}</div>;
 }

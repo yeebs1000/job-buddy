@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import type { WorkBook } from "xlsx";
 import { z } from "zod";
 import { priorities, roleFamilies, workArrangements, type Application } from "../../domain/application";
 import type { ImportPreview, ImportRow, NormalizedApplication } from "../../domain/import";
@@ -37,10 +37,7 @@ function readCsv(input: string): unknown[][] {
 function date(value: unknown, label: string, errors: string[], required = false): string | undefined {
   if (value === undefined || text(value) === "") { if (required) errors.push(`${label} is required.`); return undefined; }
   let result: string | undefined;
-  if (typeof value === "number" && value > 0 && value < 2958466) {
-    const parts = XLSX.SSF.parse_date_code(value);
-    if (parts) result = `${parts.y}-${String(parts.m).padStart(2, "0")}-${String(parts.d).padStart(2, "0")}T${String(parts.H).padStart(2, "0")}:${String(parts.M).padStart(2, "0")}:${String(parts.S).padStart(2, "0")}Z`;
-  } else {
+  if (typeof value === "string") {
     const raw = text(value);
     if (/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2}))?$/.test(raw)) result = raw.length === 10 ? `${raw}T00:00:00Z` : raw;
     const local = raw.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/);
@@ -59,7 +56,7 @@ function boolean(value: unknown, label: string, errors: string[]): boolean | und
   if (["false", "no", "0", "n"].includes(key(value))) return false;
   errors.push(`${label} must be yes/no or true/false.`); return undefined;
 }
-const schema = z.object({ company: z.string().min(1, "Company is required."), role: z.string().min(1, "Role is required."), discipline: z.enum(["finance", "software_it"]), market: z.enum(["SG", "HK"]), stage: z.enum(applicationStages).nullable(), roleFamily: z.enum(roleFamilies).optional(), workArrangement: z.enum(workArrangements).optional(), priority: z.enum(priorities).optional() });
+const schema = z.object({ company: z.string().min(1, "Company is required."), role: z.string().min(1, "Role is required."), source: z.string().min(1, "Source is required."), location: z.object({ city: z.string().min(1, "Location is required.") }), discipline: z.enum(["finance", "software_it"]), market: z.enum(["SG", "HK"]), stage: z.enum(applicationStages).nullable(), roleFamily: z.enum(roleFamilies).optional(), workArrangement: z.enum(workArrangements).optional(), priority: z.enum(priorities).optional() });
 function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: number): ImportRow {
   const errors: string[] = [], warnings: string[] = [];
   const get = (field: TrackerField) => {
@@ -120,16 +117,22 @@ export async function parseTracker(file: File, existing: Pick<Application, "comp
   if (!/\.(xlsx|csv)$/i.test(file.name)) throw new Error("Choose a local .xlsx or UTF-8 .csv file.");
   if (!file.size) throw new Error("The file is empty.");
   if (file.size > 5 * 1024 * 1024) throw new Error("Use a file smaller than 5 MB.");
-  const bytes = new Uint8Array(await readFile(file)); let grid: unknown[][]; const warnings: string[] = []; let date1904 = false;
+  const bytes = new Uint8Array(await readFile(file)); let grid: unknown[][]; const warnings: string[] = [];
+  let serialDate: ((value: number) => unknown) | undefined;
   if (/\.csv$/i.test(file.name)) {
     let content: string; try { content = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { throw new Error("CSV must use UTF-8 encoding."); }
     grid = readCsv(content.replace(/^\uFEFF/, ""));
   } else {
     if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error("This is not a valid .xlsx workbook.");
-    let book: XLSX.WorkBook;
+    const XLSX = await import("xlsx");
+    let book: WorkBook;
     try { book = XLSX.read(bytes, { type: "array", cellFormula: true, bookVBA: true, cellHTML: false, bookDeps: false }); } catch { throw new Error("Could not read this .xlsx workbook."); }
     if (book.vbaraw) throw new Error("Macro content is not supported. Export a values-only workbook.");
-    date1904 = Boolean(book.Workbook?.WBProps?.date1904);
+    const date1904 = Boolean(book.Workbook?.WBProps?.date1904);
+    serialDate = value => {
+      const parts = XLSX.SSF.parse_date_code(value, { date1904 });
+      return parts ? `${parts.y}-${String(parts.m).padStart(2, "0")}-${String(parts.d).padStart(2, "0")}T${String(parts.H).padStart(2, "0")}:${String(parts.M).padStart(2, "0")}:${String(parts.S).padStart(2, "0")}Z` : value;
+    };
     for (const sheet of Object.values(book.Sheets)) {
       for (const [address, cell] of Object.entries(sheet)) if (!address.startsWith("!") && cell && typeof cell === "object" && "f" in cell) throw new Error("Workbook formulas are not supported. Export values only.");
       if (sheet["!ref"]) { const range = XLSX.utils.decode_range(sheet["!ref"]); if (range.e.r >= MAX_ROWS + 1 || range.e.c >= MAX_COLUMNS) throw new Error("Use at most 2,000 rows and 80 columns per sheet."); }
@@ -150,7 +153,7 @@ export async function parseTracker(file: File, existing: Pick<Application, "comp
   const rows = grid.slice(headerIndex + 1).flatMap((cells, index) => {
     if (!cells.some(v => text(v))) return [];
     const values: Partial<Record<TrackerField, unknown>> = {};
-    mapping.forEach((m, column) => { if (m.field) values[m.field] = date1904 && ["appliedAt", "followUpAt", "deadline"].includes(m.field) && typeof cells[column] === "number" ? cells[column] + 1462 : cells[column]; });
+    mapping.forEach((m, column) => { if (m.field) values[m.field] = serialDate && ["appliedAt", "followUpAt", "deadline"].includes(m.field) && typeof cells[column] === "number" ? serialDate(cells[column]) : cells[column]; });
     return [normalize(values, headerIndex + index + 2)];
   });
   if (!rows.length) throw new Error("No application rows were found below the headings.");

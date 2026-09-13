@@ -9,7 +9,7 @@ import { ImportTrackerPage } from "./ImportTrackerPage";
 import { confirmImport } from "./confirmImport";
 import { parseTracker } from "./parseTracker";
 
-const content = "Company,Role,Stage,Date Applied,Market,Role Family\nExample Bank,Analyst,Interview,2026-09-12,SG,finance\nOther Bank,Analyst,Applied,2026-09-11,HK,finance\n,Engineer,Applied,2026-09-10,SG,software";
+const content = "Company,Role,Stage,Date Applied,Market,Role Family,Source,Location\nExample Bank,Analyst,Interview,2026-09-12,SG,finance,Campus,Singapore\nOther Bank,Analyst,Applied,2026-09-11,HK,finance,Campus,Hong Kong\n,Engineer,Applied,2026-09-10,SG,software,Campus,Singapore";
 function file(value = content) { return new File([value], "tracker.csv", { type: "text/csv" }); }
 function renderPage() { render(<MemoryRouter><ImportTrackerPage /></MemoryRouter>); return userEvent.setup(); }
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); await jobBuddyDb.delete(); await jobBuddyDb.open(); });
@@ -32,7 +32,7 @@ it("previews mapping and row errors, supports exclusion, and only writes on conf
 });
 it("lets users keep duplicate rows intentionally and import selected rows only once", async () => {
   const user = renderPage();
-  await user.upload(screen.getByLabelText("Tracker file"), file("Company,Role,Stage,Date Applied,Market,Role Family\nBank,Analyst,Applied,2026-09-12,SG,finance\nBank,Analyst,Applied,2026-09-12,SG,finance"));
+  await user.upload(screen.getByLabelText("Tracker file"), file("Company,Role,Stage,Date Applied,Market,Role Family,Source,Location\nBank,Analyst,Applied,2026-09-12,SG,finance,Campus,Singapore\nBank,Analyst,Applied,2026-09-12,SG,finance,Campus,Singapore"));
   await screen.findByText(/Matches row 2/i);
   expect(screen.getByLabelText("Include row 3")).not.toBeChecked();
   await user.click(screen.getByLabelText("Include row 3"));
@@ -70,7 +70,7 @@ it("uses the repository transaction to roll back an application when its event c
 
 it("lets a reviewer inspect salary-only and contact data using readable field labels", async () => {
   const user = renderPage();
-  await user.upload(screen.getByLabelText("Tracker file"), file("Company,Role,Stage,Date Applied,Market,Role Family,Salary,Currency,Pay Period,Contact\nBank,Analyst,Applied,2026-09-12,SG,finance,4000,SGD,monthly,Alex"));
+  await user.upload(screen.getByLabelText("Tracker file"), file("Company,Role,Stage,Date Applied,Market,Role Family,Salary,Currency,Pay Period,Contact,Source,Location\nBank,Analyst,Applied,2026-09-12,SG,finance,4000,SGD,monthly,Alex,Campus,Singapore"));
   await screen.findByText("Bank");
   await user.click(screen.getByRole("button", { name: "View row 2 fields" }));
   expect(screen.getByText("SGD 4,000 / monthly")).toBeVisible();
@@ -79,7 +79,7 @@ it("lets a reviewer inspect salary-only and contact data using readable field la
 });
 
 it("imports an explicit not-started state without fabricating a reached stage", async () => {
-  const preview = await parseTracker(file("Company,Role,Stage,Date Applied,Market,Role Family\nBank,Analyst,Not started,2026-09-12,SG,finance"));
+  const preview = await parseTracker(file("Company,Role,Stage,Date Applied,Market,Role Family,Source,Location\nBank,Analyst,Not started,2026-09-12,SG,finance,Campus,Singapore"));
   expect(preview.rows[0].errors).toEqual([]);
   const result = await confirmImport(preview);
   expect(result.rows[0].result).toBe("imported");

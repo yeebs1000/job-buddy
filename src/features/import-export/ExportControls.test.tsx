@@ -1,9 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { sampleApplications } from "../../fixtures/sampleApplications";
 import { ExportControls } from "./ExportControls";
 import { parseTracker } from "./parseTracker";
+import * as exports from "./exportTracker";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it("downloads the selected format and filtered/all scope as actual round-trippable bytes", async () => {
@@ -22,6 +23,17 @@ it("downloads the selected format and filtered/all scope as actual round-trippab
   await user.selectOptions(screen.getByLabelText("Export scope"), "all");
   await user.selectOptions(screen.getByLabelText("Export format"), "xlsx");
   await user.click(screen.getByRole("button", { name: "Download tracker" }));
-  expect(names[1]).toMatch(/all.*\.xlsx$/);
+  await waitFor(() => expect(names[1]).toMatch(/all.*\.xlsx$/));
   expect((await parseTracker(new File([blobs[1]], names[1]))).rows).toHaveLength(sampleApplications.length);
+});
+
+it("disables duplicate clicks during an async export and reports a rejected download", async () => {
+  let rejectDownload!: (error: Error) => void;
+  vi.spyOn(exports, "downloadTracker").mockImplementation(() => new Promise<void>((_resolve, reject) => { rejectDownload = reject; }));
+  const user = userEvent.setup(); render(<ExportControls applications={sampleApplications} filtered={sampleApplications} />);
+  await user.click(screen.getByRole("button", { name: "Download tracker" }));
+  expect(screen.getByRole("button", { name: /Preparing download/ })).toBeDisabled();
+  rejectDownload(new Error("Unavailable module"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not generate this download");
+  expect(screen.getByRole("button", { name: "Download tracker" })).toBeEnabled();
 });

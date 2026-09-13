@@ -8,7 +8,7 @@ export function workbook(rows: unknown[][]) {
   return new File([XLSX.write(book, { type: "array", bookType: "xlsx" })], "tracker.xlsx");
 }
 it("maps fresh graduate headings and normalizes dates, currencies, markets and stages", async () => {
-  const preview = await parseTracker(workbook([["Company", "Title", "Status", "Date Applied", "Location", "Role Family", "Salary", "Pay Period", "Tags", "Contact", "Link"], ["Example Bank", "Analyst", "Interviewing", 46277, "Singapore", "Finance", "SGD 4,000–5,000", "monthly", "graduate; priority;graduate", "Alex", "https://example.com/job"]]));
+  const preview = await parseTracker(workbook([["Company", "Title", "Status", "Date Applied", "Location", "Role Family", "Salary", "Pay Period", "Tags", "Contact", "Link", "Source"], ["Example Bank", "Analyst", "Interviewing", 46277, "Singapore", "Finance", "SGD 4,000–5,000", "monthly", "graduate; priority;graduate", "Alex", "https://example.com/job", "Campus"]]));
   expect(preview.rows[0].errors).toEqual([]);
   expect(preview.rows[0].normalized).toMatchObject({ company: "Example Bank", role: "Analyst", stage: "interview", market: "SG", appliedAt: "2026-09-12T00:00:00.000Z", recruiter: "Alex", jobUrl: "https://example.com/job", tags: ["graduate", "priority"], research: { salary: { minimum: 4000, maximum: 5000, currency: "SGD", period: "monthly" } } });
   expect(preview.rows[0].normalized.research?.companyRating).toBeUndefined();
@@ -25,7 +25,7 @@ it("retains physical row numbers, flags missing/invalid values and does not inve
   expect(preview.rows[1].normalized.appliedAt).toBe("2026-09-12T00:00:00.000Z");
 });
 it("reports duplicates inside a file and against existing records without blocking inclusion", async () => {
-  const preview = await parseTracker(csv("Company,Role,Stage,Date Applied,Market,Role Family\n Bank ,Analyst,Applied,2026-09-12,SG,finance\nBANK, analyst ,Applied,2026-09-12,SG,finance"), [{ company: "Bank", role: "Analyst", appliedAt: "2026-09-12T12:00:00Z" }]);
+  const preview = await parseTracker(csv("Company,Role,Stage,Date Applied,Market,Role Family,Source,Location\n Bank ,Analyst,Applied,2026-09-12,SG,finance,Campus,Singapore\nBANK, analyst ,Applied,2026-09-12,SG,finance,Campus,Singapore"), [{ company: "Bank", role: "Analyst", appliedAt: "2026-09-12T12:00:00Z" }]);
   expect(preview.rows[0].duplicateReasons.join(" ")).toMatch(/existing/i);
   expect(preview.rows[1].duplicateReasons.join(" ")).toMatch(/row 2/i);
   expect(preview.rows[1].included).toBe(false);
@@ -49,7 +49,7 @@ it("warns on unknown headers and unsafe links, and rejects workbook formula cell
 
 it("handles the workbook's 1904 date system without shifting application dates", async () => {
   const book = XLSX.utils.book_new(); book.Workbook = { WBProps: { date1904: true } };
-  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["Company", "Role", "Stage", "Date Applied", "Market", "Role Family"], ["Bank", "Analyst", "Review", 44815, "SG", "finance"]]), "Tracker");
+  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["Company", "Role", "Stage", "Date Applied", "Market", "Role Family", "Source", "Location"], ["Bank", "Analyst", "Review", 44815, "SG", "finance", "Campus", "Singapore"]]), "Tracker");
   const preview = await parseTracker(new File([XLSX.write(book, { type: "array", bookType: "xlsx" })], "mac.xlsx"));
   expect(preview.rows[0].normalized.appliedAt).toBe("2026-09-12T00:00:00.000Z");
 });
@@ -59,4 +59,13 @@ it("rejects duplicate mappings, incomplete salary and invalid optional enums or 
   expect(preview.rows[0].errors.join(" ")).toMatch(/currency/i);
   expect(preview.rows[0].errors.join(" ")).toMatch(/priority/i);
   expect(preview.rows[0].errors.join(" ")).toMatch(/archived/i);
+});
+
+it.each([
+  { source: "", location: "Singapore", message: /Source is required/i },
+  { source: "Campus", location: "   ", message: /Location is required/i },
+])("rejects blank required source/location without fabricating a fallback", async ({ source, location, message }) => {
+  const preview = await parseTracker(csv(`Company,Role,Stage,Date Applied,Market,Role Family,Source,Location\nBank,Analyst,Applied,2026-09-12,SG,finance,${source},${location}`));
+  expect(preview.rows[0].errors.join(" ")).toMatch(message);
+  expect(preview.rows[0].included).toBe(false);
 });
