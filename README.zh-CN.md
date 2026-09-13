@@ -140,6 +140,10 @@ npm run test:e2e
 
 产品方向见[设计规格](docs/superpowers/specs/2026-09-12-job-buddy-design.md)，核心实施顺序见[核心追踪器计划](docs/superpowers/plans/2026-09-12-job-buddy-core-tracker.md)。
 
+## 致谢
+
+特别感谢 [JobSpy](https://github.com/speedyapply/JobSpy)。我们在设计 Job Buddy 的职位来源发现和字段标准化时，借鉴并采用了其中一些实用思路。Job Buddy 的代码结构、数据模型和本地优先实现均独立完成；JobSpy 不是运行时依赖。
+
 ## GitHub 清单
 
 - [x] 无需账号的本地优先存储
