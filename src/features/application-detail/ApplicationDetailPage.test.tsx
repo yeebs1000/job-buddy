@@ -37,6 +37,23 @@ it("records a manual stage event and exposes undo", async () => {
   expect(screen.getByText("Changed to Interview").closest("li")).toHaveTextContent("Reverted");
 });
 
+it("undoes the first manual stage update back to no stage while retaining its history", async () => {
+  await applicationRepository.create({ ...sampleApplications[0], id: "a1", stageEvents: [] });
+  const user = userEvent.setup(); renderDetail();
+  await user.selectOptions(await screen.findByLabelText("New stage"), "interview");
+  await user.click(screen.getByRole("button", { name: "Update stage" }));
+  expect(await screen.findByText("Changed to Interview")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Undo change" })).toBeEnabled();
+  const [original] = await applicationRepository.eventsFor("a1");
+  expect(original).toMatchObject({ toStage: "interview", origin: "manual", accepted: true });
+  await user.click(screen.getByRole("button", { name: "Undo change" }));
+  await waitFor(() => expect(screen.getByText("Changed to Interview").closest("li")).toHaveTextContent("Reverted"));
+  expect(await applicationRepository.get("a1")).toMatchObject({ stage: null, outcome: null });
+  expect(await applicationRepository.eventsFor("a1")).toEqual([{ ...original, accepted: false }]);
+  expect(screen.getByRole("group", { name: "Application progress" }).querySelector('[aria-current="step"]')).toBeNull();
+  expect(screen.getByRole("button", { name: "Undo change" })).toBeDisabled();
+});
+
 it("requires explicit terminal confirmation, retains the reached stage and restores it on undo", async () => {
   await createApplication(); const user = userEvent.setup(); renderDetail();
   await user.selectOptions(await screen.findByLabelText("Outcome"), "rejected");

@@ -52,7 +52,7 @@ export function ApplicationDetailPage({ applicationId }: { applicationId?: strin
   if (!application) return <section className="application-detail">{back}<h1>Application not found</h1><p>This application may have been removed, or the link may be incomplete.</p></section>;
   const accepted = application.stageEvents.filter(event => event.accepted && (event.toStage || event.outcome)).sort(compareStageEvents);
   const latest = accepted.at(-1);
-  const canUndo = Boolean(latest && (accepted.length > 1 || latest.outcome));
+  const canUndo = Boolean(latest);
   const salary = application.research?.salary;
   const rating = application.research?.companyRating;
   const evidence = application.stageEvents.filter(event => event.evidenceId).sort(compareStageEvents);
