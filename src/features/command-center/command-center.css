@@ -4,6 +4,7 @@
 .command-center__header h1, .command-center__section-heading h2, .command-center__identity h3 { margin: 0; }
 .command-center__header p, .command-center__identity p, .command-center__market, .command-center__buddy p { color: var(--color-muted); margin: var(--space-2) 0 0; }
 .command-center__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.command-center__actions a, .command-center__buddy a { text-decoration: none; }
 .command-center__section { display: grid; gap: var(--space-4); }
 .command-center__section-heading { align-items: baseline; display: flex; justify-content: space-between; gap: var(--space-3); }
 .command-center__section-heading span, .command-center__identity span, .command-center__market span { color: var(--color-muted); font-size: 0.875rem; }
@@ -19,7 +20,9 @@
 .command-center__identity h3 { font-size: 1rem; }
 .command-center__market, .command-center__next-action { font-size: 0.875rem; line-height: 1.5; margin: 0; }
 .command-center__next-action { font-weight: 600; }
+.command-center__progress { display: grid; gap: var(--space-2); }
 .command-center__progress .stage-rail { border: 0; border-radius: 0; padding: 0; }
+.command-center__stage-label { color: var(--color-text); font-size: 0.8125rem; font-weight: 600; }
 .command-center__buddy { align-items: center; display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .command-center__buddy p { flex: 1 1 18rem; margin: 0; }
 .command-center__skeleton { background: #e8eaed; border-radius: var(--radius-sm); height: 5.5rem; }

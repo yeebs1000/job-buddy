@@ -11,6 +11,7 @@ export const appRoutes: RouteObject[] = [
     element: <AppShell />,
     children: [
       { index: true, element: <CommandCenterPage /> },
+      { path: "import", element: <Page title="Import tracker" /> },
       { path: "applications", element: <Page title="Applications" /> },
       { path: "applications/:id", element: <Page title="Application details" /> },
       { path: "updates", element: <Page title="Updates" /> },

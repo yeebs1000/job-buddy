@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { StageRail } from "../../components/StageRail";
@@ -55,7 +56,7 @@ export function CommandCenterPage() {
   }, []);
 
   if (applications === null) {
-    return <div className="command-center"><header className="command-center__header"><div><h1 aria-label="Your application journey">Application command center</h1><p>See what needs your attention across Singapore and Hong Kong.</p></div></header><section aria-busy="true" aria-label="Loading applications"><div className="command-center__skeleton" /><div className="command-center__skeleton" /><div className="command-center__skeleton" /></section></div>;
+    return <div className="command-center"><header className="command-center__header"><div><h1 aria-label="Your application journey">Application command center</h1><p>See what needs your attention across Singapore and Hong Kong.</p></div></header><section aria-busy="true" aria-label="Loading applications"><div className="command-center__skeleton" data-testid="loading-skeleton" /><div className="command-center__skeleton" data-testid="loading-skeleton" /><div className="command-center__skeleton" data-testid="loading-skeleton" /></section></div>;
   }
 
   if (error) {
@@ -63,7 +64,7 @@ export function CommandCenterPage() {
   }
 
   if (!applications.length) {
-    return <section className="command-center"><EmptyState title="Start your tracker">Add your first application or load fictional sample data to see the workflow.</EmptyState><div className="command-center__actions"><Button variant="secondary">Import tracker</Button><Button variant="secondary">Add application</Button><Button onClick={() => void loadApplications()}>Load sample data</Button></div></section>;
+    return <section className="command-center"><EmptyState title="Start your tracker">Add your first application or load fictional sample data to see the workflow.</EmptyState><div className="command-center__actions"><Link className="button button--secondary" to="/import">Import tracker</Link><Link className="button button--secondary" to="/applications?new=1">Add application</Link><Button onClick={() => void loadApplications()}>Load sample data</Button></div></section>;
   }
 
   const summary = summarizeStages(applications);
@@ -73,7 +74,7 @@ export function CommandCenterPage() {
     <div className="command-center">
       <header className="command-center__header">
         <div><h1>Application command center</h1><p>See what needs your attention across Singapore and Hong Kong.</p></div>
-        <div className="command-center__actions"><Button variant="secondary">Import tracker</Button><Button>Add application</Button></div>
+        <div className="command-center__actions"><Link className="button button--secondary" to="/import">Import tracker</Link><Link className="button button--primary" to="/applications?new=1">Add application</Link></div>
       </header>
 
       <section aria-labelledby="portfolio-overview" className="command-center__section">
@@ -88,17 +89,21 @@ export function CommandCenterPage() {
         <div className="command-center__rows">
           {actions.map(({ application, reason }) => {
             const state = deriveApplicationState(application.stageEvents);
+            const railStage = rejectedAtStage(application) ?? state.stage;
+            const statusLabel = state.outcome === "rejected"
+              ? `Rejected at ${railStage ? stageLabels[railStage] : "unknown stage"}`
+              : `Stage: ${state.stage ? stageLabels[state.stage] : "Not started"}`;
             return <article className="command-center__application" data-outcome={state.outcome ?? undefined} data-testid={`application-row-${application.id}`} key={application.id}>
               <div className="command-center__identity"><h3>{application.company}</h3><p>{application.role} · {application.location.city}</p><span>Source: {application.source}</span></div>
               <p className="command-center__market">{salarySnapshot(application)}<br /><span>{application.research.companyRating.source}</span></p>
-              <div className="command-center__progress"><StageRail compact outcome={state.outcome} rejectedAtStage={rejectedAtStage(application)} stage={state.stage} /></div>
+              <div className="command-center__progress"><StageRail compact outcome={state.outcome} rejectedAtStage={railStage ?? undefined} stage={state.stage} /><span className="command-center__stage-label">{statusLabel}</span></div>
               <p className="command-center__next-action">{reason}</p>
             </article>;
           })}
         </div>
       </section>
 
-      <aside aria-label="Buddy prompt" className="command-center__buddy"><strong>Buddy prompt</strong><p>Set aside 15 minutes to prepare for your next interview.</p><Button variant="secondary">Open preparation</Button></aside>
+      <aside aria-label="Buddy prompt" className="command-center__buddy"><strong>Buddy prompt</strong><p>Set aside 15 minutes to prepare for your next interview.</p><Link className="button button--secondary" to="/prepare">Open preparation</Link></aside>
     </div>
   );
 }
