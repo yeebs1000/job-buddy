@@ -34,7 +34,7 @@ export function CommandCenterPage() {
 
   async function readApplications() {
     await seedDemoData();
-    return applicationRepository.list();
+    return (await applicationRepository.list()).filter(application => !application.archived);
   }
 
   async function loadApplications() {

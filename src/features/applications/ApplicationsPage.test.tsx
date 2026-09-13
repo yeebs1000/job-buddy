@@ -7,6 +7,7 @@ import { jobBuddyDb } from "../../db/database";
 import { applicationRepository } from "../../db/applicationRepository";
 import { savedViewRepository } from "../../db/viewRepository";
 import { ApplicationsPage } from "./ApplicationsPage";
+import { appRoutes } from "../../app/routes";
 
 afterEach(async () => { cleanup(); await jobBuddyDb.delete(); await jobBuddyDb.open(); });
 function renderPage(path = "/applications") {
@@ -150,4 +151,24 @@ it("clears hidden selections when filters change", async () => {
   expect(screen.queryByRole("button", { name: "Archive selected" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Reset filters" }));
   expect(screen.getByLabelText("Select Aurora Ledger Pte Ltd")).not.toBeChecked();
+});
+
+it("removes an archived application from overview counts and attention while retaining archive access", async () => {
+  const user = userEvent.setup();
+  const router = createMemoryRouter(appRoutes, { initialEntries: ["/applications"] });
+  render(<RouterProvider router={router} />); await ready();
+  await user.click(screen.getByLabelText("Select Aurora Ledger Pte Ltd"));
+  await user.click(screen.getByRole("button", { name: "Archive selected" }));
+  await waitFor(() => expect(screen.queryByRole("link", { name: "Investment Analyst" })).not.toBeInTheDocument());
+  await user.click(screen.getByRole("link", { name: "Overview" }));
+  const overview = await screen.findByRole("region", { name: "Portfolio overview" });
+  expect(within(overview).getByText("7 applications")).toBeInTheDocument();
+  expect(within(overview).getByText("Applied").parentElement).toHaveTextContent("Applied0");
+  expect(screen.queryByTestId("application-row-app-aurora-applied")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("link", { name: "Applications" }));
+  await screen.findByRole("link", { name: "Software Engineer" });
+  await user.click(screen.getByText("More filters"));
+  await user.click(screen.getByLabelText("Include archived"));
+  expect(await screen.findByRole("link", { name: "Investment Analyst" })).toBeInTheDocument();
+  expect((await applicationRepository.get("app-aurora-applied"))?.archived).toBe(true);
 });

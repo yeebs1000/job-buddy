@@ -23,18 +23,35 @@ interface Props {
   busy: boolean;
 }
 
+function nextAction(application: Application) {
+  const deadline = nextDeadline(application);
+  if (application.followUpAt && !deriveApplicationState(application.stageEvents).outcome
+    && (!deadline || Date.parse(application.followUpAt) <= Date.parse(deadline.at))) {
+    return { label: "Follow up", at: application.followUpAt };
+  }
+  return deadline;
+}
+
 export function ApplicationTable({ applications, sorting, onSort, visibleColumns, selected, onSelect, onUpdate, onStage, busy }: Props) {
   const columns = useMemo<LegacyColumnDef<Application>[]>(() => {
     const textValues: Record<string, (a: Application) => string | number> = {
       role: a => a.role, company: a => a.company, industry: a => a.industry ?? "Unknown", roleFamily: applicationRoleFamily, market: applicationMarket,
       location: a => a.location.city, workArrangement: a => a.workArrangement ?? "Unknown", stage: a => deriveApplicationState(a.stageEvents).stage ?? "", outcome: a => deriveApplicationState(a.stageEvents).outcome ?? "active",
       appliedAt: a => dateOnly(a.appliedAt), lastActivity: a => dateOnly([...a.stageEvents.filter(e => e.accepted).map(e => e.at), "updatedAt" in a && typeof a.updatedAt === "string" ? a.updatedAt : a.appliedAt].sort().at(-1)!),
-      nextAction: a => nextDeadline(a)?.label ?? "—", deadline: a => nextDeadline(a) ? dateOnly(nextDeadline(a)!.at) : "—", source: a => a.source,
+      nextAction: a => nextAction(a)?.label ?? "—", deadline: a => nextAction(a) ? dateOnly(nextAction(a)!.at) : "—", source: a => a.source,
       salary: a => a.research ? `${a.research.salary.currency} ${a.research.salary.minimum.toLocaleString()}${a.research.salary.maximum ? `–${a.research.salary.maximum.toLocaleString()}` : ""} / ${a.research.salary.period}` : "Unavailable",
       companyRating: a => a.research ? `${a.research.companyRating.score}/${a.research.companyRating.outOf} · ${a.research.companyRating.source}` : "Unavailable",
       priority: a => a.priority ?? "normal", tags: a => a.tags.join(", "),
     };
-    return standardColumns.map(([id, header]) => ({ id, header, sortDescFirst: false, accessorFn: a => id === "stage" ? applicationStages.indexOf(deriveApplicationState(a.stageEvents).stage as ApplicationStage) : id === "priority" ? priorities.indexOf(a.priority ?? "normal") : textValues[id](a), cell: ({ row }) => {
+    return standardColumns.map(([id, header]) => ({ id, header, sortDescFirst: false, sortUndefined: "last",
+      accessorFn: a => id === "salary" ? a.research?.salary.minimum : id === "stage" ? applicationStages.indexOf(deriveApplicationState(a.stageEvents).stage as ApplicationStage) : id === "priority" ? priorities.indexOf(a.priority ?? "normal") : textValues[id](a),
+      sortFn: id === "salary" ? (left, right) => {
+        const a = left.original.research?.salary;
+        const b = right.original.research?.salary;
+        if (!a || !b) return 0;
+        return a.currency.localeCompare(b.currency) || a.period.localeCompare(b.period) || a.minimum - b.minimum;
+      } : "auto",
+      cell: ({ row }) => {
       const a = row.original;
       if (id === "role") return <Link to={`/applications/${a.id}`}>{a.role}</Link>;
       if (id === "company") return <><strong>{a.company}</strong>{a.archived && <small>Archived</small>}</>;
