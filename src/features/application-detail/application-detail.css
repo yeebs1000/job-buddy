@@ -1,0 +1,55 @@
+.application-detail { max-width: 1160px; margin: 0 auto; min-width: 0; color: #202832; overflow-wrap: anywhere; }
+.detail-back { color: #294b6a; font-size: .85rem; font-weight: 600; }
+.detail-heading { margin: 1.5rem 0; }
+.detail-heading h1 { margin: .25rem 0 .5rem; font-size: clamp(1.8rem, 3vw, 2.6rem); line-height: 1.15; letter-spacing: -.035em; }
+.detail-company { margin: 0; font-size: 1rem; font-weight: 650; }
+.application-detail .detail-meta { color: #4c5968; font-size: .82rem; line-height: 1.55; }
+.detail-progress { border: 1px solid #bbc3cc; border-radius: 12px; padding: 1rem 1.25rem; background: white; position: relative; }
+.detail-progress > p { margin: 0 0 .9rem; font-size: .9rem; }
+.detail-progress .stage-rail { padding: 0; border: 0; border-radius: 0; background: none; }
+.detail-progress .stage-rail__label { color: #4c5968; }
+.detail-status { min-height: 1.3rem; margin: .6rem 0; font-size: .82rem; }
+.detail-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 2rem; }
+.detail-layout > * { min-width: 0; }
+.detail-section { padding: 1.1rem 0 1.4rem; border-bottom: 1px solid #bbc3cc; }
+.detail-section h2 { font-size: 1.05rem; letter-spacing: -.015em; margin: 0 0 .7rem; }
+.detail-section p { font-size: .88rem; line-height: 1.55; }
+.detail-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.detail-section-heading h2 { margin: 0; }
+.detail-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: .85rem; }
+.detail-facts dt { color: #4c5968; font-size: .78rem; margin-bottom: .25rem; }
+.detail-facts dd { margin: 0; }
+.application-detail fieldset { min-width: 0; border: 0; padding: 0; margin: 0; }
+.application-detail label { display: flex; flex-direction: column; gap: .4rem; font-size: .8rem; font-weight: 600; margin-bottom: .9rem; }
+.application-detail input, .application-detail select, .application-detail textarea { width: 100%; min-width: 0; padding: .6rem .65rem; min-height: 2.65rem; border: 1px solid #929eac; border-radius: 6px; background: white; color: #202832; font: inherit; }
+.application-detail textarea { resize: vertical; }
+.application-detail textarea::placeholder { color: #556171; }
+.detail-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+.application-detail .button { min-height: 2.65rem; font-size: .8rem; border-radius: 6px; }
+.application-detail .button--primary { background: #263443; color: white; border-color: #263443; }
+.application-detail .button--primary:hover { background: #3a4b5e; }
+.application-detail :disabled { cursor: default; opacity: .65; }
+.detail-confirmation { background: #fff; border: 1px solid #929eac; border-radius: 8px; padding: 1rem; margin-top: 1rem; }
+.detail-confirmation h3 { margin: 0; font-size: 1rem; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: .7rem; }
+.detail-history { list-style: none; padding: 0; margin: 0; }
+.detail-history li { padding: 1rem 0; border-top: 1px solid #d9dde3; }
+.detail-history__action { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; font-size: .9rem; }
+.detail-history p { margin: .3rem 0 0; }
+.detail-reverted { color: #4c5968; background: #e9edf1; border: 1px solid #bbc3cc; padding: .15rem .4rem; border-radius: 4px; font-size: .73rem; }
+.detail-note { white-space: pre-wrap; }
+.detail-deadlines { list-style: none; padding: 0; margin: 0; }
+.detail-deadlines li { font-size: .88rem; padding: .6rem 0; }
+.detail-deadlines span { display: block; margin-top: .25rem; }
+.detail-salary { font-weight: 650; }
+.detail-salary small { font-weight: 400; }
+.detail-disclosure { border-bottom: 1px solid #bbc3cc; padding: 1rem 0; font-size: .85rem; line-height: 1.6; }
+.detail-disclosure summary { font-weight: 650; cursor: pointer; }
+.detail-error { padding: .8rem; border-left: 3px solid #b42318; background: white; }
+@media (max-width: 48rem) {
+  .detail-layout { grid-template-columns: 1fr; gap: .5rem; }
+  .detail-progress { padding: .65rem; }
+  .detail-progress .stage-rail ol { gap: .2rem; }
+  .detail-progress .stage-rail__label { font-size: .6875rem; letter-spacing: -.04em; }
+  .detail-heading { margin: 1.2rem 0; }
+}
