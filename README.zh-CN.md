@@ -1,10 +1,29 @@
 # Job Buddy（求职申请助手）
 
-> 一个本地优先的求职申请工作区，用来替代毕业生常用的 Excel 求职追踪表。
+> 一个本地优先的求职申请工作区，用来替代求职者常用的 Excel 追踪表。
+
+[![Built with React](https://img.shields.io/badge/Built_with-React_19-149eca?logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Storage](https://img.shields.io/badge/Storage-Local--first-2ea44f)](#隐私与安全)
+[![Markets](https://img.shields.io/badge/Markets-Singapore_%2B_Hong_Kong-f59e0b)](#项目状态)
+[![Preview](https://img.shields.io/badge/Status-Private_preview-6f42c1)](https://github.com/yeebs1000/job-buddy)
 
 [English README](README.md)
 
-Job Buddy 帮助个人集中管理每一份求职申请、当前阶段、截止日期、面试、跟进任务和备注。首个版本面向新加坡和香港，优先支持金融、软件工程、数据、网络安全、云计算及一般 IT 职位。
+Job Buddy 帮助所有正在寻找工作的人集中管理每一份求职申请、当前阶段、截止日期、面试、跟进任务和备注。首个版本面向新加坡和香港，优先支持金融、软件工程、数据、网络安全、云计算及一般 IT 职位。
+
+> [!TIP]
+> **小小承诺：** Job Buddy 可以对阶段历史有自己的规则，但绝不会悄悄改写你的过去。
+
+<details>
+<summary>✨ 30 秒了解使用流程</summary>
+
+1. 导入现有 CSV/XLSX 追踪表，或手动新增一份申请。
+2. 按地区、行业、职位族群、阶段、优先级、标签和截止日期筛选。
+3. 打开职位详情，更新阶段、查看完整历史；误操作时可以撤销，但不会删除审计记录。
+4. 随时导出当前视图或完整追踪表作为备份。
+
+</details>
 
 ## 项目状态
 
@@ -121,9 +140,16 @@ npm run test:e2e
 
 产品方向见[设计规格](docs/superpowers/specs/2026-09-12-job-buddy-design.md)，核心实施顺序见[核心追踪器计划](docs/superpowers/plans/2026-09-12-job-buddy-core-tracker.md)。
 
-## 参考项目
+## GitHub 清单
 
-项目参考了 [ai-job-search](https://github.com/MadsLorentzen/ai-job-search) 和 [JobSpy](https://github.com/speedyapply/JobSpy)。它们只是参考项目，不是运行时依赖。未来连接器必须遵守各平台的条款、API 限制、隐私要求和地区可用性。
+- [x] 无需账号的本地优先存储
+- [x] 新加坡和香港首发地区
+- [x] 导入前审阅的 CSV/XLSX 迁移流程
+- [x] 单元测试、组件测试和浏览器流程
+- [ ] Gmail 智能识别与每日招聘方扫描
+- [ ] 薪资/公司评价研究连接器
+- [ ] 用户确认式自动填表助手
+- [ ] 可选加密同步
 
 ## License
 

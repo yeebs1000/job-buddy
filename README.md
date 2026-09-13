@@ -1,10 +1,29 @@
 # Job Buddy
 
-> A local-first workspace for replacing the graduate job-application spreadsheet.
+> A local-first workspace for replacing the job-application spreadsheet.
+
+[![Built with React](https://img.shields.io/badge/Built_with-React_19-149eca?logo=react&logoColor=white)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Storage](https://img.shields.io/badge/Storage-Local--first-2ea44f)](#privacy-and-security)
+[![Markets](https://img.shields.io/badge/Markets-Singapore_%2B_Hong_Kong-f59e0b)](#project-status)
+[![Preview](https://img.shields.io/badge/Status-Private_preview-6f42c1)](https://github.com/yeebs1000/job-buddy)
 
 [中文文档](README.zh-CN.md)
 
-Job Buddy helps one person keep every application, stage change, deadline, interview, follow-up, and note in one place. The first release is designed for Singapore and Hong Kong, with a focus on finance, software engineering, data, cybersecurity, cloud, and general IT roles.
+Job Buddy helps anyone looking for work keep every application, stage change, deadline, interview, follow-up, and note in one place. The first release is designed for Singapore and Hong Kong, with a focus on finance, software engineering, data, cybersecurity, cloud, and general IT roles.
+
+> [!TIP]
+> **Tiny promise:** Job Buddy may be opinionated about stage history, but it will never silently rewrite your past.
+
+<details>
+<summary>✨ The 30-second tour</summary>
+
+1. Import an existing CSV/XLSX tracker or add an application manually.
+2. Filter the table by market, industry, role family, stage, priority, tags, deadlines, and more.
+3. Open a role to update its stage, see the full history, and undo a mistaken change without deleting the audit trail.
+4. Export the current view or your complete tracker whenever you need a backup.
+
+</details>
 
 ## Project status
 
@@ -121,9 +140,16 @@ npm run test:e2e
 
 The product direction is documented in the [design specification](docs/superpowers/specs/2026-09-12-job-buddy-design.md), and the core implementation sequence is in the [core tracker plan](docs/superpowers/plans/2026-09-12-job-buddy-core-tracker.md).
 
-## Prior art
+## GitHub checklist
 
-The project takes inspiration from [ai-job-search](https://github.com/MadsLorentzen/ai-job-search) and [JobSpy](https://github.com/speedyapply/JobSpy). They are references, not runtime dependencies. Any future connector must respect each platform's terms, API limits, privacy expectations, and regional availability.
+- [x] Local-first storage with no account required
+- [x] Singapore and Hong Kong launch coverage
+- [x] CSV/XLSX migration path with review before write
+- [x] Focused unit/component tests and a browser journey
+- [ ] Gmail intelligence and daily recruiter scans
+- [ ] Salary/review research connectors
+- [ ] User-approved autofill assistant
+- [ ] Optional encrypted sync
 
 ## License
 
