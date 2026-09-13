@@ -63,3 +63,12 @@ it("shows unavailable research for a new manual application", async () => {
   renderPage();
   expect(await screen.findByText("Research unavailable")).toBeVisible();
 });
+
+it.each([
+  { research: { salary: { minimum: 4000, currency: "SGD" as const, period: "monthly" as const } }, available: /4,000.*monthly/, absent: "Company rating unavailable" },
+  { research: { companyRating: { score: 4.2, outOf: 5, source: "Graduate survey" } }, available: /4.2\/5/, absent: "Salary unavailable" },
+])("renders independently optional salary and rating observations", async ({ research, available, absent }) => {
+  list.mockResolvedValue([{ ...sampleApplications[0], research }]);
+  renderPage();
+  expect(await screen.findByText(available)).toHaveTextContent(absent);
+});

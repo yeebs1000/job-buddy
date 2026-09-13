@@ -12,13 +12,13 @@ export interface Deadline {
 }
 
 export interface ResearchSnapshot {
-  salary: {
+  salary?: {
     minimum: number;
     maximum?: number;
     currency: "SGD" | "HKD";
     period: "monthly" | "annual";
   };
-  companyRating: {
+  companyRating?: {
     score: number;
     outOf: number;
     source: string;
@@ -37,6 +37,7 @@ export interface Application {
   workArrangement?: (typeof workArrangements)[number];
   priority?: (typeof priorities)[number];
   recruiter?: string;
+  jobUrl?: string;
   notes?: string;
   archived?: boolean;
   unreadUpdate?: boolean;

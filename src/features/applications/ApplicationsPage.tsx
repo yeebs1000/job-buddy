@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { SortingState } from "@tanstack/react-table";
 import { applicationRepository } from "../../db/applicationRepository";
 import { jobBuddyDb, type SavedView } from "../../db/database";
@@ -9,6 +9,7 @@ import { priorities, roleFamilies, workArrangements, type Application } from "..
 import { matchesApplicationFilters, type ApplicationFilterState } from "../../domain/filters";
 import { applicationStages, deriveApplicationState, type ApplicationStage } from "../../domain/stage";
 import { ApplicationFilters } from "./ApplicationFilters";
+import { ExportControls } from "../import-export/ExportControls";
 import { ApplicationTable, defaultVisibleColumns, parseTags, standardColumns } from "./ApplicationTable";
 import "./applications.css";
 
@@ -126,6 +127,8 @@ export function ApplicationsPage() {
     <p className="application-status" role="status">{loading ? "Loading applications…" : message}</p>
     {params.get("new") === "1" && <NewApplication busy={busy} onCancel={closeCreate} onSave={async application => { if (await run(() => applicationRepository.create(application), "Application created.")) { changeFilters({}); closeCreate(); } }} />}
     {!loading && <>
+      <div className="application-toolbar"><Link to="/import">Import tracker</Link></div>
+      <ExportControls applications={applications} filtered={filtered} />
       <div className="application-toolbar application-views">
         <label>Saved view<select aria-label="Saved view" value={viewId} onChange={e => restoreView(e.target.value)}><option value="">All applications / custom</option>{views.map(view => <option key={view.id} value={view.id}>{view.name}</option>)}</select></label>
         <label>View name<input maxLength={80} value={viewName} onChange={e => setViewName(e.target.value)} placeholder="Name this setup" /></label><button disabled={busy || !viewName.trim()} onClick={() => void saveView()}>Save view</button>

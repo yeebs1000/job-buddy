@@ -17,11 +17,13 @@ const stageLabels = {
 function salarySnapshot(application: Application): string {
   if (!application.research) return "Research unavailable";
   const { salary, companyRating } = application.research;
+  const rating = companyRating ? `${companyRating.score}/${companyRating.outOf}` : "Company rating unavailable";
+  if (!salary) return `Salary unavailable · ${rating}`;
   const currency = new Intl.NumberFormat(salary.currency === "SGD" ? "en-SG" : "en-HK", {
     style: "currency", currency: salary.currency, maximumFractionDigits: 0,
   });
   const range = salary.maximum ? `${currency.format(salary.minimum)}–${currency.format(salary.maximum)}` : currency.format(salary.minimum);
-  return `${range} / ${salary.period} · ${companyRating.score}/${companyRating.outOf}`;
+  return `${range} / ${salary.period} · ${rating}`;
 }
 
 function rejectedAtStage(application: Application) {
@@ -96,7 +98,7 @@ export function CommandCenterPage() {
               : `Stage: ${state.stage ? stageLabels[state.stage] : "Not started"}`;
             return <article className="command-center__application" data-outcome={state.outcome ?? undefined} data-testid={`application-row-${application.id}`} key={application.id}>
               <div className="command-center__identity"><h3>{application.company}</h3><p>{application.role} · {application.location.city}</p><span>Source: {application.source}</span></div>
-              <p className="command-center__market">{salarySnapshot(application)}<br /><span>{application.research?.companyRating.source}</span></p>
+              <p className="command-center__market">{salarySnapshot(application)}<br /><span>{application.research?.companyRating?.source}</span></p>
               <div className="command-center__progress"><StageRail compact outcome={state.outcome} rejectedAtStage={railStage ?? undefined} stage={state.stage} /><span className="command-center__stage-label">{statusLabel}</span></div>
               <p className="command-center__next-action">{reason}</p>
             </article>;

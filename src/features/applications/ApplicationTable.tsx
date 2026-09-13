@@ -39,12 +39,12 @@ export function ApplicationTable({ applications, sorting, onSort, visibleColumns
       location: a => a.location.city, workArrangement: a => a.workArrangement ?? "Unknown", stage: a => deriveApplicationState(a.stageEvents).stage ?? "", outcome: a => deriveApplicationState(a.stageEvents).outcome ?? "active",
       appliedAt: a => dateOnly(a.appliedAt), lastActivity: a => dateOnly([...a.stageEvents.filter(e => e.accepted).map(e => e.at), "updatedAt" in a && typeof a.updatedAt === "string" ? a.updatedAt : a.appliedAt].sort().at(-1)!),
       nextAction: a => nextAction(a)?.label ?? "—", deadline: a => nextAction(a) ? dateOnly(nextAction(a)!.at) : "—", source: a => a.source,
-      salary: a => a.research ? `${a.research.salary.currency} ${a.research.salary.minimum.toLocaleString()}${a.research.salary.maximum ? `–${a.research.salary.maximum.toLocaleString()}` : ""} / ${a.research.salary.period}` : "Unavailable",
-      companyRating: a => a.research ? `${a.research.companyRating.score}/${a.research.companyRating.outOf} · ${a.research.companyRating.source}` : "Unavailable",
+      salary: a => a.research?.salary ? `${a.research.salary.currency} ${a.research.salary.minimum.toLocaleString()}${a.research.salary.maximum ? `–${a.research.salary.maximum.toLocaleString()}` : ""} / ${a.research.salary.period}` : "Unavailable",
+      companyRating: a => a.research?.companyRating ? `${a.research.companyRating.score}/${a.research.companyRating.outOf} · ${a.research.companyRating.source}` : "Unavailable",
       priority: a => a.priority ?? "normal", tags: a => a.tags.join(", "),
     };
     return standardColumns.map(([id, header]) => ({ id, header, sortDescFirst: false, sortUndefined: "last",
-      accessorFn: a => id === "salary" ? a.research?.salary.minimum : id === "stage" ? applicationStages.indexOf(deriveApplicationState(a.stageEvents).stage as ApplicationStage) : id === "priority" ? priorities.indexOf(a.priority ?? "normal") : textValues[id](a),
+      accessorFn: a => id === "salary" ? a.research?.salary?.minimum : id === "stage" ? applicationStages.indexOf(deriveApplicationState(a.stageEvents).stage as ApplicationStage) : id === "priority" ? priorities.indexOf(a.priority ?? "normal") : textValues[id](a),
       sortFn: id === "salary" ? (left, right) => {
         const a = left.original.research?.salary;
         const b = right.original.research?.salary;
