@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router-dom";
 import { AppShell } from "../components/AppShell";
 import { CommandCenterPage } from "../features/command-center/CommandCenterPage";
+import { ApplicationsPage } from "../features/applications/ApplicationsPage";
 
 function Page({ title }: { title: string }) {
   return <section><h1>{title}</h1></section>;
@@ -12,7 +13,7 @@ export const appRoutes: RouteObject[] = [
     children: [
       { index: true, element: <CommandCenterPage /> },
       { path: "import", element: <Page title="Import tracker" /> },
-      { path: "applications", element: <Page title="Applications" /> },
+      { path: "applications", element: <ApplicationsPage /> },
       { path: "applications/:id", element: <Page title="Application details" /> },
       { path: "updates", element: <Page title="Updates" /> },
       { path: "prepare", element: <Page title="Prepare" /> },

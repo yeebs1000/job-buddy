@@ -25,3 +25,15 @@ it("keeps accepted fixture histories internally stage-consistent", () => {
     });
   }
 });
+
+it("supplies standard market, role family, industry, arrangement and priority columns", () => {
+  for (const application of sampleApplications) {
+    expect(application.market).toMatch(/^(SG|HK)$/);
+    expect(application.roleFamily).toMatch(/^(finance|software|data|cybersecurity|cloud|IT)$/);
+    expect(application.industry).toBeTruthy();
+    expect(application.workArrangement).toBeTruthy();
+    expect(application.priority).toBeTruthy();
+  }
+  expect(sampleApplications.find(a => a.role === "Data Engineer")?.roleFamily).toBe("data");
+  expect(sampleApplications.find(a => a.role === "IT Support Analyst")?.roleFamily).toBe("IT");
+});

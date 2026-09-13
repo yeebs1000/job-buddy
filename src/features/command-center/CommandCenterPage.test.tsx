@@ -57,3 +57,9 @@ it("keeps three stable skeleton rows visible while applications load", () => {
   expect(screen.getByRole("region", { name: "Loading applications" })).toHaveAttribute("aria-busy", "true");
   expect(screen.getAllByTestId("loading-skeleton")).toHaveLength(3);
 });
+
+it("shows unavailable research for a new manual application", async () => {
+  list.mockResolvedValue([{ ...sampleApplications[0], research: undefined }]);
+  renderPage();
+  expect(await screen.findByText("Research unavailable")).toBeVisible();
+});

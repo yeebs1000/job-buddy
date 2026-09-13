@@ -3,6 +3,7 @@ import type { Application } from "../domain/application";
 export const sampleApplications: Application[] = [
   {
     id: "app-aurora-applied", company: "Aurora Ledger Pte Ltd", role: "Investment Analyst", discipline: "finance",
+    market: "SG", roleFamily: "finance", industry: "Financial services", workArrangement: "hybrid", priority: "normal",
     location: { city: "Singapore", country: "Singapore" }, source: "LinkedIn", appliedAt: "2026-09-01T02:15:00Z", tags: ["asset-management", "graduate"],
     deadlines: [{ id: "d1", label: "Follow up", at: "2026-09-15T09:00:00Z", completed: false }],
     research: { salary: { minimum: 4800, maximum: 6200, currency: "SGD", period: "monthly" }, companyRating: { score: 4.1, outOf: 5, source: "Fictional Reviews" } },
@@ -10,6 +11,7 @@ export const sampleApplications: Application[] = [
   },
   {
     id: "app-circuit-review", company: "Circuit Harbour Ltd", role: "Software Engineer", discipline: "software_it",
+    market: "SG", roleFamily: "software", industry: "Technology", workArrangement: "hybrid", priority: "high",
     location: { city: "Singapore", country: "Singapore" }, source: "Company careers", appliedAt: "2026-08-28T04:00:00Z", tags: ["typescript", "platform"], interviewSubtype: "technical",
     deadlines: [{ id: "d2", label: "Recruiter follow-up", at: "2026-09-16T04:00:00Z", completed: false }],
     research: { salary: { minimum: 7000, maximum: 9000, currency: "SGD", period: "monthly" }, companyRating: { score: 3.9, outOf: 5, source: "Fictional Reviews" } },
@@ -20,6 +22,7 @@ export const sampleApplications: Application[] = [
   },
   {
     id: "app-pine-assessment", company: "Pine Street Capital", role: "Risk Analyst", discipline: "finance",
+    market: "HK", roleFamily: "finance", industry: "Financial services", workArrangement: "onsite", priority: "high",
     location: { city: "Hong Kong", country: "Hong Kong" }, source: "Campus portal", appliedAt: "2026-08-24T03:00:00Z", tags: ["risk", "markets"], interviewSubtype: "case",
     deadlines: [{ id: "d3", label: "Numerical assessment", at: "2026-09-14T02:00:00Z", completed: false }],
     research: { salary: { minimum: 28000, maximum: 35000, currency: "HKD", period: "monthly" }, companyRating: { score: 4.0, outOf: 5, source: "Fictional Reviews" } },
@@ -30,6 +33,7 @@ export const sampleApplications: Application[] = [
   },
   {
     id: "app-moon-interview", company: "Moonbeam Systems", role: "Data Engineer", discipline: "software_it",
+    market: "HK", roleFamily: "data", industry: "Technology", workArrangement: "hybrid", priority: "high",
     location: { city: "Hong Kong", country: "Hong Kong" }, source: "Referral", appliedAt: "2026-08-20T07:45:00Z", tags: ["data", "python"], interviewSubtype: "video",
     deadlines: [{ id: "d4", label: "Video interview", at: "2026-09-13T06:00:00Z", completed: false }],
     research: { salary: { minimum: 30000, maximum: 42000, currency: "HKD", period: "monthly" }, companyRating: { score: 4.3, outOf: 5, source: "Fictional Reviews" } },
@@ -40,6 +44,7 @@ export const sampleApplications: Application[] = [
   },
   {
     id: "app-orchard-final", company: "Orchard Advisory", role: "Corporate Finance Associate", discipline: "finance",
+    market: "SG", roleFamily: "finance", industry: "Financial services", workArrangement: "onsite", priority: "high",
     location: { city: "Singapore", country: "Singapore" }, source: "LinkedIn", appliedAt: "2026-08-15T01:00:00Z", tags: ["m-and-a", "advisory"], interviewSubtype: "final",
     deadlines: [{ id: "d5", label: "Final panel", at: "2026-09-17T03:00:00Z", completed: false }],
     research: { salary: { minimum: 6500, maximum: 8200, currency: "SGD", period: "monthly" }, companyRating: { score: 4.2, outOf: 5, source: "Fictional Reviews" } },
@@ -51,6 +56,7 @@ export const sampleApplications: Application[] = [
   },
   {
     id: "app-cobalt-offer", company: "Cobalt Cloud Works", role: "Product Engineer", discipline: "software_it",
+    market: "HK", roleFamily: "software", industry: "Technology", workArrangement: "remote", priority: "high",
     location: { city: "Hong Kong", country: "Hong Kong" }, source: "Company careers", appliedAt: "2026-08-10T05:30:00Z", tags: ["frontend", "product"], interviewSubtype: "onsite",
     deadlines: [{ id: "d6", label: "Offer response", at: "2026-09-18T09:00:00Z", completed: false }],
     research: { salary: { minimum: 36000, maximum: 45000, currency: "HKD", period: "monthly" }, companyRating: { score: 3.8, outOf: 5, source: "Fictional Reviews" } },
@@ -62,6 +68,7 @@ export const sampleApplications: Application[] = [
   },
   {
     id: "app-river-rejected", company: "Riverbank Partners", role: "Portfolio Operations Analyst", discipline: "finance",
+    market: "SG", roleFamily: "finance", industry: "Financial services", workArrangement: "onsite", priority: "normal",
     location: { city: "Singapore", country: "Singapore" }, source: "Campus portal", appliedAt: "2026-08-12T04:30:00Z", tags: ["operations", "funds"],
     deadlines: [{ id: "d7", label: "Archive notes", at: "2026-09-12T04:30:00Z", completed: false }],
     research: { salary: { minimum: 4500, maximum: 5800, currency: "SGD", period: "monthly" }, companyRating: { score: 3.6, outOf: 5, source: "Fictional Reviews" } },
@@ -73,6 +80,7 @@ export const sampleApplications: Application[] = [
   },
   {
     id: "app-lantern-withdrawn", company: "Lantern Loop Studio", role: "IT Support Analyst", discipline: "software_it",
+    market: "HK", roleFamily: "IT", industry: "Technology", workArrangement: "onsite", priority: "low",
     location: { city: "Hong Kong", country: "Hong Kong" }, source: "Jobs board", appliedAt: "2026-08-18T02:00:00Z", tags: ["support", "saas"], interviewSubtype: "phone",
     deadlines: [{ id: "d8", label: "Withdrawal confirmation", at: "2026-09-11T02:00:00Z", completed: true }],
     research: { salary: { minimum: 22000, maximum: 28000, currency: "HKD", period: "monthly" }, companyRating: { score: 3.7, outOf: 5, source: "Fictional Reviews" } },

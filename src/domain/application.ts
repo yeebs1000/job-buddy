@@ -1,5 +1,9 @@
 import type { ApplicationStage, StageEvent } from "./stage";
 
+export const roleFamilies = ["finance", "software", "data", "cybersecurity", "cloud", "IT"] as const;
+export const workArrangements = ["onsite", "hybrid", "remote"] as const;
+export const priorities = ["low", "normal", "high"] as const;
+
 export interface Deadline {
   id: string;
   label: string;
@@ -26,6 +30,18 @@ export interface Application {
   company: string;
   role: string;
   discipline: "finance" | "software_it";
+  // Optional for records created before the standard-column contract.
+  industry?: string;
+  roleFamily?: (typeof roleFamilies)[number];
+  market?: "SG" | "HK";
+  workArrangement?: (typeof workArrangements)[number];
+  priority?: (typeof priorities)[number];
+  recruiter?: string;
+  notes?: string;
+  archived?: boolean;
+  unreadUpdate?: boolean;
+  missingData?: boolean;
+  followUpAt?: string;
   location: {
     city: string;
     country: "Singapore" | "Hong Kong";
@@ -35,7 +51,7 @@ export interface Application {
   tags: string[];
   interviewSubtype?: "phone" | "video" | "technical" | "case" | "onsite" | "final";
   deadlines: Deadline[];
-  research: ResearchSnapshot;
+  research?: ResearchSnapshot;
   stageEvents: StageEvent[];
   targetStage?: ApplicationStage;
 }
