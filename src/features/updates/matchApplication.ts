@@ -68,7 +68,7 @@ function score(message: MailEnvelope, application: Application): CandidateMatch 
     confidence += 0.45;
     reasons.push("recruiter");
   }
-  if (companyIdentity.length >= 3 && senderDomain(message.fromAddress).includes(companyIdentity)) {
+  if (companyIdentity !== "" && senderDomain(message.fromAddress) === companyIdentity) {
     confidence += 0.25;
     reasons.push("sender-domain");
   }

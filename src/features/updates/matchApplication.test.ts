@@ -33,6 +33,41 @@ describe("matchApplication", () => {
     });
   });
 
+  it("does not award sender-domain evidence to a lookalike domain label", () => {
+    // Catches substring domain matching that treats notmeridianquant.example as Meridian Quant's domain.
+    const message: MailEnvelope = {
+      ...meridianMail,
+      fromAddress: "recruiting@notmeridianquant.example",
+    };
+
+    expect(matchApplication(message, [application({ recruiter: "Meridian Quant Recruiting" })])).toEqual({
+      applicationId: "app-meridian-quant",
+      confidence: 0.75,
+      reasons: ["recruiter", "company", "role"],
+      conflicts: [],
+    });
+  });
+
+  it("awards sender-domain evidence to an exact two-letter company domain", () => {
+    // Catches a length guard that removes the mandated domain signal for a legitimate short company name.
+    const message: MailEnvelope = {
+      providerMessageId: "mail-ai-001",
+      fromName: "AI Recruiting",
+      fromAddress: "recruiting@ai.example",
+      subject: "Interview invitation for Researcher",
+      receivedAt: "2026-09-12T09:00:00.000Z",
+      excerpt: "AI would like to discuss the Researcher role.",
+      links: [],
+    };
+
+    expect(matchApplication(message, [application({ id: "app-ai", company: "AI Ltd.", role: "Researcher", recruiter: "AI Recruiting" })])).toEqual({
+      applicationId: "app-ai",
+      confidence: 1,
+      reasons: ["recruiter", "sender-domain", "company", "role"],
+      conflicts: [],
+    });
+  });
+
   it("returns no match when two applications have the same high-confidence evidence", () => {
     // Catches a tie-break branch that silently assigns one of two equally plausible applications.
     const message: MailEnvelope = {
