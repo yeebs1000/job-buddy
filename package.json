@@ -2,6 +2,9 @@
   "name": "job-buddy",
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": "^22.22.2 || >=24.0.0"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

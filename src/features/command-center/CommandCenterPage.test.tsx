@@ -64,6 +64,28 @@ it("shows unavailable research for a new manual application", async () => {
   expect(await screen.findByText("Research unavailable")).toBeVisible();
 });
 
+it("uses canonical state for an unsorted rejection history and labels other terminal outcomes", async () => {
+  const rejected = {
+    ...sampleApplications[0],
+    id: "repository-id-9",
+    company: "Chronological Capital",
+    stageEvents: [
+      { id: "repo-event-001", applicationId: "repository-id-9", at: "2026-09-04T09:00:00Z", toStage: "review" as const, origin: "manual" as const, accepted: true },
+      { id: "repo-event-999", applicationId: "repository-id-9", at: "2026-09-02T09:00:00Z", toStage: "applied" as const, origin: "manual" as const, accepted: true },
+      { id: "repo-event-010", applicationId: "repository-id-9", at: "2026-09-05T09:00:00Z", outcome: "rejected" as const, origin: "manual" as const, accepted: true },
+    ],
+  };
+  const withdrawn = { ...sampleApplications[1], id: "withdrawn-id", company: "Closed Loop", stageEvents: [{ id: "closed-stage", applicationId: "withdrawn-id", at: "2026-09-02T09:00:00Z", toStage: "interview" as const, outcome: "withdrawn" as const, origin: "manual" as const, accepted: true }] };
+  list.mockResolvedValue([rejected, withdrawn]);
+  renderPage();
+
+  expect(await screen.findByText("Rejected at Review")).toBeVisible();
+  expect(screen.getByTestId("application-row-repository-id-9")).toHaveTextContent("Rejected at Review");
+  expect(screen.getByLabelText("Rejected during Review")).toBeInTheDocument();
+  expect(screen.getByTestId("application-row-withdrawn-id")).toHaveTextContent("Outcome: Withdrawn at Interview");
+  expect(screen.getByLabelText("Withdrawn after Interview")).toBeInTheDocument();
+});
+
 it.each([
   { research: { salary: { minimum: 4000, currency: "SGD" as const, period: "monthly" as const } }, available: /4,000.*monthly/, absent: "Company rating unavailable" },
   { research: { companyRating: { score: 4.2, outOf: 5, source: "Graduate survey" } }, available: /4.2\/5/, absent: "Salary unavailable" },

@@ -7,7 +7,7 @@ export async function exportTracker(applications: Application[], format: ExportF
   const fields = Object.keys(trackerColumns) as TrackerField[];
   const rows = applications.map(a => {
     const { stage, outcome } = deriveApplicationState(a.stageEvents); const salary = a.research?.salary, rating = a.research?.companyRating;
-    const values: Partial<Record<TrackerField, unknown>> = { ...a, city: a.location.city, market: a.market ?? (a.location.country === "Singapore" ? "SG" : "HK"), stage: stage ?? "Not started", outcome: outcome ?? "active", salary: salary?.minimum, salaryMax: salary?.maximum, currency: salary?.currency, period: salary?.period, rating: rating?.score, ratingOutOf: rating?.outOf, ratingSource: rating?.source, tags: a.tags.join(";"), deadlines: a.deadlines.length ? JSON.stringify(a.deadlines.map(({ label, at, completed }) => ({ label, at, completed }))) : "", escaped: format === "csv" ? "apostrophe-v1" : "" };
+    const values: Partial<Record<TrackerField, unknown>> = { ...a, city: a.location.city, market: a.market ?? (a.location.country === "Singapore" ? "SG" : "HK"), stage: stage ?? "Not started", outcome: outcome ?? "active", salary: salary?.minimum, salaryMax: salary?.maximum, currency: salary?.currency, period: salary?.period, rating: rating?.score, ratingOutOf: rating?.outOf, ratingSource: rating?.source, tags: a.tags.map(encodeURIComponent).join(";"), deadlines: a.deadlines.length ? JSON.stringify(a.deadlines.map(({ label, at, completed }) => ({ label, at, completed }))) : "", escaped: format === "csv" ? "apostrophe-v1;tag-uri-v1" : "tag-uri-v1" };
     return fields.map(field => values[field] ?? "");
   });
   const grid = [fields.map(field => trackerColumns[field]), ...rows];

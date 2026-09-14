@@ -26,4 +26,5 @@
 .command-center__buddy { align-items: center; display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .command-center__buddy p { flex: 1 1 18rem; margin: 0; }
 .command-center__skeleton { background: #e8eaed; border-radius: var(--radius-sm); height: 5.5rem; }
-@media (max-width: 48rem) { .command-center__header { align-items: start; flex-direction: column; } .command-center__stage-summary { grid-template-columns: repeat(3, 1fr); gap: var(--space-4) 0; } .command-center__stage-summary > div:nth-child(4) { border-left: 0; padding-left: 0; } .command-center__application { align-items: start; grid-template-columns: 1fr; } }
+@media (max-width: 56rem) { .command-center__application { align-items: start; grid-template-columns: 1fr; } }
+@media (max-width: 48rem) { .command-center__header { align-items: start; flex-direction: column; } .command-center__stage-summary { grid-template-columns: repeat(3, 1fr); gap: var(--space-4) 0; } .command-center__stage-summary > div:nth-child(4) { border-left: 0; padding-left: 0; } }

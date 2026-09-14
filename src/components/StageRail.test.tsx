@@ -25,6 +25,16 @@ describe("StageRail", () => {
     expect(screen.getAllByRole("listitem")).toHaveLength(6);
   });
 
+  it("labels a non-rejected terminal outcome without announcing active progress", () => {
+    render(<StageRail stage="interview" outcome="withdrawn" />);
+
+    expect(screen.getByRole("group", { name: "Withdrawn after Interview" })).toHaveAttribute("data-outcome", "withdrawn");
+    expect(screen.getByText("Interview").closest("li")).toHaveAttribute("data-state", "terminal-at");
+    expect(screen.getByText("Interview")).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("group").querySelectorAll('[data-state="current"], [data-state="upcoming"], [data-state="complete"]')).toHaveLength(0);
+    expect(screen.getByText(/Withdrawn at Interview/)).toBeInTheDocument();
+  });
+
   it("keeps compact labels and state text available to assistive technology", () => {
     render(<StageRail compact outcome={null} stage="interview" />);
 

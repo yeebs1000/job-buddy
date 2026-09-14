@@ -7,6 +7,8 @@ work/
 node_modules/
 dist/
 coverage/
+test-results/
+playwright-report/
 *.tsbuildinfo
 
 # Local databases, imports, and exports

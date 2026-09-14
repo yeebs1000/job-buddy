@@ -59,9 +59,10 @@ function boolean(value: unknown, label: string, errors: string[]): boolean | und
 const schema = z.object({ company: z.string().min(1, "Company is required."), role: z.string().min(1, "Role is required."), source: z.string().min(1, "Source is required."), location: z.object({ city: z.string().min(1, "Location is required.") }), discipline: z.enum(["finance", "software_it"]), market: z.enum(["SG", "HK"]), stage: z.enum(applicationStages).nullable(), roleFamily: z.enum(roleFamilies).optional(), workArrangement: z.enum(workArrangements).optional(), priority: z.enum(priorities).optional() });
 function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: number): ImportRow {
   const errors: string[] = [], warnings: string[] = [];
+  const escaped = text(values.escaped).split(";");
   const get = (field: TrackerField) => {
     const raw = String(values[field] ?? "");
-    const restored = values.escaped === "apostrophe-v1" && /^'(?:[\s]*[=+@\-]|[\t\r'])/.test(raw) ? raw.slice(1) : raw;
+    const restored = escaped.includes("apostrophe-v1") && /^'(?:[\s]*[=+@\-]|[\t\r'])/.test(raw) ? raw.slice(1) : raw;
     return field === "notes" ? restored : restored.trim();
   };
   const marketKey = key(values.market || values.city);
@@ -73,7 +74,11 @@ function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: nu
   const currentOutcome = outcome(values.outcome) ?? outcome(values.stage);
   if (get("outcome") && key(values.outcome) !== "active" && !outcome(values.outcome)) errors.push("Outcome is not recognized.");
   if (!currentStage && key(values.stage) !== "not started") errors.push("Stage is required; use Not started when no stage was reached. Terminal statuses also need the reached stage in a separate Stage column.");
-  const normalized: NormalizedApplication = { company: get("company"), role: get("role"), discipline, market, location: { city: get("city"), country: market === "SG" ? "Singapore" : "Hong Kong" }, source: get("source"), appliedAt: date(values.appliedAt, "Applied date", errors, true) ?? "", stage: currentStage, outcome: currentOutcome, tags: [...new Set(get("tags").split(/[;,]/).map(v => v.trim()).filter(Boolean))], deadlines: [] };
+  const tags = get("tags").split(";").map(value => value.trim()).filter(Boolean).map(value => {
+    if (!escaped.includes("tag-uri-v1")) return value;
+    try { return decodeURIComponent(value); } catch { return value; }
+  });
+  const normalized: NormalizedApplication = { company: get("company"), role: get("role"), discipline, market, location: { city: get("city"), country: market === "SG" ? "Singapore" : "Hong Kong" }, source: get("source"), appliedAt: date(values.appliedAt, "Applied date", errors, true) ?? "", stage: currentStage, outcome: currentOutcome, tags: [...new Set(tags)], deadlines: [] };
   if (!market) errors.push("Market is required: SG/Singapore or HK/Hong Kong.");
   if (!discipline) errors.push("Role Family or Discipline is required (finance, software, data, cybersecurity, cloud or IT).");
   if (roleFamily) normalized.roleFamily = roleFamily;

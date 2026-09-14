@@ -26,9 +26,7 @@ function salarySnapshot(application: Application): string {
   return `${range} / ${salary.period} · ${rating}`;
 }
 
-function rejectedAtStage(application: Application) {
-  return [...application.stageEvents].filter((event) => event.accepted && event.toStage).at(-1)?.toStage;
-}
+const outcomeLabels = { rejected: "Rejected", withdrawn: "Withdrawn", expired: "Expired", offer_declined: "Offer declined", offer_accepted: "Offer accepted", hired: "Hired" } as const;
 
 export function CommandCenterPage() {
   const [applications, setApplications] = useState<Application[] | null>(null);
@@ -92,14 +90,16 @@ export function CommandCenterPage() {
         <div className="command-center__rows">
           {actions.map(({ application, reason }) => {
             const state = deriveApplicationState(application.stageEvents);
-            const railStage = rejectedAtStage(application) ?? state.stage;
+            const railStage = state.stage;
             const statusLabel = state.outcome === "rejected"
               ? `Rejected at ${railStage ? stageLabels[railStage] : "unknown stage"}`
+              : state.outcome
+                ? `Outcome: ${outcomeLabels[state.outcome]}${railStage ? ` at ${stageLabels[railStage]}` : ""}`
               : `Stage: ${state.stage ? stageLabels[state.stage] : "Not started"}`;
             return <article className="command-center__application" data-outcome={state.outcome ?? undefined} data-testid={`application-row-${application.id}`} key={application.id}>
               <div className="command-center__identity"><h3>{application.company}</h3><p>{application.role} · {application.location.city}</p><span>Source: {application.source}</span></div>
               <p className="command-center__market">{salarySnapshot(application)}<br /><span>{application.research?.companyRating?.source}</span></p>
-              <div className="command-center__progress"><StageRail compact outcome={state.outcome} rejectedAtStage={railStage ?? undefined} stage={state.stage} /><span className="command-center__stage-label">{statusLabel}</span></div>
+              <div className="command-center__progress"><StageRail compact outcome={state.outcome} rejectedAtStage={state.outcome === "rejected" ? railStage ?? undefined : undefined} stage={state.stage} /><span className="command-center__stage-label">{statusLabel}</span></div>
               <p className="command-center__next-action">{reason}</p>
             </article>;
           })}

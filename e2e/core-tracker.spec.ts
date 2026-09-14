@@ -114,3 +114,19 @@ test("imports, filters, updates, undoes, and exports an application", async ({ p
   expect(xlsxCapture.mediaType).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   expect(xlsxCapture.byteLength).toBeGreaterThan(0);
 });
+
+test("keeps Command Center attention actions readable without horizontal page overflow across responsive widths", async ({ page }) => {
+  for (const width of [390, 768, 800, 820, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    await expect(page.getByRole("heading", { name: "Applications requiring attention" })).toBeVisible();
+    await expect(page.locator(".command-center__next-action").first()).toBeVisible();
+
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(await page.locator(".command-center__next-action").evaluateAll((elements) => elements.every((element) => {
+      const box = element.getBoundingClientRect();
+      return element.scrollWidth <= element.clientWidth && box.left >= 0 && box.right <= window.innerWidth;
+    }))).toBe(true);
+    if ([390, 800, 1440].includes(width)) await page.screenshot({ path: `test-results/final-fix-command-center-${width}.png`, fullPage: true });
+  }
+});

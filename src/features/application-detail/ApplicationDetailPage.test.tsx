@@ -129,6 +129,16 @@ it("renders the actual route parameter and useful available and unavailable sect
   expect(screen.getByText("Ask about the rotation programme.")).toBeVisible();
 });
 
+it("renders a validated job URL as a safe external source link", async () => {
+  await createApplication();
+  await applicationRepository.update("a1", { jobUrl: "https://careers.example.com/roles/graduate" });
+  renderDetail();
+
+  expect(await screen.findByRole("link", { name: "Open job posting" })).toHaveAttribute("href", "https://careers.example.com/roles/graduate");
+  expect(screen.getByRole("link", { name: "Open job posting" })).toHaveAttribute("target", "_blank");
+  expect(screen.getByRole("link", { name: "Open job posting" })).toHaveAttribute("rel", "noopener noreferrer");
+});
+
 it("shows a loading state and a clear not-found state", async () => {
   renderDetail("/applications/missing");
   expect(screen.getByRole("status")).toHaveTextContent("Loading application");

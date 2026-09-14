@@ -21,7 +21,7 @@ Job Buddy helps anyone looking for work keep every application, stage change, de
 1. Import an existing CSV/XLSX tracker or add an application manually.
 2. Filter the table by market, industry, role family, stage, priority, tags, deadlines, and more.
 3. Open a role to update its stage, see the full history, and undo a mistaken change without deleting the audit trail.
-4. Export the current view or your complete tracker whenever you need a backup.
+4. Export the current view or your complete tracker as a portable snapshot of standard fields.
 
 </details>
 
@@ -80,13 +80,13 @@ More regions, optional encrypted sync, backup/restore across devices, provider a
 
 V1 is single-user and local-only. Applications, imported records, events, and saved views live in the browser's IndexedDB. There is no hosted database, Gmail connection, background email scan, AI credential, or remote job scraper in this release.
 
-This is a privacy boundary, not a guarantee against someone who can access the same browser profile or device. Export a backup before clearing site data or changing devices. Never commit real trackers, exports, email bodies, API keys, cookies, or personal data.
+This is a privacy boundary, not a guarantee against someone who can access the same browser profile or device. Export a snapshot before clearing site data or changing devices, but do not treat the standard CSV/XLSX export as a restorable backup: it intentionally omits lifecycle history, event notes, evidence, internal IDs, and saved views. Never commit real trackers, exports, email bodies, API keys, cookies, or personal data.
 
 CSV and XLSX files are parsed locally. XLSX import is deliberately values-only: formulas, macros, oversized sheets, and workbook formatting are rejected or not preserved. The inherited `xlsx` advisory remains a release risk; the parser accepts explicit local files only, limits input size, and loads the spreadsheet library on demand.
 
 ## Quick start
 
-Prerequisites: Node.js 22+ and npm. Playwright's browser journey also needs Chromium.
+Prerequisites: Node.js 22.22.2+ (or a newer supported LTS) and npm. Playwright's browser journey also needs Chromium.
 
 ```bash
 git clone -b feature/job-buddy-core https://github.com/yeebs1000/job-buddy.git
@@ -116,7 +116,7 @@ If Chromium is missing, install it once with `npx playwright install chromium`.
 
 ## Reset demo data
 
-When the local database is empty, Job Buddy seeds deterministic, fictional applications. To reset the demo and all locally stored applications, export anything you need first, then clear this site's browser storage/IndexedDB and reload the app. The reset cannot be undone from inside Job Buddy.
+When the local database is empty, Job Buddy seeds deterministic, fictional applications. To reset the demo and all locally stored applications, export any standard fields you need as a snapshot first, then clear this site's browser storage/IndexedDB and reload the app. The reset cannot be undone from inside Job Buddy; the export does not retain lifecycle history, event notes/evidence, internal IDs, or saved views.
 
 ## Repository map
 
