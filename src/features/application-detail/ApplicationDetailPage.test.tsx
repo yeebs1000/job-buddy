@@ -129,14 +129,24 @@ it("renders the actual route parameter and useful available and unavailable sect
   expect(screen.getByText("Ask about the rotation programme.")).toBeVisible();
 });
 
-it("renders a validated job URL as a safe external source link", async () => {
+it.each(["https://careers.example.com/roles/graduate", "http://careers.example.com/roles/graduate"])("renders a persisted %s job URL as a safe external source link", async jobUrl => {
   await createApplication();
-  await applicationRepository.update("a1", { jobUrl: "https://careers.example.com/roles/graduate" });
+  await applicationRepository.update("a1", { jobUrl });
   renderDetail();
 
-  expect(await screen.findByRole("link", { name: "Open job posting" })).toHaveAttribute("href", "https://careers.example.com/roles/graduate");
+  expect(await screen.findByRole("link", { name: "Open job posting" })).toHaveAttribute("href", jobUrl);
   expect(screen.getByRole("link", { name: "Open job posting" })).toHaveAttribute("target", "_blank");
   expect(screen.getByRole("link", { name: "Open job posting" })).toHaveAttribute("rel", "noopener noreferrer");
+});
+
+it.each(["javascript:alert(1)", "https://user:password@careers.example.com/role", "not a url"])("does not turn an unsafe persisted job URL into an external link: %s", async jobUrl => {
+  await createApplication();
+  await applicationRepository.update("a1", { jobUrl });
+  renderDetail();
+
+  await screen.findByRole("heading", { name: "Investment Analyst" });
+  expect(screen.queryByRole("link", { name: "Open job posting" })).not.toBeInTheDocument();
+  expect(screen.getByText("LinkedIn")).toBeVisible();
 });
 
 it("shows a loading state and a clear not-found state", async () => {

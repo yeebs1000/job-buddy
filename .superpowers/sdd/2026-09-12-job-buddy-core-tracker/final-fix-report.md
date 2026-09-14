@@ -43,3 +43,25 @@ Playwright reran the real import → filter → manual update → undo → CSV/X
 - The production main chunk remains **624.47 kB raw / 188.55 kB gzip** and triggers Vite's chunk-size warning. Route splitting is intentionally deferred from this focused correctness wave.
 - No license file is present; a release plan must select and add one before redistribution.
 - Host-injected `NO_COLOR` / `FORCE_COLOR` warnings appeared during Playwright runs; assertions and browser results were unaffected.
+
+## Final fix round 2 — 2026-09-14
+
+### RED → GREEN evidence
+
+1. Added persisted `javascript:`, credential-bearing HTTPS, and malformed job URL component cases. RED: all three rendered `Open job posting` links. GREEN: a shared `isSafeExternalJobUrl` boundary is used by both import normalization and detail rendering; only credential-free HTTP(S) URLs produce external links. HTTP and HTTPS positive cases pass.
+2. Added a legacy unmarked quoted `graduate,priority` CSV case. RED: it imported as one tag. GREEN: unmarked input uses the legacy comma-or-semicolon split while `tag-uri-v1` exports continue to split only structural semicolons; existing CSV/XLSX `R&D; quant` lossless round trips remain green.
+3. Added follow-up-versus-deadline cases for both earlier and later follow-ups. GREEN: the selector returns the earliest outstanding action and exposes the matching deadline or follow-up metadata.
+4. Added a Hired rail regression alongside active and rejected rails. GREEN: Hired has a terminal label/state with no `aria-current`, current, upcoming, or complete progress semantics; active remains progressive and rejection remains constant red.
+5. Corrected the supported Node intersection to `^22.22.2 || ^24.15.0 || >=26.0.0` in both package metadata files and aligned EN/ZH README prerequisites.
+
+### Final round 2 verification
+
+| Command | Result |
+| --- | --- |
+| Focused Vitest (detail, parser/export, selectors, rail) | PASS — 5 files, 46 tests |
+| `node node_modules/vitest/vitest.mjs run` | PASS — 18 files, 132 tests |
+| `node node_modules/typescript/bin/tsc -b --pretty false` | PASS — exit 0, no diagnostics |
+| `node node_modules/vite/bin/vite.js build` | PASS — production build completed |
+| `node node_modules/@playwright/test/cli.js test` | PASS — 2 browser tests |
+
+The known main-bundle warning remains (624.56 kB raw / 188.59 kB gzip); it is unchanged in nature and remains deferred with the existing SheetJS and license concerns.

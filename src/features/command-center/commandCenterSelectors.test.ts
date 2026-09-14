@@ -40,6 +40,14 @@ it("uses an active follow-up as the earliest next action across overdue, today, 
   expect(rankNextActions([{ ...application, followUpAt: "2026-09-13T04:00:00Z" }], [], new Date("2026-09-12T00:00:00Z"))[0].reason).toBe("Tomorrow: Follow up");
 });
 
+it("chooses the earliest action when an active follow-up competes with a deadline", () => {
+  const deadline = { id: "deadline", label: "Portfolio", at: "2026-09-14T04:00:00Z", completed: false };
+  const application = { ...sampleApplications[0], deadlines: [deadline], followUpAt: "2026-09-13T04:00:00Z" };
+
+  expect(rankNextActions([application], [deadline], new Date("2026-09-12T00:00:00Z"))[0]).toMatchObject({ reason: "Tomorrow: Follow up", deadline: undefined, followUpAt: "2026-09-13T04:00:00Z" });
+  expect(rankNextActions([{ ...application, followUpAt: "2026-09-15T04:00:00Z" }], [deadline], new Date("2026-09-12T00:00:00Z"))[0]).toMatchObject({ reason: "Due Sep 14: Portfolio", deadline, followUpAt: undefined });
+});
+
 it("uses Singapore calendar days across the UTC midnight boundary", () => {
   const application = { ...sampleApplications[0], deadlines: [{ id: "sg-midnight", label: "SG midnight", at: "2026-09-12T16:30:00Z", completed: false }] };
 

@@ -6,6 +6,7 @@ import { applicationRepository, type PersistedApplication } from "../../db/appli
 import { jobBuddyDb } from "../../db/database";
 import { seedDemoData } from "../../db/seed";
 import { compareStageEvents } from "../../domain/stage";
+import { isSafeExternalJobUrl } from "../../domain/jobUrl";
 import { ManualStageUpdate, type ManualUpdate } from "./ManualStageUpdate";
 import { formatDate, outcomeLabels, stageLabels, StageHistory } from "./StageHistory";
 import "./application-detail.css";
@@ -65,6 +66,7 @@ export function ApplicationDetailPage({ applicationId }: { applicationId?: strin
       await applicationRepository.undoEvent(latest.id);
     }), "Change undone. The original record remains in history.");
   }
+  const jobUrl = isSafeExternalJobUrl(application.jobUrl) ? application.jobUrl : undefined;
   return <article className="application-detail">
     {back}
     <header className="detail-heading"><p className="detail-company">{application.company}</p><h1>{application.role}</h1><p className="detail-meta">{application.location.city} · {application.workArrangement ?? "Work arrangement unavailable"} · {application.roleFamily ?? application.discipline.replace("_", " / ")}{application.archived && " · Archived"}</p></header>
@@ -72,7 +74,7 @@ export function ApplicationDetailPage({ applicationId }: { applicationId?: strin
     <p role="status" className="detail-status">{busy ? "Saving changes…" : message}</p>
     {error && <p className="detail-error" role="alert">{error}</p>}
     <div className="detail-layout"><div>
-      <section className="detail-section" aria-labelledby="overview-title"><h2 id="overview-title">Overview</h2><dl className="detail-facts"><div><dt>Applied</dt><dd>{formatDate(application.appliedAt)}</dd></div><div><dt>Source</dt><dd>{application.source || "Unavailable"}{application.jobUrl && <> · <a href={application.jobUrl} target="_blank" rel="noopener noreferrer">Open job posting</a></>}</dd></div><div><dt>Industry</dt><dd>{application.industry ?? "Unavailable"}</dd></div><div><dt>Priority</dt><dd>{application.priority ?? "normal"}</dd></div></dl><p className="detail-meta">Tags: {application.tags.length ? application.tags.join(" · ") : "None"}</p></section>
+      <section className="detail-section" aria-labelledby="overview-title"><h2 id="overview-title">Overview</h2><dl className="detail-facts"><div><dt>Applied</dt><dd>{formatDate(application.appliedAt)}</dd></div><div><dt>Source</dt><dd>{application.source || "Unavailable"}{jobUrl && <> · <a href={jobUrl} target="_blank" rel="noopener noreferrer">Open job posting</a></>}</dd></div><div><dt>Industry</dt><dd>{application.industry ?? "Unavailable"}</dd></div><div><dt>Priority</dt><dd>{application.priority ?? "normal"}</dd></div></dl><p className="detail-meta">Tags: {application.tags.length ? application.tags.join(" · ") : "None"}</p></section>
       <ManualStageUpdate key={`${id}-${application.updatedAt}`} stage={application.stage} outcome={application.outcome} busy={busy} onUpdate={update} />
       <section className="detail-section" aria-labelledby="activity-title"><div className="detail-section-heading"><h2 id="activity-title">Activity</h2><Button variant="secondary" disabled={busy || !canUndo} onClick={() => void undo()}>Undo change</Button></div><p className="detail-meta">Oldest to newest. Undo reverts the latest applied change and preserves its record.</p><StageHistory events={application.stageEvents} /></section>
     </div><aside aria-label="Application context">

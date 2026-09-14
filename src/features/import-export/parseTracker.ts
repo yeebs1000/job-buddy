@@ -3,6 +3,7 @@ import { z } from "zod";
 import { priorities, roleFamilies, workArrangements, type Application } from "../../domain/application";
 import type { ImportPreview, ImportRow, NormalizedApplication } from "../../domain/import";
 import { applicationStages, type ApplicationOutcome, type ApplicationStage } from "../../domain/stage";
+import { isSafeExternalJobUrl } from "../../domain/jobUrl";
 import { mapHeading, type TrackerField } from "./trackerColumns";
 
 const MAX_ROWS = 2000;
@@ -74,7 +75,7 @@ function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: nu
   const currentOutcome = outcome(values.outcome) ?? outcome(values.stage);
   if (get("outcome") && key(values.outcome) !== "active" && !outcome(values.outcome)) errors.push("Outcome is not recognized.");
   if (!currentStage && key(values.stage) !== "not started") errors.push("Stage is required; use Not started when no stage was reached. Terminal statuses also need the reached stage in a separate Stage column.");
-  const tags = get("tags").split(";").map(value => value.trim()).filter(Boolean).map(value => {
+  const tags = get("tags").split(escaped.includes("tag-uri-v1") ? ";" : /[;,]/).map(value => value.trim()).filter(Boolean).map(value => {
     if (!escaped.includes("tag-uri-v1")) return value;
     try { return decodeURIComponent(value); } catch { return value; }
   });
@@ -87,7 +88,7 @@ function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: nu
   const followUpAt = date(values.followUpAt, "Follow up", errors); if (followUpAt) normalized.followUpAt = followUpAt;
   if (get("targetStage")) { const target = stage(values.targetStage); if (target) normalized.targetStage = target; else errors.push("Target stage is invalid."); }
   if (normalized.interviewSubtype && !["phone", "video", "technical", "case", "onsite", "final"].includes(normalized.interviewSubtype)) errors.push("Interview type is invalid.");
-  if (get("jobUrl")) { try { const url = new URL(get("jobUrl")); if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error(); normalized.jobUrl = get("jobUrl"); } catch { warnings.push("Link is not a valid http/https URL and will be omitted."); } }
+  if (get("jobUrl")) { if (isSafeExternalJobUrl(get("jobUrl"))) normalized.jobUrl = get("jobUrl"); else warnings.push("Link is not a valid http/https URL and will be omitted."); }
   const salaryText = get("salary");
   if (["salary", "salaryMax", "currency", "period"].some(f => get(f as TrackerField))) {
     const range = salaryText.toUpperCase().replace(/SGD|HKD|S\$|HK\$/g, "").replace(/,/g, "").trim().split(/\s*[–—-]\s*/);

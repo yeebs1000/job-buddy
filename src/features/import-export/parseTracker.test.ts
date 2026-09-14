@@ -14,6 +14,11 @@ it("maps fresh graduate headings and normalizes dates, currencies, markets and s
   expect(preview.rows[0].normalized.research?.companyRating).toBeUndefined();
   expect(preview.mapping).toContainEqual({ source: "Title", field: "role" });
 });
+it("keeps legacy unmarked comma-separated tags separate", async () => {
+  const preview = await parseTracker(csv("Company,Role,Stage,Date Applied,Market,Role Family,Source,Location,Tags\nBank,Analyst,Applied,2026-09-12,SG,finance,Campus,Singapore,\"graduate,priority\""));
+
+  expect(preview.rows[0].normalized.tags).toEqual(["graduate", "priority"]);
+});
 it("retains physical row numbers, flags missing/invalid values and does not invent dates or markets", async () => {
   const preview = await parseTracker(csv("Company,Role,Stage,Date Applied,Market,Role Family\n\n,Engineer,Mystery,31/02/2026,Mars,software\nGood,Analyst,Applied,12/09/2026,HK,finance"));
   expect(preview.rows[0].sourceRow).toBe(3);

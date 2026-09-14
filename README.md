@@ -86,7 +86,7 @@ CSV and XLSX files are parsed locally. XLSX import is deliberately values-only: 
 
 ## Quick start
 
-Prerequisites: Node.js 22.22.2+ (or a newer supported LTS) and npm. Playwright's browser journey also needs Chromium.
+Prerequisites: Node.js 22.22.2+ on Node 22, 24.15.0+ on Node 24, or Node 26+ and npm. Playwright's browser journey also needs Chromium.
 
 ```bash
 git clone -b feature/job-buddy-core https://github.com/yeebs1000/job-buddy.git

@@ -86,7 +86,7 @@ CSV 和 XLSX 文件在本地解析。XLSX 导入刻意只接受值：公式、�
 
 ## 快速开始
 
-前置条件：Node.js 22.22.2+（或更新的受支持 LTS）和 npm。运行 Playwright 浏览器测试还需要 Chromium。
+前置条件：Node 22 使用 Node.js 22.22.2+，Node 24 使用 24.15.0+，或使用 Node 26+ 和 npm。运行 Playwright 浏览器测试还需要 Chromium。
 
 ```bash
 git clone -b feature/job-buddy-core https://github.com/yeebs1000/job-buddy.git

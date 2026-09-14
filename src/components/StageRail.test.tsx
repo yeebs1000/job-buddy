@@ -35,6 +35,17 @@ describe("StageRail", () => {
     expect(screen.getByText(/Withdrawn at Interview/)).toBeInTheDocument();
   });
 
+  it("renders hired as a terminal, non-active outcome while preserving active and rejected semantics", () => {
+    render(<><StageRail stage="offer" outcome="hired" /><StageRail stage="interview" outcome={null} /><StageRail stage="assessment" outcome="rejected" rejectedAtStage="assessment" /></>);
+
+    const hired = screen.getByRole("group", { name: "Hired after Offer" });
+    expect(hired).toHaveAttribute("data-outcome", "hired");
+    expect(hired.querySelectorAll('[aria-current="step"], [data-state="current"], [data-state="upcoming"], [data-state="complete"]')).toHaveLength(0);
+    expect(within(hired).getByText(/Hired at Offer/)).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Application progress" }).querySelector('[aria-current="step"]')).toHaveTextContent("Interview");
+    expect(screen.getByRole("group", { name: /Rejected during Assessment/ })).toHaveAttribute("data-outcome", "rejected");
+  });
+
   it("keeps compact labels and state text available to assistive technology", () => {
     render(<StageRail compact outcome={null} stage="interview" />);
 
