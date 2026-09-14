@@ -124,4 +124,33 @@ describe("classifyMessage", () => {
       excerpt: "We confirm that your application has been withdrawn.",
     }))).toMatchObject({ proposedOutcome: "withdrawn", requiresApproval: true });
   });
+
+  it("does not promote a negated technical interview invitation", () => {
+    // Catches a positive interview matcher that ignores a recruiter saying they cannot invite the candidate.
+    expect(classifyMessage(mail({
+      subject: "Application update",
+      excerpt: "We cannot invite you to a technical interview at this time.",
+    }))).toBeNull();
+  });
+
+  it("does not combine invitation and interview words from different sentences", () => {
+    // Catches a cross-sentence matcher that fabricates an interview proposal and cannot cite one supporting sentence.
+    expect(classifyMessage(mail({
+      subject: "Application update",
+      excerpt: "We invite you to our careers webinar. Your technical interview process remains under review.",
+    }))).toBeNull();
+  });
+
+  it("keeps an interview signal but rejects an impossible calendar date", () => {
+    // Catches Date.UTC rollover that silently changes February 30 into a March deadline.
+    expect(classifyMessage(mail({
+      providerMessageId: "mail-invalid-date-001",
+      subject: "Technical interview invitation",
+      excerpt: "We would like to invite you to a technical interview on 2026-02-30 at 2:00 PM SGT.",
+    }))).toMatchObject({
+      proposedStage: "interview",
+      deadlines: [],
+      reasons: expect.arrayContaining(["invalid-date"]),
+    });
+  });
 });

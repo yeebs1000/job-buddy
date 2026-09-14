@@ -23,31 +23,31 @@ const stageSignals: readonly StageSignal[] = [
     stage: "assessment",
     reason: "numerical-assessment-deadline",
     confidence: 0.9,
-    matches: (text) => /\bnumerical assessment\b[\s\S]{0,100}\b(?:by|deadline)\b/i.test(text),
+    matches: (text) => /\bnumerical assessment\b.{0,100}\b(?:by|deadline)\b/i.test(text),
   },
   {
     stage: "assessment",
     reason: "assessment-invitation",
     confidence: 0.85,
-    matches: (text) => /\b(?:online |numerical )?assessment\b[\s\S]{0,100}\b(?:invitation|invite|complete|by|deadline)\b/i.test(text),
+    matches: (text) => /\b(?:online |numerical )?assessment\b.{0,100}\b(?:invitation|invite|complete|by|deadline)\b/i.test(text),
   },
   {
     stage: "interview",
     reason: "technical-interview-invitation",
     confidence: 0.95,
-    matches: (text) => /\b(?:invite|invitation)\b[\s\S]{0,100}\btechnical interview\b|\btechnical interview\b[\s\S]{0,100}\b(?:invite|invitation)\b/i.test(text),
+    matches: (text) => /\b(?:invite|invitation)\b.{0,100}\btechnical interview\b|\btechnical interview\b.{0,100}\b(?:invite|invitation)\b/i.test(text),
   },
   {
     stage: "interview",
     reason: "interview-invitation",
     confidence: 0.9,
-    matches: (text) => /\b(?:invite|invitation)\b[\s\S]{0,100}\binterview\b|\binterview\b[\s\S]{0,100}\b(?:invite|invitation|scheduled)\b/i.test(text),
+    matches: (text) => /\b(?:invite|invitation)\b.{0,100}\binterview\b|\binterview\b.{0,100}\b(?:invite|invitation|scheduled)\b/i.test(text),
   },
   {
     stage: "review",
     reason: "under-review-language",
     confidence: 0.8,
-    matches: (text) => /\b(?:application|applications|candidacy|roles?)\b[\s\S]{0,120}\b(?:is|are|remain) under review\b/i.test(text),
+    matches: (text) => /\b(?:application|applications|candidacy|roles?)\b.{0,120}\b(?:is|are|remain) under review\b/i.test(text),
   },
 ];
 
@@ -60,8 +60,25 @@ function sentences(value: string): string[] {
   return value.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
 }
 
-function sentenceEvidence(message: MailEnvelope, matcher: (text: string) => boolean): string {
-  return sentences(message.excerpt).find(matcher) ?? (message.excerpt.trim() || message.subject.trim());
+function messageSentences(message: MailEnvelope): string[] {
+  return [...sentences(message.excerpt), message.subject.trim()].filter(Boolean);
+}
+
+function negatesInvitation(sentence: string): boolean {
+  return /\b(?:cannot|can't|unable to|will not|won't|do not|don't|not able to)\b.{0,60}\binvit(?:e|ation)\b/i.test(sentence);
+}
+
+interface SignalMatch<T> {
+  signal: T;
+  evidenceExcerpt: string;
+}
+
+function findSignal<T extends { matches: (text: string) => boolean }>(signals: readonly T[], contexts: readonly string[], allow: (context: string) => boolean = () => true): SignalMatch<T> | undefined {
+  for (const signal of signals) {
+    const evidenceExcerpt = contexts.find((context) => allow(context) && signal.matches(context));
+    if (evidenceExcerpt) return { signal, evidenceExcerpt };
+  }
+  return undefined;
 }
 
 function validHttpsLinks(links: readonly string[]): string[] {
@@ -77,37 +94,48 @@ function validHttpsLinks(links: readonly string[]): string[] {
 interface TimeExtraction {
   deadline?: Deadline;
   unknownTimezone: boolean;
+  invalidDate: boolean;
 }
 
-function extractTime(message: MailEnvelope, label: string, suffix: string): TimeExtraction {
-  const text = `${message.subject}\n${message.excerpt}`;
+function extractTime(text: string, messageId: string, label: string, suffix: string): TimeExtraction {
   const dateTime = /\b(\d{4})-(\d{2})-(\d{2})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)(?:\s+([A-Za-z]{2,4})\b)?/i.exec(text);
-  if (!dateTime) return { unknownTimezone: false };
+  if (!dateTime) return { unknownTimezone: false, invalidDate: false };
 
   const [, yearText, monthText, dayText, hourText, minuteText, meridiem, timezone] = dateTime;
-  if (!timezone || !/^(SGT|HKT)$/i.test(timezone)) return { unknownTimezone: true };
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  const hour12 = Number(hourText);
+  const minute = Number(minuteText);
+  const hour = hour12 % 12 + (meridiem.toUpperCase() === "PM" ? 12 : 0);
+  const localTime = new Date(Date.UTC(year, month - 1, day, hour, minute));
+  const invalidDate = month < 1 || month > 12 || day < 1 || hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59
+    || Number.isNaN(localTime.getTime()) || localTime.getUTCFullYear() !== year || localTime.getUTCMonth() !== month - 1 || localTime.getUTCDate() !== day;
+  if (invalidDate) return { unknownTimezone: !timezone || !/^(SGT|HKT)$/i.test(timezone), invalidDate: true };
+  if (!timezone || !/^(SGT|HKT)$/i.test(timezone)) return { unknownTimezone: true, invalidDate: false };
 
-  const hour = Number(hourText) % 12 + (meridiem.toUpperCase() === "PM" ? 12 : 0);
-  const at = new Date(Date.UTC(Number(yearText), Number(monthText) - 1, Number(dayText), hour - 8, Number(minuteText)));
-  if (Number.isNaN(at.getTime())) return { unknownTimezone: true };
+  const at = new Date(localTime.getTime() - 8 * 60 * 60 * 1000);
 
   return {
     deadline: {
-      id: `${message.providerMessageId}-${suffix}`,
+      id: `${messageId}-${suffix}`,
       label,
       at: at.toISOString(),
       completed: false,
     },
     unknownTimezone: false,
+    invalidDate: false,
   };
 }
 
-function stageMentions(text: string): Set<ApplicationStage> {
+function stageMentions(contexts: readonly string[]): Set<ApplicationStage> {
   const mentions = new Set<ApplicationStage>();
-  if (/\binterview\b/i.test(text)) mentions.add("interview");
-  if (/\b(?:application|applications|candidacy|roles?)\b[\s\S]{0,120}\b(?:is|are|remain) under review\b/i.test(text)) mentions.add("review");
-  if (/\b(?:online |numerical )?assessment\b/i.test(text)) mentions.add("assessment");
-  if (/\boffer\b/i.test(text)) mentions.add("offer");
+  for (const context of contexts) {
+    if (/\binterview\b/i.test(context)) mentions.add("interview");
+    if (/\b(?:application|applications|candidacy|roles?)\b.{0,120}\b(?:is|are|remain) under review\b/i.test(context)) mentions.add("review");
+    if (/\b(?:online |numerical )?assessment\b/i.test(context)) mentions.add("assessment");
+    if (/\boffer\b/i.test(context)) mentions.add("offer");
+  }
   return mentions;
 }
 
@@ -119,40 +147,43 @@ function interviewSubtype(text: string): MessageClassification["interviewSubtype
 }
 
 export function classifyMessage(message: MailEnvelope): MessageClassification | null {
-  const text = `${message.subject}\n${message.excerpt}`;
-  const terminal = terminalSignals.find((signal) => signal.matches(text));
-  const stageSignal = stageSignals.find((signal) => signal.matches(text));
-  const mentionedStages = stageMentions(text);
+  const contexts = messageSentences(message);
+  const terminalMatch = findSignal(terminalSignals, contexts);
+  const stageMatch = findSignal(stageSignals, contexts, (context) => !negatesInvitation(context));
+  const mentionedStages = stageMentions(contexts);
   const contradictory = mentionedStages.size > 1;
 
-  if (!terminal && !stageSignal) return null;
+  if (!terminalMatch && !stageMatch) return null;
 
-  const proposedStage = contradictory && mentionedStages.has("review") ? "review" : stageSignal?.stage;
-  const selectedSignal = stageSignals.find((signal) => signal.stage === proposedStage && signal.matches(text)) ?? stageSignal;
+  const proposedStage = contradictory && mentionedStages.has("review") ? "review" : stageMatch?.signal.stage;
+  const selectedMatch = findSignal(stageSignals.filter((signal) => signal.stage === proposedStage), contexts, (context) => !negatesInvitation(context)) ?? stageMatch;
+  const selectedSignal = selectedMatch?.signal;
   const isOffer = proposedStage === "offer";
-  const requiresApproval = Boolean(terminal || isOffer || contradictory);
-  const subtype = proposedStage === "interview" ? interviewSubtype(text) : undefined;
+  const requiresApproval = Boolean(terminalMatch || isOffer || contradictory);
+  const subtype = proposedStage === "interview" ? interviewSubtype(selectedMatch?.evidenceExcerpt ?? "") : undefined;
   const label = proposedStage === "interview" ? `${subtype ? `${subtype[0].toUpperCase()}${subtype.slice(1)} ` : ""}interview` : proposedStage === "assessment" ? (selectedSignal?.reason === "numerical-assessment-deadline" ? "Numerical assessment deadline" : "Assessment") : "Application update";
-  const time = extractTime(message, label, proposedStage === "assessment" ? "deadline" : "scheduled-time");
+  const evidenceExcerpt = terminalMatch?.evidenceExcerpt ?? selectedMatch?.evidenceExcerpt ?? "";
+  const time = extractTime(evidenceExcerpt, message.providerMessageId, label, proposedStage === "assessment" ? "deadline" : "scheduled-time");
   const links = validHttpsLinks(message.links);
-  const reasons = [terminal?.reason ?? selectedSignal?.reason];
+  const reasons = [terminalMatch?.signal.reason ?? selectedSignal?.reason];
   if (contradictory) reasons.push("contradictory-stage-language");
   if (time.deadline) reasons.push("scheduled-time");
   if (links.length > 0) reasons.push("https-link");
   if (time.unknownTimezone) reasons.push("unknown-timezone");
+  if (time.invalidDate) reasons.push("invalid-date");
 
   const classification = {
     ...(proposedStage ? { proposedStage } : {}),
     ...(subtype ? { interviewSubtype: subtype } : {}),
-    confidence: terminal ? 0.95 : selectedSignal?.confidence ?? 0.8,
+    confidence: terminalMatch ? 0.95 : selectedSignal?.confidence ?? 0.8,
     reasons: reasons.filter((reason): reason is string => Boolean(reason)),
-    evidenceExcerpt: sentenceEvidence(message, (value) => terminal?.matches(value) || selectedSignal?.matches(value) || /\bunder review\b/i.test(value)),
+    evidenceExcerpt,
     deadlines: time.deadline ? [time.deadline] : [],
     links,
   };
 
   if (requiresApproval) {
-    return { ...classification, ...(terminal ? { proposedOutcome: terminal.outcome } : {}), requiresApproval: true };
+    return { ...classification, ...(terminalMatch ? { proposedOutcome: terminalMatch.signal.outcome } : {}), requiresApproval: true };
   }
 
   return { ...classification, requiresApproval: false };
