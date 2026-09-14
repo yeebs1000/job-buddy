@@ -21,24 +21,68 @@ export interface UpdateProposalMatch {
   conflicts: string[];
 }
 
-export interface UpdateProposalClassification {
+type UnconflictedUpdateProposalMatch = Omit<UpdateProposalMatch, "conflicts"> & { conflicts: [] };
+
+interface UpdateProposalClassificationFields {
   confidence: number;
   reasons: string[];
   evidenceExcerpt: string;
   proposedStage?: ApplicationStage;
-  proposedOutcome?: ApplicationOutcome;
   interviewSubtype?: "phone" | "video" | "technical" | "case" | "onsite" | "final";
   deadlines: Deadline[];
   links: string[];
+}
+
+export type ApprovalRequiredUpdateProposalClassification = UpdateProposalClassificationFields & {
+  proposedOutcome?: ApplicationOutcome;
+  requiresApproval: true;
+};
+
+export type AutoApplicableUpdateProposalClassification = UpdateProposalClassificationFields & {
+  proposedOutcome?: never;
+  requiresApproval: false;
+};
+
+export type UpdateProposalClassification = ApprovalRequiredUpdateProposalClassification | AutoApplicableUpdateProposalClassification;
+
+export interface UpdateProposalClassificationInput extends UpdateProposalClassificationFields {
+  proposedOutcome?: ApplicationOutcome;
   requiresApproval: boolean;
 }
 
-export interface UpdateProposal {
+interface UpdateProposalFields<TClassification> {
   id: string;
   status: UpdateProposalStatus;
   source: UpdateProposalSource;
   match: UpdateProposalMatch;
-  classification: UpdateProposalClassification;
+  classification: TClassification;
   createdAt: string;
   reviewedAt?: string;
+}
+
+export type UpdateProposal =
+  | (UpdateProposalFields<AutoApplicableUpdateProposalClassification> & { match: UnconflictedUpdateProposalMatch })
+  | UpdateProposalFields<ApprovalRequiredUpdateProposalClassification>;
+export type UpdateProposalInput = UpdateProposalFields<UpdateProposalClassificationInput>;
+
+export function createUpdateProposal(input: UpdateProposalInput): UpdateProposal {
+  const { classification } = input;
+  if (classification.requiresApproval) {
+    return { ...input, classification: { ...classification, requiresApproval: true } };
+  }
+
+  if (classification.proposedOutcome) {
+    throw new Error("Terminal outcomes require approval");
+  }
+
+  if (input.match.conflicts.length > 0) {
+    throw new Error("Conflicting matches require approval");
+  }
+
+  const { proposedOutcome: _, ...nonTerminalClassification } = classification;
+  return {
+    ...input,
+    match: { ...input.match, conflicts: [] },
+    classification: { ...nonTerminalClassification, requiresApproval: false },
+  };
 }
