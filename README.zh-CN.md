@@ -39,7 +39,7 @@ Job Buddy 帮助所有正在寻找工作的人集中管理每一份求职申请�
 - 申请详情页：截止日期、联系人、备注、研究快照、按时间排序的阶段历史、终止结果二次确认，以及保留原记录的撤销功能。
 - 经过审核的 CSV/XLSX 导入：列映射、日期/金额/阶段标准化、逐行校验、重复项审阅、包含/排除控制，并且确认前不会写入数据库。
 - 支持导出当前筛选结果或全部申请的 UTF-8 CSV 和 XLSX 文件。
-- 新加坡/香港的虚构示例数据，覆盖当前支持的职位族群和申请生命周期。
+- 新加坡/香港的虚构示例数据覆盖金融、软件、数据及一般 IT 职位和申请生命周期；应用也支持在手动新增或导入时使用网络安全和云计算职位族群。
 
 ## 信息来源与可追溯性
 
@@ -97,14 +97,19 @@ npm run dev
 
 Vite 会输出本地地址，通常是 [http://localhost:5173](http://localhost:5173)。
 
-运行生产构建和质量检查：
+运行可结束的质量检查：
 
 ```bash
-npm run build
-npm run preview
 npm test
 npm run typecheck
+npm run build
 npm run test:e2e
+```
+
+构建完成后，如需查看生产预览：
+
+```bash
+npm run preview
 ```
 
 如果尚未安装 Chromium，可执行 `npx playwright install chromium` 安装一次。

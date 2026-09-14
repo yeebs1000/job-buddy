@@ -39,7 +39,7 @@ The repository is intentionally private while the product and data model are bei
 - Application detail pages with deadlines, contacts, notes, research snapshots, chronological stage history, terminal-outcome confirmation, and preserved-event undo.
 - Reviewed CSV/XLSX import with column mapping, normalization, row-level validation, duplicate review, include/exclude controls, and no writes before confirmation.
 - UTF-8 CSV and XLSX export for the current filtered set or the full tracker.
-- Fictional Singapore/Hong Kong demo records covering the supported role families and lifecycle states.
+- Fictional Singapore/Hong Kong demo records for finance, software, data, and general IT roles, covering lifecycle states. The app also supports cybersecurity and cloud roles when you add or import them.
 
 ## Information sources and provenance
 
@@ -97,14 +97,19 @@ npm run dev
 
 Vite prints the local URL, normally [http://localhost:5173](http://localhost:5173).
 
-To run the production preview and quality gates:
+To run the finite quality gates:
 
 ```bash
-npm run build
-npm run preview
 npm test
 npm run typecheck
+npm run build
 npm run test:e2e
+```
+
+To inspect the production preview after building:
+
+```bash
+npm run preview
 ```
 
 If Chromium is missing, install it once with `npx playwright install chromium`.

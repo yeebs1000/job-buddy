@@ -67,3 +67,36 @@ The README only presents present local-first functionality as shipped. It explic
 - Vite emits a non-blocking production warning: the main JavaScript chunk is 623.22 kB minified (188.10 kB gzip), above the 500 kB warning threshold. Dynamic code splitting is a later performance task and was deliberately not widened into Task 9.
 - The host injects a `NO_COLOR`/`FORCE_COLOR` Node warning into Playwright subprocess output. It does not originate from Job Buddy and the browser console itself was clean.
 - Playwright's temporary downloaded artifact was locked by Windows (`EPERM`) when read/copied directly. The final E2E assertion therefore reads the actual export Blob within the test browser, while still asserting the real download event and filename. This is deterministic and avoids touching user files.
+
+## Fix round 1 — 2026-09-14
+
+### Findings addressed
+
+- The prior download observer used one global byte count. A later XLSX check could read the non-zero count left by CSV and produce a false green.
+- The prior CSV check proved only that a captured string contained one company name; it did not prove that the current filters controlled every exported row.
+- `App.test.tsx` returned before Command Center's asynchronous initialization settled.
+- English and Chinese README fixture claims implied demo coverage for every supported role family, and their quality-gate blocks placed the intentionally blocking preview command before finite checks.
+
+### Changes and GREEN evidence
+
+- The test-browser-only Blob observer now records an ordered capture for every `URL.createObjectURL` call, including media type, text, and byte length. CSV and XLSX each snapshot their next capture index before clicking Download. The XLSX assertion waits for and checks that second product-generated capture's Office MIME type and non-zero bytes, as well as the real download event and `.xlsx` filename.
+- The CSV capture is parsed as quoted CSV. The test checks the complete documented standard heading list, requires every data row to be `Market=SG` and `Role Family=software`, retains Cedarline Systems, and rejects known nonmatching Singapore finance and Hong Kong finance demo companies.
+- The App test uses fake IndexedDB cleanup and awaits the loaded `8 applications` state, so it completes after Command Center initialization.
+- README and `README.zh-CN.md` now say the demo records cover finance, software, data, and general IT; cybersecurity and cloud remain supported add/import role families. The finite checks precede a separate optional production-preview command.
+
+Focused post-change commands:
+
+| Command | Result |
+| --- | --- |
+| `node node_modules/@playwright/test/cli.js test e2e/core-tracker.spec.ts` | PASS — 1/1, strengthened capture and filtered CSV assertions |
+| `node node_modules/vitest/vitest.mjs run src/app/App.test.tsx` | PASS — 1/1, no React `act` warning |
+| `node node_modules/vitest/vitest.mjs run` | PASS — 18 files / 118 tests |
+| `node node_modules/typescript/bin/tsc -b --pretty false` | PASS — exit 0, no diagnostics |
+| `node node_modules/vite/bin/vite.js build` | PASS — production build generated |
+| `node node_modules/@playwright/test/cli.js test` | PASS — 1/1 using configured production preview server |
+
+The Vite chunk-size and host-injected `NO_COLOR`/`FORCE_COLOR` subprocess warnings remain non-blocking concerns. No browser-console errors were introduced by this round.
+
+### Remote status
+
+This fix round was committed **locally only**. It did not push, force-push, delete, or otherwise mutate `origin/feature/job-buddy-core`; the remote findings for `c916bbd`, `47f1aa3`, `8aa6b46`, and `48fe8fa` were left unchanged.
