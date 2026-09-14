@@ -153,4 +153,42 @@ describe("classifyMessage", () => {
       reasons: expect.arrayContaining(["invalid-date"]),
     });
   });
+
+  it("suppresses a positive interview subject when the body negates that invitation", () => {
+    // Catches a subject-only positive match that auto-applies despite a body sentence saying the interview cannot be offered.
+    expect(classifyMessage(mail({
+      subject: "Technical interview invitation",
+      excerpt: "We cannot invite you to a technical interview at this time.",
+    }))).toBeNull();
+  });
+
+  it("extracts an SGT deadline from the adjacent scheduling sentence", () => {
+    // Catches date extraction limited to the invitation sentence when the immediately following sentence schedules it.
+    expect(classifyMessage(mail({
+      providerMessageId: "mail-adjacent-date-001",
+      subject: "Application update",
+      excerpt: "We would like to invite you to a technical interview. It is scheduled for 2026-09-16 at 10:00 AM SGT.",
+    }))).toMatchObject({
+      proposedStage: "interview",
+      evidenceExcerpt: "We would like to invite you to a technical interview.",
+      deadlines: [{
+        id: "mail-adjacent-date-001-scheduled-time",
+        label: "Technical interview",
+        at: "2026-09-16T02:00:00.000Z",
+        completed: false,
+      }],
+    });
+  });
+
+  it("reports an impossible date from the adjacent scheduling sentence", () => {
+    // Catches an adjacent invalid date being ignored after a valid interview signal.
+    expect(classifyMessage(mail({
+      subject: "Application update",
+      excerpt: "We would like to invite you to a technical interview. It is scheduled for 2026-02-30 at 10:00 AM SGT.",
+    }))).toMatchObject({
+      proposedStage: "interview",
+      deadlines: [],
+      reasons: expect.arrayContaining(["invalid-date"]),
+    });
+  });
 });
