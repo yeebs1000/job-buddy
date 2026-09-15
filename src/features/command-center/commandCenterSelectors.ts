@@ -18,15 +18,21 @@ function dayStart(date: Date): number {
   return Date.UTC(value("year"), value("month") - 1, value("day"));
 }
 
+function singaporeTime(value: string): string {
+  return `${new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Singapore", hour: "numeric", minute: "2-digit", hour12: true,
+  }).format(new Date(value))} SGT`;
+}
+
 function deadlineReason(action: Pick<Deadline, "at" | "label">, now: Date): { priority: number; reason: string } {
   const due = dayStart(new Date(action.at));
   const today = dayStart(now);
   const daysAway = (due - today) / 86_400_000;
 
-  if (daysAway < 0) return { priority: 0, reason: `Overdue: ${action.label}` };
-  if (daysAway === 0) return { priority: 1, reason: `Today: ${action.label}` };
-  if (daysAway === 1) return { priority: 2, reason: `Tomorrow: ${action.label}` };
-  return { priority: 3, reason: `Due ${new Intl.DateTimeFormat("en", { timeZone: "Asia/Singapore", month: "short", day: "numeric" }).format(new Date(action.at))}: ${action.label}` };
+  if (daysAway < 0) return { priority: 0, reason: `Overdue: ${action.label} · ${singaporeTime(action.at)}` };
+  if (daysAway === 0) return { priority: 1, reason: `Today: ${action.label} · ${singaporeTime(action.at)}` };
+  if (daysAway === 1) return { priority: 2, reason: `Tomorrow: ${action.label} · ${singaporeTime(action.at)}` };
+  return { priority: 3, reason: `Due ${new Intl.DateTimeFormat("en", { timeZone: "Asia/Singapore", month: "short", day: "numeric" }).format(new Date(action.at))}: ${action.label} · ${singaporeTime(action.at)}` };
 }
 
 export function summarizeStages(applications: Application[]): StageSummary {

@@ -12,7 +12,7 @@ export const sampleApplications: Application[] = [
   {
     id: "app-circuit-review", company: "Circuit Harbour Ltd", role: "Software Engineer", discipline: "software_it",
     market: "SG", roleFamily: "software", industry: "Technology", workArrangement: "hybrid", priority: "high",
-    location: { city: "Singapore", country: "Singapore" }, source: "Company careers", appliedAt: "2026-08-28T04:00:00Z", tags: ["typescript", "platform"], interviewSubtype: "technical",
+    location: { city: "Singapore", country: "Singapore" }, source: "Company careers", appliedAt: "2026-08-28T04:00:00Z", recruiter: "Taylor Ng", tags: ["typescript", "platform"], interviewSubtype: "technical",
     deadlines: [{ id: "d2", label: "Recruiter follow-up", at: "2026-09-16T04:00:00Z", completed: false }],
     research: { salary: { minimum: 7000, maximum: 9000, currency: "SGD", period: "monthly" }, companyRating: { score: 3.9, outOf: 5, source: "Fictional Reviews" } },
     stageEvents: [
@@ -23,7 +23,7 @@ export const sampleApplications: Application[] = [
   {
     id: "app-pine-assessment", company: "Pine Street Capital", role: "Risk Analyst", discipline: "finance",
     market: "HK", roleFamily: "finance", industry: "Financial services", workArrangement: "onsite", priority: "high",
-    location: { city: "Hong Kong", country: "Hong Kong" }, source: "Campus portal", appliedAt: "2026-08-24T03:00:00Z", tags: ["risk", "markets"], interviewSubtype: "case",
+    location: { city: "Hong Kong", country: "Hong Kong" }, source: "Campus portal", appliedAt: "2026-08-24T03:00:00Z", recruiter: "Amelia Wong", tags: ["risk", "markets"], interviewSubtype: "case",
     deadlines: [{ id: "d3", label: "Numerical assessment", at: "2026-09-14T02:00:00Z", completed: false }],
     research: { salary: { minimum: 28000, maximum: 35000, currency: "HKD", period: "monthly" }, companyRating: { score: 4.0, outOf: 5, source: "Fictional Reviews" } },
     stageEvents: [
@@ -57,7 +57,7 @@ export const sampleApplications: Application[] = [
   {
     id: "app-cobalt-offer", company: "Cobalt Cloud Works", role: "Product Engineer", discipline: "software_it",
     market: "HK", roleFamily: "software", industry: "Technology", workArrangement: "remote", priority: "high",
-    location: { city: "Hong Kong", country: "Hong Kong" }, source: "Company careers", appliedAt: "2026-08-10T05:30:00Z", tags: ["frontend", "product"], interviewSubtype: "onsite",
+    location: { city: "Hong Kong", country: "Hong Kong" }, source: "Company careers", appliedAt: "2026-08-10T05:30:00Z", recruiter: "Noah Lim", tags: ["frontend", "product"], interviewSubtype: "onsite",
     deadlines: [{ id: "d6", label: "Offer response", at: "2026-09-18T09:00:00Z", completed: false }],
     research: { salary: { minimum: 36000, maximum: 45000, currency: "HKD", period: "monthly" }, companyRating: { score: 3.8, outOf: 5, source: "Fictional Reviews" } },
     stageEvents: [
@@ -69,7 +69,7 @@ export const sampleApplications: Application[] = [
   {
     id: "app-river-rejected", company: "Riverbank Partners", role: "Portfolio Operations Analyst", discipline: "finance",
     market: "SG", roleFamily: "finance", industry: "Financial services", workArrangement: "onsite", priority: "normal",
-    location: { city: "Singapore", country: "Singapore" }, source: "Campus portal", appliedAt: "2026-08-12T04:30:00Z", tags: ["operations", "funds"],
+    location: { city: "Singapore", country: "Singapore" }, source: "Campus portal", appliedAt: "2026-08-12T04:30:00Z", recruiter: "Priya Shah", tags: ["operations", "funds"],
     deadlines: [{ id: "d7", label: "Archive notes", at: "2026-09-12T04:30:00Z", completed: false }],
     research: { salary: { minimum: 4500, maximum: 5800, currency: "SGD", period: "monthly" }, companyRating: { score: 3.6, outOf: 5, source: "Fictional Reviews" } },
     stageEvents: [

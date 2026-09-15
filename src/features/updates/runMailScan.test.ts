@@ -13,7 +13,13 @@ import { scanStateKey, updateRepository, type ProposalEdits } from "./updateRepo
 import { useMailScan } from "./useMailScan";
 
 const now = "2026-09-14T09:00:00.000Z";
-const mail = fixtureMessages[0];
+const mail: MailEnvelope = {
+  providerMessageId: "mail-meridian-001", threadId: "thread-meridian-quant",
+  fromName: "Meridian Quant Recruiting", fromAddress: "recruiting@meridianquant.example",
+  subject: "Technical interview invitation — Quantitative Analyst", receivedAt: "2026-09-12T02:00:00.000Z",
+  excerpt: "Meridian Quant would like to invite you to a technical interview on 2026-09-13 at 2:00 PM SGT.",
+  links: ["https://meet.example/meridian-technical"],
+};
 
 function application(stage: ApplicationStage = "applied", overrides: Partial<Application> = {}): Application {
   return {

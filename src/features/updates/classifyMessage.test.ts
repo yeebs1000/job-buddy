@@ -30,14 +30,14 @@ describe("classifyMessage", () => {
       interviewSubtype: "technical",
       confidence: 0.95,
       reasons: ["technical-interview-invitation", "scheduled-time", "https-link"],
-      evidenceExcerpt: "We would like to invite you to a technical interview on 2026-09-13 at 2:00 PM SGT.",
+      evidenceExcerpt: "Circuit Harbour Ltd would like to invite you to a technical interview on 2026-09-13 at 2:00 PM SGT.",
       deadlines: [{
         id: "mail-interview-001-scheduled-time",
         label: "Technical interview",
         at: "2026-09-13T06:00:00.000Z",
         completed: false,
       }],
-      links: ["https://meet.example/meridian-technical"],
+      links: ["https://meet.example/circuit-technical"],
       requiresApproval: false,
     });
   });
@@ -48,7 +48,7 @@ describe("classifyMessage", () => {
       proposedStage: "assessment",
       confidence: 0.9,
       reasons: ["numerical-assessment-deadline", "scheduled-time", "https-link"],
-      evidenceExcerpt: "Please complete the numerical assessment by 2026-09-14 at 10:00 AM HKT.",
+      evidenceExcerpt: "Pine Street Capital: please complete the numerical assessment by 2026-09-14 at 10:00 AM HKT.",
       deadlines: [{
         id: "mail-assessment-002-deadline",
         label: "Numerical assessment deadline",

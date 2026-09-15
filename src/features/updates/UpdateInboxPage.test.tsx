@@ -13,6 +13,16 @@ import { appRoutes } from "../../app/routes";
 import { updateRepository } from "./updateRepository";
 import { UpdateInboxPage } from "./UpdateInboxPage";
 
+const technicalInterviewMail = {
+  ...fixtureMessages[0],
+  threadId: "thread-meridian-quant",
+  fromName: "Meridian Quant Recruiting",
+  fromAddress: "recruiting@meridianquant.example",
+  subject: "Technical interview invitation — Quantitative Analyst",
+  excerpt: "Meridian Quant would like to invite you to a technical interview on 2026-09-13 at 2:00 PM SGT.",
+  links: ["https://meet.example/meridian-technical"],
+};
+
 beforeEach(async () => {
   await jobBuddyDb.metadata.put({ key: "demo-seeded-v1", value: "true" });
   await applicationRepository.create({
@@ -28,9 +38,9 @@ afterEach(async () => { cleanup(); await jobBuddyDb.delete(); await jobBuddyDb.o
 async function proposal(overrides: Partial<UpdateProposalInput> = {}) {
   await updateRepository.create(createUpdateProposal({
     id: "proposal-1", status: "pending", createdAt: "2026-09-12T09:00:00Z",
-    source: fixtureMessages[0],
+    source: technicalInterviewMail,
     match: { applicationId: "application-1", confidence: 0.95, reasons: ["company", "role", "sender-domain"], conflicts: [] },
-    classification: { confidence: 0.95, reasons: ["technical-interview-invitation"], evidenceExcerpt: fixtureMessages[0].excerpt,
+    classification: { confidence: 0.95, reasons: ["technical-interview-invitation"], evidenceExcerpt: technicalInterviewMail.excerpt,
       proposedStage: "interview", requiresApproval: true, interviewSubtype: "technical",
       deadlines: [{ id: "deadline-1", label: "Technical interview", at: "2026-09-13T06:00:00.000Z", completed: false }],
       links: ["https://meet.example/meridian-technical", "javascript:alert(1)"] },
@@ -173,7 +183,7 @@ it("rolls back a failed approval, shows safe feedback, and permits retry", async
 it("shows scan progress and refreshes the command center deadline after unrestricted simulation", async () => {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
-  const fixture = new FixtureMailAdapter([fixtureMessages[0]]);
+  const fixture = new FixtureMailAdapter([technicalInterviewMail]);
   render(<MemoryRouter><CommandCenterPage mailAdapter={{ async scan(cursor) { await gate; return fixture.scan(cursor); } }} /></MemoryRouter>);
   await userEvent.selectOptions(await screen.findByLabelText("Scan mode"), "unrestricted");
   await userEvent.click(screen.getByRole("button", { name: "Scan now (simulated)" }));
@@ -205,7 +215,7 @@ it("updates the navigation pending badge when a proposal is reviewed", async () 
 
 it("retries a failed simulated scan safely and keeps approval as the default mode", async () => {
   let failed = false;
-  const fixture = new FixtureMailAdapter([fixtureMessages[0]]);
+  const fixture = new FixtureMailAdapter([technicalInterviewMail]);
   const adapter = { async scan(cursor: string | null) { if (!failed) { failed = true; throw new Error("secret provider error"); } return fixture.scan(cursor); } };
   render(<MemoryRouter><CommandCenterPage mailAdapter={adapter} /></MemoryRouter>);
   const scan = await screen.findByRole("button", { name: "Scan now (simulated)" });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Application } from "../../domain/application";
 import type { MailEnvelope } from "../../integrations/mail/MailAdapter";
 import { fixtureMessages } from "../../fixtures/mail/messages";
+import { sampleApplications } from "../../fixtures/sampleApplications";
 import { matchApplication } from "./matchApplication";
 
 const application = (overrides: Partial<Application>): Application => ({
@@ -18,9 +19,32 @@ const application = (overrides: Partial<Application>): Application => ({
   ...overrides,
 });
 
-const meridianMail = fixtureMessages[0];
+const meridianMail: MailEnvelope = {
+  providerMessageId: "mail-meridian-001",
+  fromName: "Meridian Quant Recruiting",
+  fromAddress: "recruiting@meridianquant.example",
+  subject: "Technical interview invitation — Quantitative Analyst",
+  receivedAt: "2026-09-12T02:00:00.000Z",
+  excerpt: "Meridian Quant would like to invite you to a technical interview on 2026-09-13 at 2:00 PM SGT.",
+  links: ["https://meet.example/meridian-technical"],
+};
 
 describe("matchApplication", () => {
+  it.each([
+    [0, "app-circuit-review"],
+    [1, "app-pine-assessment"],
+    [2, "app-river-rejected"],
+    [3, "app-cobalt-offer"],
+  ])("matches the synthetic fixture message %i to %s with complete identity evidence", (messageIndex, applicationId) => {
+    // Catches demo data that leaves actionable fixture mail unmatched even though it belongs to a seeded application.
+    expect(matchApplication(fixtureMessages[messageIndex], sampleApplications)).toMatchObject({
+      applicationId,
+      confidence: 1,
+      reasons: ["recruiter", "sender-domain", "company", "role"],
+      conflicts: [],
+    });
+  });
+
   it("matches a mail when normalized recruiter, domain, company, and role evidence all identify one application", () => {
     // Catches a matcher that misses punctuation, legal suffix, casing, or whitespace and loses a certain match.
     const result = matchApplication(meridianMail, [application({ recruiter: " RECRUITING@MERIDIANQUANT.EXAMPLE " })]);

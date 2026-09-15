@@ -1,4 +1,4 @@
-# Job Buddy
+# Job Buddy v0.2
 
 > A local-first workspace for replacing the job-application spreadsheet.
 
@@ -10,7 +10,7 @@
 
 [中文文档](README.zh-CN.md)
 
-Job Buddy helps anyone looking for work keep every application, stage change, deadline, interview, follow-up, and note in one place. The first release is designed for Singapore and Hong Kong, with a focus on finance, software engineering, data, cybersecurity, cloud, and general IT roles.
+Job Buddy v0.2 combines a local-first application tracker with **simulated Update Intelligence**. It helps anyone looking for work keep applications, stage changes, deadlines, interviews, follow-ups, and notes in one place. The release is designed for Singapore and Hong Kong, with a focus on finance, software engineering, data, cybersecurity, cloud, and general IT roles.
 
 > [!TIP]
 > **Tiny promise:** Job Buddy may be opinionated about stage history, but it will never silently rewrite your past.
@@ -27,7 +27,9 @@ Job Buddy helps anyone looking for work keep every application, stage change, de
 
 ## Project status
 
-The local-first core tracker is usable today. It does not require an account, a server, Gmail access, or an AI key.
+The local-first tracker and v0.2 Update Intelligence simulation are usable today. The simulation uses synthetic fixture messages, stores only the minimal evidence needed to review a proposal (sender, subject, excerpt, received time, approved HTTPS links, confidence, and reasons), and never requests Gmail credentials. It scans only while this page is active and only after you explicitly choose **Scan now (simulated)**; it has no live Gmail access or background scanning.
+
+Approval is the default: every simulated message becomes a reviewable proposal. **Unrestricted simulation** may apply only confident, conflict-free forward updates while the page remains open; offers, terminal outcomes, unmatched/ambiguous mail, and conflicts still require explicit approval.
 
 The repository is intentionally private while the product and data model are being shaped. The core branch is structured so it can be opened to contributors later without rewriting the local data boundary.
 
@@ -40,6 +42,7 @@ The repository is intentionally private while the product and data model are bei
 - Reviewed CSV/XLSX import with column mapping, normalization, row-level validation, duplicate review, include/exclude controls, and no writes before confirmation.
 - UTF-8 CSV and XLSX export for the current filtered set or the full tracker.
 - Fictional Singapore/Hong Kong demo records for finance, software, data, and general IT roles, covering lifecycle states. The app also supports cybersecurity and cloud roles when you add or import them.
+- Simulated Update Intelligence with synthetic recruiter messages, evidence-backed match/classification confidence, reviewable interview/deadline extraction, and deterministic local fixture scans.
 
 ## Information sources and provenance
 
@@ -48,7 +51,7 @@ Job Buddy distinguishes information you enter from information a connector may g
 | Source or platform | Current release | Planned use | Boundary |
 | --- | --- | --- | --- |
 | LinkedIn, company career sites, campus portals, referrals, job boards | Stored as a source label when you add/import an application | Keep the original application source and link | Not connected or scraped by V1 |
-| Gmail / Gmail API | Not connected | Read-only daily scans for recruiter/HR replies, proposed stage changes, interview dates, meeting links, deadlines, and follow-up tasks | OAuth and user approval required; messages should remain local unless explicitly exported |
+| Gmail / Gmail API | Not connected; v0.2 uses synthetic messages only | Read-only OAuth connection and user-initiated scans while the app is active for recruiter/HR replies, proposed stage changes, interview dates, meeting links, deadlines, and follow-up tasks | No Gmail credentials, live mail, daily active scans, or background scanning are shipped; messages should remain local unless explicitly exported |
 | Greenhouse, Workday, Oracle Recruiting, Lever and similar ATSs | Not connected | User-approved autofill and application-link capture where the platform and browser context allow it | No unattended submission or bypass of platform controls is promised |
 | Glassdoor, Levels.fyi, official salary postings, and regional salary datasets | Not connected | Region-specific salary ranges and company-review context for Singapore/Hong Kong | Availability, licensing, freshness, and regional coverage must be verified per source |
 | JobSpy and public job listings | Not connected | Optional job-discovery adapters and deduplication inputs | Discovery data is not application-status truth |
@@ -60,13 +63,13 @@ Future generated facts are intended to carry their source, region, retrieval tim
 
 Roadmap items are planned, not promises of current functionality.
 
-### V1.0 — Core tracker (current)
+### V0.2 — Local tracker and simulated Update Intelligence (current)
 
-Local persistence, visual stage tracking, filters and saved views, manual updates with history/undo, reviewed spreadsheet migration, and Singapore/Hong Kong coverage.
+Local persistence, visual stage tracking, filters and saved views, manual updates with history/undo, reviewed spreadsheet migration, Singapore/Hong Kong coverage, and a simulated evidence-backed update inbox with approval and unrestricted-simulation modes.
 
-### V1.1 — Intelligence layer
+### Next work — real Gmail OAuth and active-session scans
 
-Read-only Gmail connection with a daily scan, evidence-backed update proposals, interview/deadline extraction, regional salary and review research, and a preparation workspace for recruiter, technical, case, cultural, and final interviews.
+Read-only Gmail OAuth, user-initiated scans while the app is active, and hardening the simulated matching/evidence workflow against real user-approved data. Real Gmail OAuth and daily active scans are not shipped in v0.2.
 
 ### V2.0 — Application assistant
 
@@ -78,7 +81,7 @@ More regions, optional encrypted sync, backup/restore across devices, provider a
 
 ## Privacy and security
 
-V1 is single-user and local-only. Applications, imported records, events, and saved views live in the browser's IndexedDB. There is no hosted database, Gmail connection, background email scan, AI credential, or remote job scraper in this release.
+V0.2 is single-user and local-only. Applications, imported records, events, saved views, and minimal simulated-message evidence live in the browser's IndexedDB. There is no hosted database, Gmail connection, live or background email scan, AI credential, salary/review scraper, browser autofill, unattended submission, or remote job scraper in this release.
 
 This is a privacy boundary, not a guarantee against someone who can access the same browser profile or device. Export a snapshot before clearing site data or changing devices, but do not treat the standard CSV/XLSX export as a restorable backup: it intentionally omits lifecycle history, event notes, evidence, internal IDs, and saved views. Never commit real trackers, exports, email bodies, API keys, cookies, or personal data.
 
@@ -89,7 +92,7 @@ CSV and XLSX files are parsed locally. XLSX import is deliberately values-only: 
 Prerequisites: Node.js 22.22.2+ on Node 22, 24.15.0+ on Node 24, or Node 26+ and npm. Playwright's browser journey also needs Chromium.
 
 ```bash
-git clone -b feature/job-buddy-core https://github.com/yeebs1000/job-buddy.git
+git clone https://github.com/yeebs1000/job-buddy.git
 cd job-buddy
 npm install
 npm run dev
@@ -155,7 +158,8 @@ A shoutout to [JobSpy](https://github.com/speedyapply/JobSpy). We adopted severa
 - [x] Singapore and Hong Kong launch coverage
 - [x] CSV/XLSX migration path with review before write
 - [x] Focused unit/component tests and a browser journey
-- [ ] Gmail intelligence and daily recruiter scans
+- [x] v0.2 simulated Update Intelligence with local synthetic messages
+- [ ] Real Gmail OAuth and daily active scans
 - [ ] Salary/review research connectors
 - [ ] User-approved autofill assistant
 - [ ] Optional encrypted sync
