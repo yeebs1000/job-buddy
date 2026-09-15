@@ -276,7 +276,7 @@ it("retries a failed simulated scan safely and keeps approval as the default mod
   expect(screen.queryByText(/secret provider error/)).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Retry demo scan" }));
   expect(await screen.findByRole("link", { name: "Review 1 pending update" })).toBeVisible();
-  expect(screen.getByText(/Last successful scan:/)).not.toHaveTextContent("Never");
+  await waitFor(() => expect(screen.getByText(/Last successful scan:/)).not.toHaveTextContent("Never"));
   expect((await applicationRepository.get("application-1"))?.stage).toBe("applied");
   await userEvent.selectOptions(screen.getByLabelText("Scan mode"), "unrestricted");
   expect(screen.getByRole("alert")).toHaveTextContent(/automatically apply/i);
