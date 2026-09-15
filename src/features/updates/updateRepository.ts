@@ -102,7 +102,7 @@ async function approve(id: string, edits: ProposalEdits, at: string, automatic: 
         fromStage: application.stage ?? undefined, toStage: classification.proposedStage,
         outcome: classification.proposedOutcome, origin: lifecycleCorrected ? "manual" : "system", accepted: true,
         evidenceId: id, confidence: classification.confidence,
-        note: automatic ? "Automatically accepted simulated mail update" : "Approved mail update",
+        note: automatic ? "Automatically accepted mail update" : "Approved mail update",
       });
     }
     const deadlines = classification.deadlines.map((deadline) => ({

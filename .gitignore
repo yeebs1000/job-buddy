@@ -22,6 +22,16 @@ exports/
 .env
 .env.*
 !.env.example
+.env.local
+oauth-response*.json
+gmail-oauth-response*.json
+google-oauth-token*.json
+gmail-refresh-token*
+
+# Local companion data accidentally copied from %LOCALAPPDATA%
+JobBuddy/
+LocalAppData/JobBuddy/
+AppData/Local/JobBuddy/
 
 # Editors and operating systems
 .vscode/

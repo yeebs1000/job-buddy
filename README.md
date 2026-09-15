@@ -1,4 +1,4 @@
-# Job Buddy v0.2
+# Job Buddy v0.3
 
 > A local-first workspace for replacing the job-application spreadsheet.
 
@@ -10,7 +10,7 @@
 
 [中文文档](README.zh-CN.md)
 
-Job Buddy v0.2 combines a local-first application tracker with **simulated Update Intelligence**. It helps anyone looking for work keep applications, stage changes, deadlines, interviews, follow-ups, and notes in one place. The release is designed for Singapore and Hong Kong, with a focus on finance, software engineering, data, cybersecurity, cloud, and general IT roles.
+Job Buddy v0.3 combines a local-first application tracker with optional, read-only Gmail Update Intelligence. It helps anyone looking for work keep applications, stage changes, deadlines, interviews, follow-ups, and notes in one place. The release is designed for Singapore and Hong Kong, with software roles first and finance, data, cybersecurity, cloud, and general IT records supported by the tracker.
 
 > [!TIP]
 > **Tiny promise:** Job Buddy may be opinionated about stage history, but it will never silently rewrite your past.
@@ -27,9 +27,9 @@ Job Buddy v0.2 combines a local-first application tracker with **simulated Updat
 
 ## Project status
 
-The local-first tracker and v0.2 Update Intelligence simulation are usable today. The simulation uses synthetic fixture messages, stores only the minimal evidence needed to review a proposal (sender, subject, excerpt, received time, approved HTTPS links, confidence, and reasons), and never requests Gmail credentials. It scans only while this page is active and only after you explicitly choose **Scan now (simulated)**; it has no live Gmail access or background scanning.
+The local tracker, demo inbox, and Windows Gmail companion are usable today. Gmail is optional and must be configured by the person running the app. It requests the read-only Gmail scope, performs an explicitly confirmed first scan of at most 500 inbox messages from the last 90 days, then uses Gmail history IDs for incremental checks. It scans only when Job Buddy is open: manually, or once per eligible active session after 24 hours. There is no background service.
 
-Approval is the default: actionable simulated messages become reviewable proposals, while marketing/no-op mail and duplicate provider IDs are intentionally ignored. **Unrestricted simulation** may apply only confident, conflict-free forward updates while the page remains open; offers, terminal outcomes, unmatched/ambiguous mail, and conflicts still require explicit approval.
+Approval is the default: actionable messages become reviewable proposals, while marketing/no-op mail and duplicate provider IDs are ignored. **Auto-apply safe updates** may apply only confident, conflict-free forward updates; offers, terminal outcomes, unmatched/ambiguous mail, and conflicts still require explicit approval. Live failures never fall back to demo data.
 
 The repository is intentionally private while the product and data model are being shaped. The core branch is structured so it can be opened to contributors later without rewriting the local data boundary.
 
@@ -43,6 +43,7 @@ The repository is intentionally private while the product and data model are bei
 - UTF-8 CSV and XLSX export for the current filtered set or the full tracker.
 - Fictional Singapore/Hong Kong demo records for finance, software, data, and general IT roles, covering lifecycle states. The app also supports cybersecurity and cloud roles when you add or import them.
 - Simulated Update Intelligence with synthetic recruiter messages, evidence-backed match/classification confidence, reviewable interview/deadline extraction, and deterministic local fixture scans.
+- Optional read-only Gmail OAuth on Windows with encrypted refresh-token storage, bounded initial sync, incremental history sync, explicit Gmail/Demo provenance, reconnect handling, and retained reviewed evidence after disconnect.
 
 ## Information sources and provenance
 
@@ -50,12 +51,12 @@ Job Buddy distinguishes information you enter from information a connector may g
 
 | Source or platform | Current release | Planned use | Boundary |
 | --- | --- | --- | --- |
-| LinkedIn, company career sites, campus portals, referrals, job boards | Stored as a source label when you add/import an application | Keep the original application source and link | Not connected or scraped by V1 |
-| Gmail / Gmail API | Not connected; v0.2 uses synthetic messages only | Read-only OAuth connection and user-initiated scans while the app is active for recruiter/HR replies, proposed stage changes, interview dates, meeting links, deadlines, and follow-up tasks | No Gmail credentials, live mail, daily active scans, or background scanning are shipped; messages should remain local unless explicitly exported |
+| LinkedIn, company career sites, campus portals, referrals, job boards | Stored as a source label when you add/import an application | Keep the original application source and link | Not connected or scraped by v0.3 |
+| Gmail / Gmail API | Optional read-only OAuth companion on Windows, plus a separate fictional demo inbox | Active-session scans for recruiter/HR replies, proposed stage changes, interview dates, approved HTTPS meeting links, deadlines, and follow-up tasks | Refresh token is Windows-DPAPI encrypted; normalized evidence is stored locally; no background service and no automatic live-to-demo fallback |
 | Greenhouse, Workday, Oracle Recruiting, Lever and similar ATSs | Not connected | User-approved autofill and application-link capture where the platform and browser context allow it | No unattended submission or bypass of platform controls is promised |
 | Glassdoor, Levels.fyi, official salary postings, and regional salary datasets | Not connected | Region-specific salary ranges and company-review context for Singapore/Hong Kong | Availability, licensing, freshness, and regional coverage must be verified per source |
 | JobSpy and public job listings | Not connected | Optional job-discovery adapters and deduplication inputs | Discovery data is not application-status truth |
-| User-selected AI provider | Not connected | Interview question generation, email classification proposals, and preparation plans | Future versions may support user-supplied API keys and selectable models; V1 stores no AI credentials |
+| User-selected AI provider | Not connected | Interview question generation, email classification proposals, and preparation plans | Future versions may support user-supplied API keys and selectable models; v0.3 stores no AI credentials |
 
 Future generated facts are intended to carry their source, region, retrieval time, confidence, and user override. A connector may propose a change; the user remains the authority for the final application stage.
 
@@ -63,13 +64,13 @@ Future generated facts are intended to carry their source, region, retrieval tim
 
 Roadmap items are planned, not promises of current functionality.
 
-### V0.2 — Local tracker and simulated Update Intelligence (current)
+### V0.3 — Local tracker and live Gmail Update Intelligence (current)
 
-Local persistence, visual stage tracking, filters and saved views, manual updates with history/undo, reviewed spreadsheet migration, Singapore/Hong Kong coverage, and a simulated evidence-backed update inbox with approval and unrestricted-simulation modes.
+Local persistence, visual stage tracking, filters and saved views, manual updates with history/undo, reviewed spreadsheet migration, Singapore/Hong Kong coverage, demo mail, and optional read-only Gmail with approval and auto-apply-safe modes.
 
-### Next work — real Gmail OAuth and active-session scans
+### Next work — research and application assistance
 
-Read-only Gmail OAuth, user-initiated scans while the app is active, and hardening the simulated matching/evidence workflow against real user-approved data. Real Gmail OAuth and daily active scans are not shipped in v0.2.
+Region-specific salary and workplace-review connectors, interview preparation resources, and a user-controlled AI provider. Source freshness, licensing, and regional provenance must remain visible.
 
 ### V2.0 — Application assistant
 
@@ -81,7 +82,9 @@ More regions, optional encrypted sync, backup/restore across devices, provider a
 
 ## Privacy and security
 
-V0.2 is single-user and local-only. Applications, imported records, events, saved views, and minimal simulated-message evidence live in the browser's IndexedDB. There is no hosted database, Gmail connection, live or background email scan, AI credential, salary/review scraper, browser autofill, unattended submission, or remote job scraper in this release.
+V0.3 is single-user and local-first. Applications, imported records, events, saved views, normalized message evidence, and scan preferences live in the browser's IndexedDB. The local companion binds only to `127.0.0.1`; on Windows its Gmail refresh token is encrypted for the current Windows user with DPAPI under `%LOCALAPPDATA%\JobBuddy`. Access tokens stay in memory. The browser bundle never receives the OAuth client secret or refresh token. There is no hosted database, background email service, AI credential, salary/review scraper, browser autofill, unattended submission, or remote job scraper in this release.
+
+Disconnect attempts Google token revocation and removes the local protected token and connection metadata. Existing applications, approved changes, and already-normalized evidence remain so the tracker does not lose its audit trail. Clearing browser storage is a separate destructive action.
 
 This is a privacy boundary, not a guarantee against someone who can access the same browser profile or device. Export a snapshot before clearing site data or changing devices, but do not treat the standard CSV/XLSX export as a restorable backup: it intentionally omits lifecycle history, event notes, evidence, internal IDs, and saved views. Never commit real trackers, exports, email bodies, API keys, cookies, or personal data.
 
@@ -98,7 +101,34 @@ npm install
 npm run dev
 ```
 
-Vite prints the local URL, normally [http://localhost:5173](http://localhost:5173).
+Vite prints the local URL, normally [http://127.0.0.1:5173](http://127.0.0.1:5173). `npm run dev` starts both the web app and the loopback companion; use `npm.cmd run dev` if PowerShell blocks `npm.ps1`.
+
+## Optional Gmail setup
+
+The demo inbox works without Google configuration. For live Gmail on Windows:
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create or select a project, then [enable the Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com).
+2. Configure the OAuth consent screen. For a personal prototype, keep the app in **Testing** and add the Gmail address you will connect as a test user.
+3. Create an OAuth 2.0 Client ID with application type **Web application**. Add this exact authorized redirect URI: `http://127.0.0.1:43117/api/gmail/oauth/callback`.
+4. Copy `.env.example` to `.env.local`. Put the client ID and client secret in the matching variables; keep the redirect URI unchanged. Never commit this file.
+5. Restart `npm run dev`, open **Settings**, choose **Connect Gmail**, complete Google's consent screen, then confirm **Scan last 90 days**.
+
+```dotenv
+GOOGLE_OAUTH_CLIENT_ID=your-web-client-id
+GOOGLE_OAUTH_CLIENT_SECRET=your-web-client-secret
+GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:43117/api/gmail/oauth/callback
+```
+
+Job Buddy requests `https://www.googleapis.com/auth/gmail.readonly`, which Google classifies as a restricted scope. A Testing-mode app is suitable for named test users but may require periodic reconnection; broader public distribution can require Google verification and an appropriate security assessment. See Google's [OAuth web-server guide](https://developers.google.com/identity/protocols/oauth2/web-server) and [Gmail scope reference](https://developers.google.com/workspace/gmail/api/auth/scopes).
+
+### Gmail troubleshooting
+
+- **Setup needed:** confirm both OAuth values exist in `.env.local`, then fully restart the dev command.
+- **Redirect URI mismatch:** the Google Cloud redirect and `.env.local` value must exactly match the loopback URI above, including `127.0.0.1`, port `43117`, path, and `http` scheme.
+- **Reconnect needed / revoked token:** open Settings and reconnect. Approved tracker changes and normalized evidence remain available.
+- **First scan stopped at 500:** this is the intentional privacy and performance bound. The UI reports truncation; later checks use incremental Gmail history.
+- **No automatic daily check:** finish the first scan, enable **Daily active-session scan**, leave Gmail selected, and reopen Job Buddy after the last successful scan is at least 24 hours old.
+- **Unsupported device:** persistent live Gmail is Windows-only in v0.3 because credential storage requires current-user DPAPI. Use the demo inbox elsewhere.
 
 To run the finite quality gates:
 
@@ -106,8 +136,11 @@ To run the finite quality gates:
 npm test
 npm run typecheck
 npm run build
+npm run verify:client-secrets
 npm run test:e2e
 ```
+
+`npm run check` runs the complete sequence. The client-artifact verifier reports only rule names and file paths; it never prints matched secret values.
 
 To inspect the production preview after building:
 
@@ -128,7 +161,9 @@ src/domain/                  lifecycle, filters, import contracts
 src/db/                      Dexie schema, migrations, repositories
 src/features/                Command Center, Applications, detail, import/export
 src/components/              shared shell, controls, stage rail
-e2e/                          core browser journey and fictional fixture
+server/                      loopback OAuth, Gmail API, normalization, DPAPI
+scripts/                     paired dev launcher and client-secret verification
+e2e/                         tracker, demo inbox, and fake-Gmail browser journeys
 docs/superpowers/specs/      approved product specification
 docs/superpowers/plans/      implementation plans and review checkpoints
 ```
@@ -158,8 +193,8 @@ A shoutout to [JobSpy](https://github.com/speedyapply/JobSpy). We adopted severa
 - [x] Singapore and Hong Kong launch coverage
 - [x] CSV/XLSX migration path with review before write
 - [x] Focused unit/component tests and a browser journey
-- [x] v0.2 simulated Update Intelligence with local synthetic messages
-- [ ] Real Gmail OAuth and daily active scans
+- [x] Demo Update Intelligence with local synthetic messages
+- [x] Read-only Gmail OAuth and daily active-session scans on Windows
 - [ ] Salary/review research connectors
 - [ ] User-approved autofill assistant
 - [ ] Optional encrypted sync

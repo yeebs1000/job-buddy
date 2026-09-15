@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
 test("scans fixture mail, reviews evidence, and updates an interview deadline", async ({ page }) => {
   // Catches default demo fixtures that cannot match the Review-stage Circuit application, or a Command Center that hides the extracted appointment time.
   await expect(page.getByRole("heading", { name: "Application command center" })).toBeVisible();
-  await page.getByRole("button", { name: /scan now/i }).click();
+  await page.getByRole("button", { name: "Scan demo inbox" }).click();
   await page.getByRole("link", { name: /review .*pending update/i }).click();
 
   const technicalInterview = page.getByRole("article").filter({ hasText: "Technical interview invitation — Software Engineer" });
