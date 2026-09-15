@@ -82,6 +82,56 @@ it("requires selecting a persisted application for unmatched evidence", async ()
   expect((await updateRepository.get("proposal-1"))?.match.applicationId).toBe("application-1");
 });
 
+it("rechecks a live application conflict before approval and requires inline confirmation", async () => {
+  await proposal({ match: { applicationId: "application-1", confidence: 0.95, reasons: ["company"], conflicts: ["ambiguous"] } });
+  inbox();
+  expect(await screen.findByText(/Scan-time conflicts: ambiguous/)).toBeVisible();
+  await applicationRepository.appendEvent({
+    id: "later-manual-final", applicationId: "application-1", at: "2026-09-14T00:00:00Z",
+    fromStage: "applied", toStage: "final", origin: "manual", accepted: true,
+  });
+  expect(await screen.findByText(/Current application conflicts: stage not forward/)).toBeVisible();
+  expect(screen.getByText(/Current application stage: Final/)).toBeVisible();
+
+  await userEvent.click(screen.getByRole("button", { name: "Approve update" }));
+  const confirmation = await screen.findByRole("alertdialog", { name: "Approve conflicting update?" });
+  expect((await updateRepository.get("proposal-1"))?.status).toBe("pending");
+  expect((await applicationRepository.get("application-1"))?.stage).toBe("final");
+  await userEvent.click(within(confirmation).getByRole("button", { name: "Approve update" }));
+  expect(await screen.findByText("Update applied.")).toBeVisible();
+});
+
+it("keeps keyboard focus on the reviewed row result after multi-row actions reorder the inbox", async () => {
+  await proposal({ id: "proposal-reject", source: { ...fixtureMessages[0], providerMessageId: "reject", subject: "Reject message", receivedAt: "2026-09-15T09:00:00Z" } });
+  await proposal({ id: "proposal-defer", source: { ...fixtureMessages[0], providerMessageId: "defer", subject: "Defer message", receivedAt: "2026-09-14T09:00:00Z" } });
+  await proposal({ id: "proposal-approve", source: { ...fixtureMessages[0], providerMessageId: "approve", subject: "Approve message", receivedAt: "2026-09-13T09:00:00Z" } });
+  inbox();
+  const user = userEvent.setup();
+  const list = await screen.findByRole("region", { name: "Mail update proposals" });
+
+  const rejectRow = within(list).getByRole("article", { name: /Reject message/ });
+  const reject = within(rejectRow).getByRole("button", { name: "Reject update" });
+  reject.focus(); await user.keyboard("{Enter}");
+  const rejected = await within(rejectRow).findByText("Review result: Update rejected.");
+  expect(rejected).toHaveAttribute("role", "status");
+  expect(document.activeElement).toBe(rejected);
+  await waitFor(() => expect(Array.from(list.querySelectorAll("article")).at(-1)).toBe(rejectRow));
+
+  const deferRow = within(list).getByRole("article", { name: /Defer message/ });
+  const defer = within(deferRow).getByRole("button", { name: "Defer update" });
+  defer.focus(); await user.keyboard("{Enter}");
+  const deferred = await within(deferRow).findByText("Review result: Update deferred. You can review it later.");
+  expect(deferred).toHaveAttribute("role", "status");
+  expect(document.activeElement).toBe(deferred);
+
+  const approveRow = within(list).getByRole("article", { name: /Approve message/ });
+  const approve = within(approveRow).getByRole("button", { name: "Approve update" });
+  approve.focus(); await user.keyboard("{Enter}");
+  const approved = await within(approveRow).findByText("Review result: Update applied.");
+  expect(approved).toHaveAttribute("role", "status");
+  expect(document.activeElement).toBe(approved);
+});
+
 it("requires an explicit approve confirmation before applying an edited terminal outcome", async () => {
   await proposal(); inbox(); const user = userEvent.setup();
   await user.selectOptions(await screen.findByLabelText("Proposed outcome"), "rejected");

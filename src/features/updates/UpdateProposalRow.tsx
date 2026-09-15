@@ -1,11 +1,11 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "../../components/Button";
 import { StageRail } from "../../components/StageRail";
 import type { PersistedApplication } from "../../db/applicationRepository";
 import type { Deadline } from "../../domain/application";
 import { applicationStages, type ApplicationOutcome, type ApplicationStage } from "../../domain/stage";
 import type { UpdateProposal } from "../../domain/updateProposal";
-import { updateRepository } from "./updateRepository";
+import { proposalConflicts, updateRepository } from "./updateRepository";
 
 const stageLabels = { applied: "Applied", review: "Review", assessment: "Assessment", interview: "Interview", final: "Final", offer: "Offer" };
 const outcomeLabels: Record<ApplicationOutcome, string> = { rejected: "Rejected", withdrawn: "Withdrawn", expired: "Expired", offer_declined: "Offer declined", offer_accepted: "Offer accepted", hired: "Hired" };
@@ -28,6 +28,7 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
 }) {
   const id = useId();
   const approveButton = useRef<HTMLButtonElement>(null);
+  const resultRef = useRef<HTMLParagraphElement>(null);
   const [applicationId, setApplicationId] = useState(proposal.match.applicationId ?? "");
   const [stage, setStage] = useState<ApplicationStage | "">(proposal.classification.proposedStage ?? "");
   const [outcome, setOutcome] = useState<ApplicationOutcome | "">(proposal.classification.proposedOutcome ?? "");
@@ -35,12 +36,20 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [result, setResult] = useState("");
   const reviewed = proposal.status === "approved" || proposal.status === "rejected";
   const application = applications.find((item) => item.id === (reviewed ? proposal.match.applicationId : applicationId));
   const closed = Boolean(application?.outcome);
   const displayedStage = reviewed ? proposal.classification.proposedStage : stage;
   const displayedOutcome = reviewed ? proposal.classification.proposedOutcome : outcome;
   const links = proposal.classification.links.filter(validLink);
+  const currentConflicts = application && !reviewed ? proposalConflicts(application, {
+    source: proposal.source,
+    classification: { ...proposal.classification, proposedStage: stage || undefined, proposedOutcome: outcome || undefined },
+  } as Pick<UpdateProposal, "classification" | "source">) : [];
+  const requiresConfirmation = Boolean(outcome || stage === "offer" || currentConflicts.length);
+
+  useEffect(() => { if (result) resultRef.current?.focus(); }, [result]);
 
   function editDeadline(index: number, patch: Partial<Deadline>) {
     setDeadlines(deadlines.map((deadline, position) => position === index ? { ...deadline, ...patch } : deadline));
@@ -54,16 +63,16 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
         setError("Enter a deadline label and valid ISO date and time with a timezone, such as 2026-09-20T14:00:00+08:00."); return;
       }
       if (!stage && !outcome && !deadlines.length) { setError("Choose a stage, outcome or deadline before approving."); return; }
-      if ((outcome || stage === "offer") && !confirmed) { setConfirming(true); return; }
+      if (requiresConfirmation && !confirmed) { setConfirming(true); return; }
     }
     setBusy(true);
     try {
       if (action === "approve") {
         await updateRepository.approveProposal(proposal.id, { applicationId, proposedStage: stage || undefined, proposedOutcome: outcome || undefined,
           deadlines: deadlines.map((deadline) => ({ ...deadline, label: deadline.label.trim(), at: new Date(deadline.at).toISOString() })) });
-        onReviewed("Update applied.");
-      } else if (action === "reject") { await updateRepository.rejectProposal(proposal.id); onReviewed("Update rejected."); }
-      else { await updateRepository.deferProposal(proposal.id); onReviewed("Update deferred. You can review it later."); }
+        setResult("Review result: Update applied."); onReviewed("Update applied.");
+      } else if (action === "reject") { await updateRepository.rejectProposal(proposal.id); setResult("Review result: Update rejected."); onReviewed("Update rejected."); }
+      else { await updateRepository.deferProposal(proposal.id); setResult("Review result: Update deferred. You can review it later."); onReviewed("Update deferred. You can review it later."); }
       setConfirming(false);
     } catch { setError("This update could not be saved. Check the selected application and try again."); }
     finally { setBusy(false); }
@@ -86,7 +95,9 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
       <p>Because {proposal.match.reasons.map(humanize).join(", ") || "no matching evidence was found"}.</p>
       <p>Classification confidence: {Math.round(proposal.classification.confidence * 100)}%</p>
       <ul aria-label="Classification reasons">{proposal.classification.reasons.map((reason) => <li key={reason}>{humanize(reason)}</li>)}</ul>
-      {proposal.match.conflicts.length > 0 ? <p className="update-row__conflict">Conflicts: {proposal.match.conflicts.map(humanize).join(", ")}. Review carefully.</p> : <p>No matching conflicts recorded.</p>}
+      {proposal.match.conflicts.length > 0 ? <p className="update-row__conflict">Scan-time conflicts: {proposal.match.conflicts.map(humanize).join(", ")}. Review carefully.</p> : <p>No scan-time matching conflicts recorded.</p>}
+      {application && <p>Current application stage: {application.stage ? stageLabels[application.stage] : "Not set"}.</p>}
+      {currentConflicts.length > 0 && <p className="update-row__conflict">Current application conflicts: {currentConflicts.map(humanize).join(", ")}. Confirm approval to apply this change.</p>}
       <p>Status: <strong>{humanize(proposal.status)}</strong></p>
       <StageRail compact stage={displayedStage || null} outcome={displayedOutcome || null} rejectedAtStage={displayedOutcome === "rejected" ? displayedStage || application?.stage || undefined : undefined} />
     </div>
@@ -104,9 +115,10 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
           <Button variant="secondary" onClick={() => { setDeadlines([...deadlines, { id: crypto.randomUUID(), label: "", at: "", completed: false }]); setConfirming(false); }}>Add deadline</Button>
           {closed && <p className="update-row__conflict">This application is closed. Correct its history before approving an update.</p>}
           <div className="update-row__actions"><button ref={approveButton} className="button button--primary" disabled={!application || closed} onClick={() => void review("approve")}>Approve update</button><Button variant="secondary" onClick={() => void review("reject")}>Reject update</Button><Button variant="secondary" disabled={proposal.status === "deferred"} onClick={() => void review("defer")}>Defer update</Button></div>
-          {confirming && <section role="alertdialog" aria-labelledby={`${id}-confirm`} aria-describedby={`${id}-confirm-description`} className="update-row__confirmation" onKeyDown={(event) => { if (event.key === "Escape") cancelConfirmation(); }}><h3 id={`${id}-confirm`}>Approve terminal update?</h3><p id={`${id}-confirm-description`}>Approve {outcome ? outcomeLabels[outcome] : "Offer"} for {application?.company} · {application?.role}. This will change the application history.</p><Button autoFocus variant="secondary" onClick={cancelConfirmation}>Cancel</Button><Button onClick={() => void review("approve", true)}>Approve update</Button></section>}
+          {confirming && <section role="alertdialog" aria-labelledby={`${id}-confirm`} aria-describedby={`${id}-confirm-description`} className="update-row__confirmation" onKeyDown={(event) => { if (event.key === "Escape") cancelConfirmation(); }}><h3 id={`${id}-confirm`}>{currentConflicts.length ? "Approve conflicting update?" : "Approve terminal update?"}</h3><p id={`${id}-confirm-description`}>{currentConflicts.length ? `Current conflicts: ${currentConflicts.map(humanize).join(", ")}. ` : ""}Approve {outcome ? outcomeLabels[outcome] : stage === "offer" ? "Offer" : "this update"} for {application?.company} · {application?.role}. This will change the application history.</p><Button autoFocus variant="secondary" onClick={cancelConfirmation}>Cancel</Button><Button onClick={() => void review("approve", true)}>Approve update</Button></section>}
         </fieldset>}
       {busy && <p role="status">Saving update…</p>}
+      {result && <p ref={resultRef} role="status" tabIndex={-1}>{result}</p>}
       {error && <p role="alert" className="update-row__conflict">{error}</p>}
     </div>
   </article>;
