@@ -33,8 +33,9 @@ it("records a manual stage event and exposes undo", async () => {
   expect((await applicationRepository.eventsFor("a1"))).toContainEqual(expect.objectContaining({ toStage: "interview", origin: "manual", accepted: true, note: "Recruiter confirmed the interview." }));
   await user.click(screen.getByRole("button", { name: "Undo change" }));
   await waitFor(() => expect(screen.getByLabelText("New stage")).toHaveValue("review"));
-  expect(await applicationRepository.eventsFor("a1")).toHaveLength(3);
+  expect(await applicationRepository.eventsFor("a1")).toHaveLength(4);
   expect(screen.getByText("Changed to Interview").closest("li")).toHaveTextContent("Reverted");
+  expect(screen.getByText("Undo recorded")).toBeVisible();
 });
 
 it("undoes the first manual stage update back to no stage while retaining its history", async () => {
@@ -49,7 +50,10 @@ it("undoes the first manual stage update back to no stage while retaining its hi
   await user.click(screen.getByRole("button", { name: "Undo change" }));
   await waitFor(() => expect(screen.getByText("Changed to Interview").closest("li")).toHaveTextContent("Reverted"));
   expect(await applicationRepository.get("a1")).toMatchObject({ stage: null, outcome: null });
-  expect(await applicationRepository.eventsFor("a1")).toEqual([{ ...original, accepted: false }]);
+  expect(await applicationRepository.eventsFor("a1")).toEqual(expect.arrayContaining([
+    { ...original, accepted: false },
+    expect.objectContaining({ origin: "manual", accepted: true, revertsEventId: original.id }),
+  ]));
   expect(screen.getByRole("group", { name: "Application progress" }).querySelector('[aria-current="step"]')).toBeNull();
   expect(screen.getByRole("button", { name: "Undo change" })).toBeDisabled();
 });
@@ -137,6 +141,19 @@ it.each(["https://careers.example.com/roles/graduate", "http://careers.example.c
   expect(await screen.findByRole("link", { name: "Open job posting" })).toHaveAttribute("href", jobUrl);
   expect(screen.getByRole("link", { name: "Open job posting" })).toHaveAttribute("target", "_blank");
   expect(screen.getByRole("link", { name: "Open job posting" })).toHaveAttribute("rel", "noopener noreferrer");
+});
+
+it("renders a persisted safe meeting link for a deadline", async () => {
+  await createApplication();
+  await applicationRepository.update("a1", {
+    deadlines: [{ id: "meeting", label: "Technical interview", at: "2026-09-20T06:00:00.000Z", completed: false, links: ["https://meet.example/interview"] }],
+  });
+  renderDetail();
+
+  const meeting = await screen.findByRole("link", { name: "Open meeting link" });
+  expect(meeting).toHaveAttribute("href", "https://meet.example/interview");
+  expect(meeting).toHaveAttribute("target", "_blank");
+  expect(meeting).toHaveAttribute("rel", "noopener noreferrer");
 });
 
 it.each(["javascript:alert(1)", "https://user:password@careers.example.com/role", "not a url"])("does not turn an unsafe persisted job URL into an external link: %s", async jobUrl => {

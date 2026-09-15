@@ -162,12 +162,38 @@ describe("classifyMessage", () => {
     }))).toBeNull();
   });
 
+  it.each([
+    ["Your technical interview has been cancelled.", "interview-cancellation"],
+    ["You are not invited to the assessment.", "not-invited-language"],
+  ])("surfaces a positive subject with negative body as informational review: %s", (excerpt, reason) => {
+    // Catches a positive subject overriding explicit cancellation/not-invited evidence and auto-advancing the application.
+    expect(classifyMessage(mail({
+      subject: "Technical interview invitation",
+      excerpt: `${excerpt} The webinar is scheduled for 2026-09-16 at 10:00 AM SGT.`,
+    }))).toEqual({
+      confidence: 0.95,
+      reasons: [reason],
+      evidenceExcerpt: excerpt,
+      deadlines: [],
+      links: [],
+      requiresApproval: true,
+    });
+  });
+
+  it("keeps explicit rejection authoritative over a positive interview subject", () => {
+    // Catches informational negative handling that accidentally hides an explicit rejection outcome.
+    expect(classifyMessage(mail({
+      subject: "Technical interview invitation",
+      excerpt: "Your technical interview has been cancelled. Your application has been rejected.",
+    }))).toMatchObject({ proposedOutcome: "rejected", requiresApproval: true, deadlines: [] });
+  });
+
   it("extracts an SGT deadline from the adjacent scheduling sentence", () => {
     // Catches date extraction limited to the invitation sentence when the immediately following sentence schedules it.
     expect(classifyMessage(mail({
       providerMessageId: "mail-adjacent-date-001",
       subject: "Application update",
-      excerpt: "We would like to invite you to a technical interview. It is scheduled for 2026-09-16 at 10:00 AM SGT.",
+      excerpt: "We would like to invite you to a technical interview. The technical interview is scheduled for 2026-09-16 at 10:00 AM SGT.",
     }))).toMatchObject({
       proposedStage: "interview",
       evidenceExcerpt: "We would like to invite you to a technical interview.",
@@ -184,11 +210,22 @@ describe("classifyMessage", () => {
     // Catches an adjacent invalid date being ignored after a valid interview signal.
     expect(classifyMessage(mail({
       subject: "Application update",
-      excerpt: "We would like to invite you to a technical interview. It is scheduled for 2026-02-30 at 10:00 AM SGT.",
+      excerpt: "We would like to invite you to a technical interview. The technical interview is scheduled for 2026-02-30 at 10:00 AM SGT.",
     }))).toMatchObject({
       proposedStage: "interview",
       deadlines: [],
       reasons: expect.arrayContaining(["invalid-date"]),
     });
+  });
+
+  it.each([
+    "It is scheduled for 2026-09-16 at 10:00 AM SGT.",
+    "The webinar is scheduled for 2026-09-16 at 10:00 AM SGT.",
+  ])("does not take an interview deadline from unrelated or pronoun-only adjacency: %s", (adjacent) => {
+    // Catches adjacency logic that attaches any nearby scheduled event to the classified interview.
+    expect(classifyMessage(mail({
+      subject: "Application update",
+      excerpt: `We would like to invite you to a technical interview. ${adjacent}`,
+    }))).toMatchObject({ proposedStage: "interview", deadlines: [] });
   });
 });

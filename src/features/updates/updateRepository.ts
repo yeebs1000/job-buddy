@@ -1,5 +1,6 @@
 import { applicationRepository, type PersistedApplication } from "../../db/applicationRepository";
 import { jobBuddyDb, type StoredUpdateProposal } from "../../db/database";
+import { isSafeExternalHttpsUrl } from "../../domain/jobUrl";
 import { applicationStages } from "../../domain/stage";
 import { createUpdateProposal, type UpdateProposal, type UpdateProposalClassificationInput } from "../../domain/updateProposal";
 
@@ -12,6 +13,7 @@ export interface MailScanState {
 
 export type ProposalEdits = Partial<Pick<UpdateProposalClassificationInput, "proposedStage" | "proposedOutcome" | "interviewSubtype" | "deadlines" | "links">> & {
   applicationId?: string;
+  expectedApplicationUpdatedAt?: string;
 };
 
 export const scanStateKey = "mail-scan-state";
@@ -25,7 +27,7 @@ export function proposalConflicts(application: PersistedApplication, proposal: P
   }
   if (application.stageEvents.some((event) => event.accepted && event.origin === "manual"
     && (!Number.isFinite(Date.parse(event.at)) || Date.parse(event.at) >= Date.parse(proposal.source.receivedAt))
-    && (event.outcome || (event.toStage && event.toStage !== proposedStage)))) {
+    && (event.revertsEventId || event.outcome || (event.toStage && event.toStage !== proposedStage)))) {
     conflicts.push("manual-correction");
   }
   return conflicts;
@@ -62,11 +64,14 @@ async function approve(id: string, edits: ProposalEdits, at: string, automatic: 
     if (!existing) throw new Error("Update proposal does not exist");
     if (existing.status === "approved") return existing;
     if (existing.status === "rejected") throw new Error("Rejected proposals cannot be approved");
-    const { applicationId: editedApplicationId, ...classificationEdits } = edits;
+    const { applicationId: editedApplicationId, expectedApplicationUpdatedAt, ...classificationEdits } = edits;
     const applicationId = editedApplicationId ?? existing.match.applicationId;
     if (!applicationId) throw new Error("Choose an application before approving this update");
     const application = await applicationRepository.get(applicationId);
     if (!application) throw new Error("Selected application does not exist");
+    if (!automatic && expectedApplicationUpdatedAt !== application.updatedAt) {
+      throw new Error("This application changed while you were reviewing it. Refresh and confirm the current state before approving.");
+    }
     if (automatic && !canAutomaticallyApprove(existing, application)) return existing;
     if (application.outcome) throw new Error("This application is closed; correct its history before approving an update");
 
@@ -101,11 +106,11 @@ async function approve(id: string, edits: ProposalEdits, at: string, automatic: 
       applicationId, proposalId: id,
       kind: classification.proposedStage === "interview" ? "interview" as const : "deadline" as const,
       interviewSubtype: classification.interviewSubtype,
-      links: classification.links.filter((link) => { try { return new URL(link).protocol === "https:"; } catch { return false; } }),
+      links: classification.links.filter(isSafeExternalHttpsUrl),
     }));
     if (deadlines.length) await jobBuddyDb.deadlines.bulkAdd(deadlines);
     await jobBuddyDb.applications.update(applicationId, {
-      deadlines: [...application.deadlines, ...deadlines.map(({ id: deadlineId, label, at: deadlineAt, completed }) => ({ id: deadlineId, label, at: deadlineAt, completed }))],
+      deadlines: [...application.deadlines, ...deadlines.map(({ id: deadlineId, label, at: deadlineAt, completed, links }) => ({ id: deadlineId, label, at: deadlineAt, completed, ...(links.length ? { links } : {}) }))],
       ...(classification.interviewSubtype ? { interviewSubtype: classification.interviewSubtype } : {}),
       unreadUpdate: true, updatedAt: at,
     });

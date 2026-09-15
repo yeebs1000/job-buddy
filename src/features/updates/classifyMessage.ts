@@ -56,6 +56,11 @@ const terminalSignals: readonly { outcome: ApplicationOutcome; reason: string; m
   { outcome: "withdrawn", reason: "withdrawal-language", matches: (text) => /\b(?:application (?:has been )?withdrawn|withdrawal)\b/i.test(text) },
 ];
 
+const negativeInvitationSignals: readonly { reason: string; matches: (text: string) => boolean }[] = [
+  { reason: "interview-cancellation", matches: (text) => /\b(?:interview|assessment)\b.{0,80}\b(?:cancelled|canceled)\b|\b(?:cancelled|canceled)\b.{0,80}\b(?:interview|assessment)\b/i.test(text) },
+  { reason: "not-invited-language", matches: (text) => /\bnot invited\b.{0,80}\b(?:interview|assessment)\b|\b(?:interview|assessment)\b.{0,80}\bnot invited\b/i.test(text) },
+];
+
 function sentences(value: string): string[] {
   return value.split(/(?<=[.!?])\s+/).map((sentence) => sentence.trim()).filter(Boolean);
 }
@@ -167,13 +172,19 @@ function hasExplicitSchedulingDate(context: MessageSentence): boolean {
     && /\b\d{4}-\d{2}-\d{2}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\b/i.test(context.text);
 }
 
-function timeEvidence(contexts: readonly MessageSentence[], matched: MessageSentence): string {
+function mentionsStageEvent(context: MessageSentence, stage: ApplicationStage | undefined): boolean {
+  if (!stage) return false;
+  const noun = stage === "interview" ? "interview" : stage === "assessment" ? "assessment" : stage === "offer" ? "offer" : "review";
+  return new RegExp(`\\b${noun}\\b`, "i").test(context.text);
+}
+
+function timeEvidence(contexts: readonly MessageSentence[], matched: MessageSentence, stage: ApplicationStage | undefined): string {
   if (/\b\d{4}-\d{2}-\d{2}\s+at\s+\d{1,2}:\d{2}\s*(?:AM|PM)\b/i.test(matched.text)) return matched.text;
 
   const adjacent = contexts.filter((context) => context.source === "excerpt" && (
     matched.source === "excerpt" ? Math.abs(context.index - matched.index) === 1 : context.index === 0
   ));
-  return adjacent.find(hasExplicitSchedulingDate)?.text ?? matched.text;
+  return adjacent.find((context) => hasExplicitSchedulingDate(context) && mentionsStageEvent(context, stage))?.text ?? matched.text;
 }
 
 function interviewSubtype(text: string): MessageClassification["interviewSubtype"] | undefined {
@@ -186,9 +197,21 @@ function interviewSubtype(text: string): MessageClassification["interviewSubtype
 export function classifyMessage(message: MailEnvelope): MessageClassification | null {
   const contexts = messageSentences(message);
   const terminalMatch = findSignal(terminalSignals, contexts);
+  const negativeInvitationMatch = findSignal(negativeInvitationSignals, contexts);
   const stageMatch = findStageSignal(stageSignals, contexts);
   const mentionedStages = stageMentions(contexts);
   const contradictory = mentionedStages.size > 1;
+
+  if (!terminalMatch && negativeInvitationMatch) {
+    return {
+      confidence: 0.95,
+      reasons: [negativeInvitationMatch.signal.reason],
+      evidenceExcerpt: negativeInvitationMatch.evidenceExcerpt,
+      deadlines: [],
+      links: validHttpsLinks(message.links),
+      requiresApproval: true,
+    };
+  }
 
   if (!terminalMatch && !stageMatch) return null;
 
@@ -200,7 +223,7 @@ export function classifyMessage(message: MailEnvelope): MessageClassification | 
   const subtype = proposedStage === "interview" ? interviewSubtype(selectedMatch?.evidenceExcerpt ?? "") : undefined;
   const label = proposedStage === "interview" ? `${subtype ? `${subtype[0].toUpperCase()}${subtype.slice(1)} ` : ""}interview` : proposedStage === "assessment" ? (selectedSignal?.reason === "numerical-assessment-deadline" ? "Numerical assessment deadline" : "Assessment") : "Application update";
   const evidenceExcerpt = terminalMatch?.evidenceExcerpt ?? selectedMatch?.evidenceExcerpt ?? "";
-  const time = extractTime(timeEvidence(contexts, terminalMatch?.context ?? selectedMatch?.context ?? { text: evidenceExcerpt, source: "excerpt", index: 0 }), message.providerMessageId, label, proposedStage === "assessment" ? "deadline" : "scheduled-time");
+  const time = extractTime(timeEvidence(contexts, terminalMatch?.context ?? selectedMatch?.context ?? { text: evidenceExcerpt, source: "excerpt", index: 0 }, proposedStage), message.providerMessageId, label, proposedStage === "assessment" ? "deadline" : "scheduled-time");
   const links = validHttpsLinks(message.links);
   const reasons = [terminalMatch?.signal.reason ?? selectedSignal?.reason];
   if (contradictory) reasons.push("contradictory-stage-language");

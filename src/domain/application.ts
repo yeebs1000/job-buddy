@@ -9,6 +9,7 @@ export interface Deadline {
   label: string;
   at: string;
   completed: boolean;
+  links?: string[];
 }
 
 export interface ResearchSnapshot {

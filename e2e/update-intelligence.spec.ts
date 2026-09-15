@@ -24,6 +24,9 @@ test("scans fixture mail, reviews evidence, and updates an interview deadline", 
 
   const technicalInterview = page.getByRole("article").filter({ hasText: "Technical interview invitation — Software Engineer" });
   await expect(technicalInterview).toContainText("Circuit Harbour Ltd · Software Engineer");
+  await expect(technicalInterview).toContainText("Taylor Ng");
+  await expect(technicalInterview).toContainText("taylor.ng@circuitharbour.example");
+  await expect(technicalInterview).toContainText("Circuit Harbour Ltd would like to invite you to a technical interview on 2026-09-13 at 2:00 PM SGT.");
   await expect(technicalInterview).toContainText("Match confidence: 100%");
   await expect(technicalInterview).toContainText("Classification confidence: 95%");
   await expect(technicalInterview).toContainText("technical interview invitation");
@@ -33,5 +36,5 @@ test("scans fixture mail, reviews evidence, and updates an interview deadline", 
   await page.getByRole("link", { name: "Overview" }).click();
   const circuit = page.getByTestId("application-row-app-circuit-review");
   await expect(circuit).toContainText("Stage: Interview");
-  await expect(circuit).toContainText(/Tomorrow: Technical interview.*2:00 PM/);
+  await expect(circuit).toContainText("Tomorrow: Technical interview · 2:00 PM SGT");
 });

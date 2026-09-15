@@ -16,6 +16,7 @@ export interface StageEvent {
   evidenceId?: string;
   confidence?: number;
   note?: string;
+  revertsEventId?: string;
 }
 
 export interface ApplicationState {

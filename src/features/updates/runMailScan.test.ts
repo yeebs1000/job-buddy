@@ -35,6 +35,13 @@ function adapter(messages: MailEnvelope[] = [mail], nextCursor = "cursor-1"): Ma
   return { async scan() { return { messages, nextCursor, scannedAt: now }; } };
 }
 
+async function approveProposal(id: string, edits: ProposalEdits = {}) {
+  const proposal = await updateRepository.get(id);
+  const applicationId = edits.applicationId ?? proposal?.match.applicationId;
+  const expectedApplicationUpdatedAt = edits.expectedApplicationUpdatedAt ?? (applicationId ? (await applicationRepository.get(applicationId))?.updatedAt : undefined);
+  return updateRepository.approveProposal(id, { ...edits, expectedApplicationUpdatedAt });
+}
+
 afterEach(async () => {
   await jobBuddyDb.delete();
   await jobBuddyDb.open();
@@ -58,7 +65,7 @@ it("keeps approval-mode changes pending, then atomically approves history, inter
   await runMailScan({ adapter: adapter(), mode: "approval", now });
   const [proposal] = await updateRepository.listPending();
   expect((await applicationRepository.get("app-1"))?.stage).toBe("applied");
-  await Promise.all([updateRepository.approveProposal(proposal.id), updateRepository.approveProposal(proposal.id)]);
+  await Promise.all([approveProposal(proposal.id), approveProposal(proposal.id)]);
   expect(await updateRepository.get(proposal.id)).toMatchObject({ status: "approved" });
   expect(await applicationRepository.get("app-1")).toMatchObject({
     stage: "interview", interviewSubtype: "technical",
@@ -67,6 +74,44 @@ it("keeps approval-mode changes pending, then atomically approves history, inter
   expect(await jobBuddyDb.stageEvents.count()).toBe(2);
   expect(await jobBuddyDb.deadlines.toArray()).toEqual([expect.objectContaining({ applicationId: "app-1", proposalId: proposal.id, kind: "interview", interviewSubtype: "technical", links: ["https://meet.example/meridian-technical"] })]);
   expect(await jobBuddyDb.activityEntries.toArray()).toEqual([expect.objectContaining({ proposalId: proposal.id, automatic: false, action: "approved" })]);
+});
+
+it("rejects explicit approval when the reviewed application version is stale", async () => {
+  // Catches a render-time conflict review being committed after another tab updates the selected application.
+  await applicationRepository.create(application());
+  await runMailScan({ adapter: adapter(), mode: "approval", now });
+  const [proposal] = await updateRepository.listPending();
+  const reviewed = await applicationRepository.get("app-1");
+  await applicationRepository.update("app-1", { notes: "Changed in another tab." });
+
+  await expect(updateRepository.approveProposal(proposal.id, { expectedApplicationUpdatedAt: reviewed!.updatedAt }))
+    .rejects.toThrow("changed while you were reviewing");
+  expect((await updateRepository.get(proposal.id))?.status).toBe("pending");
+  expect((await applicationRepository.get("app-1"))?.stage).toBe("applied");
+});
+
+it("does not allow explicit approval without a reviewed application version", async () => {
+  // Catches an exported manual-approval path that silently bypasses optimistic review protection.
+  await applicationRepository.create(application());
+  await runMailScan({ adapter: adapter(), mode: "approval", now });
+  const [proposal] = await updateRepository.listPending();
+
+  await expect(updateRepository.approveProposal(proposal.id)).rejects.toThrow("changed while you were reviewing");
+  expect((await updateRepository.get(proposal.id))?.status).toBe("pending");
+});
+
+it("persists only credential-free HTTPS meeting links in the application deadline read model", async () => {
+  // Catches valid meeting links being retained only in normalized records, or unsafe URLs leaking into the embedded read model.
+  await applicationRepository.create(application());
+  await runMailScan({ adapter: adapter(), mode: "approval", now });
+  const [proposal] = await updateRepository.listPending();
+  await approveProposal(proposal.id, {
+    expectedApplicationUpdatedAt: (await applicationRepository.get("app-1"))!.updatedAt,
+    links: ["https://meet.example/safe", "http://meet.example/insecure", "https://user:password@meet.example/private"],
+  });
+
+  expect((await applicationRepository.get("app-1"))?.deadlines).toEqual([expect.objectContaining({ links: ["https://meet.example/safe"] })]);
+  expect(await jobBuddyDb.deadlines.toArray()).toEqual([expect.objectContaining({ links: ["https://meet.example/safe"] })]);
 });
 
 it("auto-applies a confident forward update and never duplicates its accepted event on retry", async () => {
@@ -103,6 +148,24 @@ it("does not let older forward mail silently replace a newer manual correction",
   expect((await applicationRepository.get("app-1"))?.stage).toBe("review");
 });
 
+it("keeps a distinct older reminder pending after the prior automatic stage event is undone", async () => {
+  // Catches undo erasing only the original event, which lets a different older provider message silently reapply it.
+  await applicationRepository.create(application());
+  await runMailScan({ adapter: adapter(), mode: "unrestricted", now });
+  const appliedEvent = (await applicationRepository.eventsFor("app-1")).find((event) => event.evidenceId);
+  expect(appliedEvent).toBeDefined();
+  await applicationRepository.undoEvent(appliedEvent!.id);
+
+  await runMailScan({
+    adapter: adapter([{ ...mail, providerMessageId: "older-reminder", receivedAt: "2026-09-11T02:00:00.000Z" }]),
+    mode: "unrestricted",
+    now: "2026-09-15T09:00:00.000Z",
+  });
+
+  expect((await applicationRepository.get("app-1"))?.stage).toBe("applied");
+  expect((await updateRepository.listPending())[0].match.conflicts).toContain("manual-correction");
+});
+
 it("keeps ambiguous and unmatched classified mail pending and records irrelevant mail without a proposal", async () => {
   await applicationRepository.create(application());
   await applicationRepository.create(application("applied", { id: "app-2", stageEvents: [] }));
@@ -113,7 +176,7 @@ it("keeps ambiguous and unmatched classified mail pending and records irrelevant
   expect(pending.find((proposal) => proposal.source.providerMessageId === mail.providerMessageId)?.match.conflicts).toContain("ambiguous");
   expect(pending.find((proposal) => proposal.source.providerMessageId === fixtureMessages[1].providerMessageId)?.match.reasons).toContain("unmatched");
   expect(await jobBuddyDb.processedMessages.count()).toBe(3);
-  await expect(updateRepository.approveProposal(pending[0].id)).rejects.toThrow("application");
+  await expect(approveProposal(pending[0].id)).rejects.toThrow("application");
   expect(await jobBuddyDb.activityEntries.count()).toBe(0);
 });
 
@@ -154,13 +217,13 @@ it("rolls back an explicit approval completely when its activity write fails", a
   const [proposal] = await updateRepository.listPending();
   const failWrite = () => { throw new Error("write failed"); };
   jobBuddyDb.activityEntries.hook("creating", failWrite);
-  try { await expect(updateRepository.approveProposal(proposal.id)).rejects.toThrow(); }
+  try { await expect(approveProposal(proposal.id)).rejects.toThrow(); }
   finally { jobBuddyDb.activityEntries.hook("creating").unsubscribe(failWrite); }
   expect((await updateRepository.get(proposal.id))?.status).toBe("pending");
   expect((await applicationRepository.get("app-1"))?.stage).toBe("applied");
   expect(await jobBuddyDb.deadlines.count()).toBe(0);
   expect(await jobBuddyDb.stageEvents.count()).toBe(1);
-  await updateRepository.approveProposal(proposal.id);
+  await approveProposal(proposal.id);
   expect(await jobBuddyDb.activityEntries.count()).toBe(1);
 });
 
@@ -170,12 +233,12 @@ it("allows explicit application/stage/deadline edits at approval and preserves r
   const proposals = await updateRepository.listPending();
   const unmatched = proposals.find((proposal) => proposal.match.applicationId === null)!;
   const matched = proposals.find((proposal) => proposal.match.applicationId === "app-1")!;
-  await updateRepository.approveProposal(unmatched.id, { applicationId: "app-1", proposedStage: "assessment", deadlines: [{ id: "corrected", label: "Edited deadline", at: "2026-09-20T00:00:00.000Z", completed: false }] });
+  await approveProposal(unmatched.id, { applicationId: "app-1", proposedStage: "assessment", deadlines: [{ id: "corrected", label: "Edited deadline", at: "2026-09-20T00:00:00.000Z", completed: false }] });
   await updateRepository.rejectProposal(matched.id);
   await updateRepository.rejectProposal(matched.id);
   await runMailScan({ adapter: adapter([fixtureMessages[1], mail]), mode: "unrestricted", now });
   expect((await updateRepository.get(matched.id))?.status).toBe("rejected");
-  await expect(updateRepository.approveProposal(matched.id)).rejects.toThrow();
+  await expect(approveProposal(matched.id)).rejects.toThrow();
   expect(await applicationRepository.get("app-1")).toMatchObject({ stage: "assessment", deadlines: [{ label: "Edited deadline", at: "2026-09-20T00:00:00.000Z" }] });
   expect(await jobBuddyDb.activityEntries.count()).toBe(2);
 });
@@ -191,7 +254,7 @@ it("defers without modifying the application and allows later approval without d
   expect(await jobBuddyDb.stageEvents.count()).toBe(1);
   expect(await jobBuddyDb.deadlines.count()).toBe(0);
   expect(await jobBuddyDb.activityEntries.count()).toBe(1);
-  await updateRepository.approveProposal(proposal.id);
+  await approveProposal(proposal.id);
   expect((await applicationRepository.get("app-1"))?.stage).toBe("interview");
   expect(await jobBuddyDb.activityEntries.count()).toBe(2);
 });
@@ -238,7 +301,7 @@ it("makes explicit approval take effect after newer manual history instead of ba
   }));
   await runMailScan({ adapter: adapter(), mode: "approval", now });
   const [proposal] = await updateRepository.listPending();
-  await updateRepository.approveProposal(proposal.id);
+  await approveProposal(proposal.id);
   expect((await applicationRepository.get("app-1"))?.stage).toBe("interview");
   expect(await jobBuddyDb.stageEvents.get("future-correction")).toMatchObject({ accepted: true, toStage: "final" });
 });
@@ -288,7 +351,7 @@ it("applies the terminal outcome only on explicit approval while retaining the l
   await runMailScan({ adapter: adapter([{ ...mail, subject: "Quantitative Analyst application update", excerpt: "We will not be progressing your application." }]), mode: "unrestricted", now });
   const [proposal] = await updateRepository.listPending();
   expect((await applicationRepository.get("app-1"))?.outcome).toBeNull();
-  await updateRepository.approveProposal(proposal.id);
+  await approveProposal(proposal.id);
   expect(await applicationRepository.get("app-1")).toMatchObject({ stage: "assessment", outcome: "rejected" });
   expect((await applicationRepository.eventsFor("app-1"))).toContainEqual(expect.objectContaining({ outcome: "rejected", accepted: true, evidenceId: proposal.id }));
 });
@@ -308,7 +371,7 @@ it("preserves a user-corrected proposal stage when a different older forward mes
   await applicationRepository.create(application());
   await runMailScan({ adapter: adapter(), mode: "approval", now });
   const [proposal] = await updateRepository.listPending();
-  await updateRepository.approveProposal(proposal.id, { proposedStage: "assessment" });
+  await approveProposal(proposal.id, { proposedStage: "assessment" });
   await runMailScan({ adapter: adapter([{ ...mail, providerMessageId: "older-distinct-interview", receivedAt: "2026-09-11T02:00:00.000Z" }]), mode: "unrestricted", now });
 
   expect((await applicationRepository.get("app-1"))?.stage).toBe("assessment");
@@ -329,7 +392,7 @@ it.each<[string, ProposalEdits]>([
   await applicationRepository.create(application("applied", { id: "app-2", company: "Other", role: "Other", recruiter: undefined, stageEvents: [] }));
   await runMailScan({ adapter: adapter(), mode: "approval", now });
   const [proposal] = await updateRepository.listPending();
-  await updateRepository.approveProposal(proposal.id, edits);
+  await approveProposal(proposal.id, edits);
   expect((await applicationRepository.eventsFor(edits.applicationId ?? "app-1")).find((event) => event.evidenceId === proposal.id)?.origin).toBe("system");
 });
 
@@ -349,6 +412,6 @@ it.each<[string, ProposalEdits]>([
     },
     createdAt: now,
   });
-  await updateRepository.approveProposal("lifecycle-proposal", edits);
+  await approveProposal("lifecycle-proposal", edits);
   expect((await applicationRepository.eventsFor("app-1")).find((event) => event.evidenceId === "lifecycle-proposal")?.origin).toBe("manual");
 });

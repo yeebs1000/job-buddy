@@ -2,7 +2,7 @@ import "fake-indexeddb/auto";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, createMemoryRouter, RouterProvider } from "react-router-dom";
-import { afterEach, beforeEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { jobBuddyDb } from "../../db/database";
 import { applicationRepository } from "../../db/applicationRepository";
 import { createUpdateProposal, type UpdateProposalInput } from "../../domain/updateProposal";
@@ -80,6 +80,28 @@ it.each([['Reject update', 'rejected'], ['Defer update', 'deferred']] as const)(
   if (status === "deferred") expect(screen.getByRole("button", { name: "Approve update" })).toBeVisible();
 });
 
+it("retains a rejected extracted deadline as evidence without writing it to the application", async () => {
+  await proposal();
+  inbox();
+  await userEvent.click(await screen.findByRole("button", { name: "Reject update" }));
+
+  expect(await screen.findByText(/Extracted deadline — not applied: Technical interview/)).toBeVisible();
+  expect((await applicationRepository.get("application-1"))?.deadlines).toEqual([]);
+});
+
+it("labels retained matching evidence as the original inference after selecting another application", async () => {
+  await applicationRepository.create({
+    id: "application-2", company: "Other Company", role: "Other role", discipline: "finance",
+    location: { city: "Singapore", country: "Singapore" }, source: "manual", appliedAt: "2026-09-01T00:00:00Z", tags: [], deadlines: [], stageEvents: [],
+  });
+  await proposal();
+  inbox();
+  await userEvent.selectOptions(await screen.findByLabelText("Application"), "application-2");
+
+  expect(screen.getByText("Original match confidence: 95%")).toBeVisible();
+  expect(screen.getByText(/Original inference: company, role, sender domain/i)).toBeVisible();
+});
+
 it("requires selecting a persisted application for unmatched evidence", async () => {
   await proposal({ match: { applicationId: null, confidence: 0, reasons: ["unmatched"], conflicts: ["ambiguous"] } });
   inbox();
@@ -109,6 +131,17 @@ it("rechecks a live application conflict before approval and requires inline con
   expect((await applicationRepository.get("application-1"))?.stage).toBe("final");
   await userEvent.click(within(confirmation).getByRole("button", { name: "Approve update" }));
   expect(await screen.findByText("Update applied.")).toBeVisible();
+});
+
+it("shows stale-review guidance and leaves the proposal pending when approval loses its transaction token", async () => {
+  await proposal();
+  const rejection = vi.spyOn(updateRepository, "approveProposal").mockRejectedValueOnce(new Error("This application changed while you were reviewing it. Refresh and confirm the current state before approving."));
+  inbox();
+
+  await userEvent.click(await screen.findByRole("button", { name: "Approve update" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Review the current state and confirm again.");
+  expect((await updateRepository.get("proposal-1"))?.status).toBe("pending");
+  rejection.mockRestore();
 });
 
 it("keeps keyboard focus on the reviewed row result after multi-row actions reorder the inbox", async () => {

@@ -128,6 +128,38 @@ describe("matchApplication", () => {
     });
   });
 
+  it("blocks a high-confidence recruiter match when the message explicitly names an incompatible role", () => {
+    // Catches recruiter, domain, and company evidence auto-matching the sole application despite contradictory title evidence.
+    const message: MailEnvelope = {
+      ...meridianMail,
+      subject: "Technical interview invitation — Product Manager",
+      excerpt: "Meridian Quant would like to invite you to an interview for the Product Manager role.",
+    };
+
+    expect(matchApplication(message, [application({ recruiter: meridianMail.fromAddress })])).toEqual({
+      applicationId: null,
+      confidence: 0.9,
+      reasons: ["recruiter", "sender-domain", "company"],
+      conflicts: ["role-mismatch"],
+    });
+  });
+
+  it("preserves a high-confidence match when the message has no explicit role evidence", () => {
+    // Catches conservative mismatch handling that mistakes missing title evidence for contradictory title evidence.
+    const message: MailEnvelope = {
+      ...meridianMail,
+      subject: "Technical interview invitation",
+      excerpt: "Meridian Quant would like to invite you to a technical interview.",
+    };
+
+    expect(matchApplication(message, [application({ recruiter: meridianMail.fromAddress })])).toEqual({
+      applicationId: "app-meridian-quant",
+      confidence: 0.9,
+      reasons: ["recruiter", "sender-domain", "company"],
+      conflicts: [],
+    });
+  });
+
   it("returns an empty unmatched result for unrelated mail", () => {
     // Catches a tie branch that labels two zero-evidence candidates as an ambiguity instead of leaving marketing mail unmatched.
     expect(matchApplication(fixtureMessages[5], [application({}), application({ id: "app-unrelated", company: "Cobalt Cloud Works", role: "Product Engineer" })])).toEqual({

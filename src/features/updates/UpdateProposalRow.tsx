@@ -39,6 +39,7 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
   const [result, setResult] = useState("");
   const reviewed = proposal.status === "approved" || proposal.status === "rejected";
   const application = applications.find((item) => item.id === (reviewed ? proposal.match.applicationId : applicationId));
+  const manuallySelectedApplication = !reviewed && Boolean(applicationId) && applicationId !== proposal.match.applicationId;
   const closed = Boolean(application?.outcome);
   const displayedStage = reviewed ? proposal.classification.proposedStage : stage;
   const displayedOutcome = reviewed ? proposal.classification.proposedOutcome : outcome;
@@ -68,13 +69,13 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
     setBusy(true);
     try {
       if (action === "approve") {
-        await updateRepository.approveProposal(proposal.id, { applicationId, proposedStage: stage || undefined, proposedOutcome: outcome || undefined,
+        await updateRepository.approveProposal(proposal.id, { applicationId, expectedApplicationUpdatedAt: application?.updatedAt, proposedStage: stage || undefined, proposedOutcome: outcome || undefined,
           deadlines: deadlines.map((deadline) => ({ ...deadline, label: deadline.label.trim(), at: new Date(deadline.at).toISOString() })) });
         setResult("Review result: Update applied."); onReviewed("Update applied.");
       } else if (action === "reject") { await updateRepository.rejectProposal(proposal.id); setResult("Review result: Update rejected."); onReviewed("Update rejected."); }
       else { await updateRepository.deferProposal(proposal.id); setResult("Review result: Update deferred. You can review it later."); onReviewed("Update deferred. You can review it later."); }
       setConfirming(false);
-    } catch { setError("This update could not be saved. Check the selected application and try again."); }
+    } catch (cause) { setError(cause instanceof Error && cause.message.includes("changed while you were reviewing") ? "This application changed while you were reviewing it. Review the current state and confirm again." : "This update could not be saved. Check the selected application and try again."); }
     finally { setBusy(false); }
   }
 
@@ -91,8 +92,8 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
     </div>
     <div className="update-row__basis">
       <p className="update-row__step">2 · Match &amp; interpretation</p>
-      <p>Match confidence: {Math.round(proposal.match.confidence * 100)}%</p>
-      <p>Because {proposal.match.reasons.map(humanize).join(", ") || "no matching evidence was found"}.</p>
+      <p>{manuallySelectedApplication ? "Original match confidence" : "Match confidence"}: {Math.round(proposal.match.confidence * 100)}%</p>
+      <p>{manuallySelectedApplication ? "Original inference" : "Because"}: {proposal.match.reasons.map(humanize).join(", ") || "no matching evidence was found"}.</p>
       <p>Classification confidence: {Math.round(proposal.classification.confidence * 100)}%</p>
       <ul aria-label="Classification reasons">{proposal.classification.reasons.map((reason) => <li key={reason}>{humanize(reason)}</li>)}</ul>
       {proposal.match.conflicts.length > 0 ? <p className="update-row__conflict">Scan-time conflicts: {proposal.match.conflicts.map(humanize).join(", ")}. Review carefully.</p> : <p>No scan-time matching conflicts recorded.</p>}
@@ -104,7 +105,8 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
     <div className="update-row__proposal">
       <p className="update-row__step">3 · Review proposal</p>
       {reviewed ? <><p>Proposed stage: {proposal.classification.proposedStage ? stageLabels[proposal.classification.proposedStage] : "No change"}</p><p>Proposed outcome: {proposal.classification.proposedOutcome ? outcomeLabels[proposal.classification.proposedOutcome] : "No change"}</p>
-        {proposal.status === "approved" && proposal.classification.deadlines.map((deadline) => <p key={deadline.id}>Saved deadline: {deadline.label}<br /><time dateTime={deadline.at}>{timeLabel(deadline.at)}</time><br /><small>{deadline.at}</small></p>)}</>
+        {proposal.status === "approved" && proposal.classification.deadlines.map((deadline) => <p key={deadline.id}>Saved deadline: {deadline.label}<br /><time dateTime={deadline.at}>{timeLabel(deadline.at)}</time><br /><small>{deadline.at}</small></p>)}
+        {proposal.status === "rejected" && proposal.classification.deadlines.map((deadline) => <p key={deadline.id}>Extracted deadline — not applied: {deadline.label}<br /><time dateTime={deadline.at}>{timeLabel(deadline.at)}</time></p>)}</>
         : <fieldset disabled={busy} className="update-row__fields"><legend className="sr-only">Edit update for {proposal.source.subject}</legend>
           <label>Application<select value={applicationId} onChange={(event) => { setApplicationId(event.target.value); setConfirming(false); }}><option value="">Choose an application</option>{applications.filter((item) => !item.archived || item.id === applicationId).map((item) => <option key={item.id} value={item.id}>{item.company} · {item.role}{item.outcome ? " (closed)" : ""}</option>)}</select></label>
           <label>Proposed stage<select value={stage} onChange={(event) => { setStage(event.target.value as ApplicationStage | ""); setConfirming(false); }}><option value="">No stage change</option>{applicationStages.map((value) => <option key={value} value={value}>{stageLabels[value]}</option>)}</select></label>

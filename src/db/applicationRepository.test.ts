@@ -46,9 +46,19 @@ describe("applicationRepository", () => {
     });
 
     await applicationRepository.undoEvent("event-offer");
+    await applicationRepository.undoEvent("event-offer");
 
     expect(await jobBuddyDb.stageEvents.get("event-offer")).toMatchObject({ accepted: false });
-    expect((await applicationRepository.get(sampleApplications[4].id))?.stage).toBe("final");
+    const application = await applicationRepository.get(sampleApplications[4].id);
+    expect(application?.stage).toBe("final");
+    expect(application?.stageEvents.filter((event) => event.revertsEventId === "event-offer")).toEqual([
+      expect.objectContaining({
+        id: JSON.stringify(["manual-correction", "event-offer"]),
+        origin: "manual",
+        accepted: true,
+        revertsEventId: "event-offer",
+      }),
+    ]);
   });
 
   it("rejects an accepted event whose fromStage conflicts with current state", async () => {

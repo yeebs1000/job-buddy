@@ -7,6 +7,7 @@ import { applicationRepository } from "../../db/applicationRepository";
 import { seedDemoData } from "../../db/seed";
 import type { Application } from "../../domain/application";
 import { applicationStages, deriveApplicationState } from "../../domain/stage";
+import { isSafeExternalHttpsUrl } from "../../domain/jobUrl";
 import { rankNextActions, summarizeStages } from "./commandCenterSelectors";
 import { fixtureMessages } from "../../fixtures/mail/messages";
 import { FixtureMailAdapter } from "../../integrations/mail/FixtureMailAdapter";
@@ -117,7 +118,8 @@ export function CommandCenterPage({ mailAdapter = simulatedMail }: { mailAdapter
       <section aria-labelledby="attention-heading" className="command-center__section">
         <div className="command-center__section-heading"><h2 id="attention-heading">Applications requiring attention</h2><span>Ordered by deadline</span></div>
         <div className="command-center__rows">
-          {actions.map(({ application, reason }) => {
+          {actions.map((action) => {
+            const { application, reason } = action;
             const state = deriveApplicationState(application.stageEvents);
             const railStage = state.stage;
             const statusLabel = state.outcome === "rejected"
@@ -129,7 +131,7 @@ export function CommandCenterPage({ mailAdapter = simulatedMail }: { mailAdapter
               <div className="command-center__identity"><h3>{application.company}</h3><p>{application.role} · {application.location.city}</p><span>Source: {application.source}</span></div>
               <p className="command-center__market">{salarySnapshot(application)}<br /><span>{application.research?.companyRating?.source}</span></p>
               <div className="command-center__progress"><StageRail compact outcome={state.outcome} rejectedAtStage={state.outcome === "rejected" ? railStage ?? undefined : undefined} stage={state.stage} /><span className="command-center__stage-label">{statusLabel}</span></div>
-              <p className="command-center__next-action">{reason}</p>
+              <p className="command-center__next-action">{reason}{action.deadline?.links?.filter(isSafeExternalHttpsUrl).map((link) => <> · <a key={link} href={link} target="_blank" rel="noopener noreferrer">Open meeting link</a></>)}</p>
             </article>;
           })}
         </div>

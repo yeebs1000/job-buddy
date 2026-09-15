@@ -12,7 +12,7 @@ export function StageHistory({ events }: { events: StageEvent[] }) {
   if (!events.length) return <p>No activity recorded yet.</p>;
   return <ol className="detail-history" aria-label="Stage history">
     {[...events].sort(compareStageEvents).map(event => <li key={event.id}>
-      <div className="detail-history__action"><strong>{event.outcome ? `Recorded ${outcomeLabels[event.outcome]}` : event.toStage ? `Changed to ${stageLabels[event.toStage]}` : "Activity recorded"}</strong>{!event.accepted && <span className="detail-reverted">Reverted / not applied</span>}</div>
+      <div className="detail-history__action"><strong>{event.revertsEventId ? "Undo recorded" : event.outcome ? `Recorded ${outcomeLabels[event.outcome]}` : event.toStage ? `Changed to ${stageLabels[event.toStage]}` : "Activity recorded"}</strong>{!event.accepted && <span className="detail-reverted">Reverted / not applied</span>}</div>
       <p className="detail-meta"><span>{originLabels[event.origin]}</span> · <time dateTime={event.at}>{formatDate(event.at)}</time></p>
       {event.fromStage && <p className="detail-meta">{event.outcome ? "Reached" : "From"} {stageLabels[event.fromStage]}</p>}
       {event.note && <p className="detail-note">{event.note}</p>}

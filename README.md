@@ -29,7 +29,7 @@ Job Buddy v0.2 combines a local-first application tracker with **simulated Updat
 
 The local-first tracker and v0.2 Update Intelligence simulation are usable today. The simulation uses synthetic fixture messages, stores only the minimal evidence needed to review a proposal (sender, subject, excerpt, received time, approved HTTPS links, confidence, and reasons), and never requests Gmail credentials. It scans only while this page is active and only after you explicitly choose **Scan now (simulated)**; it has no live Gmail access or background scanning.
 
-Approval is the default: every simulated message becomes a reviewable proposal. **Unrestricted simulation** may apply only confident, conflict-free forward updates while the page remains open; offers, terminal outcomes, unmatched/ambiguous mail, and conflicts still require explicit approval.
+Approval is the default: actionable simulated messages become reviewable proposals, while marketing/no-op mail and duplicate provider IDs are intentionally ignored. **Unrestricted simulation** may apply only confident, conflict-free forward updates while the page remains open; offers, terminal outcomes, unmatched/ambiguous mail, and conflicts still require explicit approval.
 
 The repository is intentionally private while the product and data model are being shaped. The core branch is structured so it can be opened to contributors later without rewriting the local data boundary.
 

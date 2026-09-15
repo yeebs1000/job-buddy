@@ -54,6 +54,17 @@ interface CandidateMatch {
   applicationId: string;
   confidence: number;
   reasons: string[];
+  roleMismatch: boolean;
+}
+
+function explicitRoleTokens(message: MailEnvelope): Set<string> {
+  const titles: string[] = [];
+  const subjectTitle = /[—–]\s*([^.!?]{2,80})$/.exec(message.subject)?.[1];
+  if (subjectTitle) titles.push(subjectTitle);
+  for (const text of [message.subject, message.excerpt]) {
+    for (const match of text.matchAll(/\b(?:for|regarding)\s+(?:the\s+)?([^.!?]{2,80}?)\s+(?:role|position)\b/gi)) titles.push(match[1]);
+  }
+  return new Set(words(titles.join(" ")));
 }
 
 function score(message: MailEnvelope, application: Application): CandidateMatch {
@@ -61,6 +72,7 @@ function score(message: MailEnvelope, application: Application): CandidateMatch 
   const company = companyTokens(application.company);
   const companyIdentity = company.join("");
   const role = words(application.role);
+  const namedRole = explicitRoleTokens(message);
   const reasons: string[] = [];
   let confidence = 0;
 
@@ -81,15 +93,24 @@ function score(message: MailEnvelope, application: Application): CandidateMatch 
     reasons.push("role");
   }
 
-  return { applicationId: application.id, confidence: Number(confidence.toFixed(2)), reasons };
+  return {
+    applicationId: application.id,
+    confidence: Number(confidence.toFixed(2)),
+    reasons,
+    roleMismatch: namedRole.size > 0 && !role.some((token) => namedRole.has(token)),
+  };
 }
 
 export function matchApplication(message: MailEnvelope, applications: readonly Application[]): ApplicationMatch {
   const candidates = applications.map((application) => score(message, application)).sort((left, right) => right.confidence - left.confidence);
-  const best = candidates[0];
+  const compatibleCandidates = candidates.filter((candidate) => !candidate.roleMismatch);
+  const best = compatibleCandidates[0];
+  if (!best && candidates[0]?.roleMismatch) {
+    return { applicationId: null, confidence: candidates[0].confidence, reasons: candidates[0].reasons, conflicts: ["role-mismatch"] };
+  }
   if (!best) return { applicationId: null, confidence: 0, reasons: [], conflicts: [] };
 
-  const nextBest = candidates[1];
+  const nextBest = compatibleCandidates[1];
   const ambiguous = best.confidence >= minimumConfidence && nextBest !== undefined && best.confidence - nextBest.confidence < requiredMargin;
   if (best.confidence < minimumConfidence || ambiguous) {
     return { applicationId: null, confidence: best.confidence, reasons: best.reasons, conflicts: ambiguous ? ["ambiguous"] : [] };

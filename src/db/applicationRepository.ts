@@ -76,8 +76,21 @@ export const applicationRepository = {
       if (!event) return;
       await jobBuddyDb.stageEvents.update(eventId, { accepted: false });
       const events = await jobBuddyDb.stageEvents.where("applicationId").equals(event.applicationId).toArray();
+      const correctionId = JSON.stringify(["manual-correction", eventId]);
+      if (!events.some((candidate) => candidate.id === correctionId)) {
+        await jobBuddyDb.stageEvents.add({
+          id: correctionId,
+          applicationId: event.applicationId,
+          at: new Date().toISOString(),
+          origin: "manual",
+          accepted: true,
+          revertsEventId: eventId,
+          note: "Manual correction: reverted a prior change.",
+        });
+      }
+      const updatedEvents = await jobBuddyDb.stageEvents.where("applicationId").equals(event.applicationId).toArray();
       await jobBuddyDb.applications.update(event.applicationId, {
-        ...deriveApplicationState(events),
+        ...deriveApplicationState(updatedEvents),
         updatedAt: new Date().toISOString(),
       });
     });

@@ -64,6 +64,16 @@ it("shows unavailable research for a new manual application", async () => {
   expect(await screen.findByText("Research unavailable")).toBeVisible();
 });
 
+it("renders a safe meeting link for the next deadline", async () => {
+  list.mockResolvedValue([{ ...sampleApplications[0], deadlines: [{ id: "meeting", label: "Technical interview", at: "2026-09-20T06:00:00.000Z", completed: false, links: ["https://meet.example/interview"] }] }]);
+  renderPage();
+
+  const meeting = await screen.findByRole("link", { name: "Open meeting link" });
+  expect(meeting).toHaveAttribute("href", "https://meet.example/interview");
+  expect(meeting).toHaveAttribute("target", "_blank");
+  expect(meeting).toHaveAttribute("rel", "noopener noreferrer");
+});
+
 it("uses canonical state for an unsorted rejection history and labels other terminal outcomes", async () => {
   const rejected = {
     ...sampleApplications[0],
