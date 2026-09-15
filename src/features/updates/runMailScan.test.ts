@@ -9,7 +9,7 @@ import type { ApplicationStage } from "../../domain/stage";
 import { fixtureMessages } from "../../fixtures/mail/messages";
 import type { MailAdapter, MailEnvelope } from "../../integrations/mail/MailAdapter";
 import { runMailScan } from "./runMailScan";
-import { scanStateKey, updateRepository } from "./updateRepository";
+import { scanStateKey, updateRepository, type ProposalEdits } from "./updateRepository";
 import { useMailScan } from "./useMailScan";
 
 const now = "2026-09-14T09:00:00.000Z";
@@ -296,4 +296,53 @@ it("accepts both confidence thresholds at exactly 0.9", async () => {
     status: "approved", match: { confidence: 0.9 }, classification: { confidence: 0.9 },
   });
   expect((await applicationRepository.get("app-1"))?.stage).toBe("assessment");
+});
+
+it("preserves a user-corrected proposal stage when a different older forward message arrives", async () => {
+  await applicationRepository.create(application());
+  await runMailScan({ adapter: adapter(), mode: "approval", now });
+  const [proposal] = await updateRepository.listPending();
+  await updateRepository.approveProposal(proposal.id, { proposedStage: "assessment" });
+  await runMailScan({ adapter: adapter([{ ...mail, providerMessageId: "older-distinct-interview", receivedAt: "2026-09-11T02:00:00.000Z" }]), mode: "unrestricted", now });
+
+  expect((await applicationRepository.get("app-1"))?.stage).toBe("assessment");
+  expect(await updateRepository.listPending()).toEqual([expect.objectContaining({
+    source: expect.objectContaining({ providerMessageId: "older-distinct-interview" }),
+    match: expect.objectContaining({ conflicts: ["manual-correction"] }),
+  })]);
+  expect((await applicationRepository.eventsFor("app-1")).find((event) => event.evidenceId === proposal.id)?.origin).toBe("manual");
+});
+
+it.each<[string, ProposalEdits]>([
+  ["unchanged approval", {}],
+  ["identical lifecycle values", { proposedStage: "interview", proposedOutcome: undefined }],
+  ["application match only", { applicationId: "app-2" }],
+  ["deadline and link only", { deadlines: [], links: ["https://example.test/edited"] }],
+])("keeps source lifecycle provenance for %s", async (_name, edits) => {
+  await applicationRepository.create(application());
+  await applicationRepository.create(application("applied", { id: "app-2", company: "Other", role: "Other", recruiter: undefined, stageEvents: [] }));
+  await runMailScan({ adapter: adapter(), mode: "approval", now });
+  const [proposal] = await updateRepository.listPending();
+  await updateRepository.approveProposal(proposal.id, edits);
+  expect((await applicationRepository.eventsFor(edits.applicationId ?? "app-1")).find((event) => event.evidenceId === proposal.id)?.origin).toBe("system");
+});
+
+it.each<[string, ProposalEdits]>([
+  ["explicitly clearing stage", { proposedStage: undefined }],
+  ["explicitly clearing outcome", { proposedOutcome: undefined }],
+  ["changing outcome", { proposedOutcome: "withdrawn" }],
+])("records manual lifecycle provenance when %s", async (_name, edits) => {
+  await applicationRepository.create(application());
+  await updateRepository.create({
+    id: "lifecycle-proposal", status: "pending", source: mail,
+    match: { applicationId: "app-1", confidence: 1, reasons: ["recruiter"], conflicts: [] },
+    classification: {
+      proposedStage: "assessment", proposedOutcome: "rejected", confidence: 0.95,
+      reasons: ["rejection-language"], evidenceExcerpt: "Application rejected after assessment.",
+      deadlines: [], links: [], requiresApproval: true,
+    },
+    createdAt: now,
+  });
+  await updateRepository.approveProposal("lifecycle-proposal", edits);
+  expect((await applicationRepository.eventsFor("app-1")).find((event) => event.evidenceId === "lifecycle-proposal")?.origin).toBe("manual");
 });

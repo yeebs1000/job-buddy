@@ -71,6 +71,10 @@ async function approve(id: string, edits: ProposalEdits, at: string, automatic: 
     if (application.outcome) throw new Error("This application is closed; correct its history before approving an update");
 
     const classification = { ...existing.classification, ...classificationEdits };
+    const lifecycleCorrected = !automatic && (
+      classification.proposedStage !== existing.classification.proposedStage
+      || classification.proposedOutcome !== existing.classification.proposedOutcome
+    );
     if (!classification.proposedStage && !classification.proposedOutcome && !classification.deadlines.length) {
       throw new Error("The proposal must contain a stage, outcome or deadline");
     }
@@ -87,7 +91,7 @@ async function approve(id: string, edits: ProposalEdits, at: string, automatic: 
       await applicationRepository.appendEvent({
         id: JSON.stringify(["mail-stage", id]), applicationId, at: eventAt,
         fromStage: application.stage ?? undefined, toStage: classification.proposedStage,
-        outcome: classification.proposedOutcome, origin: "system", accepted: true,
+        outcome: classification.proposedOutcome, origin: lifecycleCorrected ? "manual" : "system", accepted: true,
         evidenceId: id, confidence: classification.confidence,
         note: automatic ? "Automatically accepted simulated mail update" : "Approved mail update",
       });
