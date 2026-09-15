@@ -11,6 +11,7 @@
 .update-row p, .update-row ul { font-size: .875rem; line-height: 1.5; margin: 0 0 .75rem; }
 .update-row h2 { font-size: 1rem; line-height: 1.4; margin: 0 0 1rem; }
 .update-row__step { color: var(--color-muted); font-weight: 600; }
+.update-row__source { background: #eef0f2; border: 1px solid #d1d5db; border-radius: .25rem; color: #344054; display: inline-block; font-size: .75rem; margin-left: .375rem; padding: .0625rem .375rem; }
 .update-row time { color: var(--color-muted); font-size: .8125rem; line-height: 1.5; }
 .update-row blockquote { font-size: .9375rem; line-height: 1.5; margin: 1rem 0; }
 .update-row ul { padding-left: 1.2rem; }

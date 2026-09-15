@@ -37,3 +37,6 @@
 .command-center__scan .button { border-radius: .375rem; font-size: .875rem; }
 .command-center__scan button:disabled { cursor: default; opacity: .65; }
 .command-center__scan .command-center__scan-warning { color: #b91c1c; flex-basis: 100%; }
+.command-center__scan .command-center__scan-notice { color: #24533a; flex-basis: 100%; }
+.command-center__scan[data-source="gmail"] { border-color: #a9d9b7; }
+.command-center__scan--loading { min-height: 7rem; }

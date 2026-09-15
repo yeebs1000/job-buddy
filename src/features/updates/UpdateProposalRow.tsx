@@ -83,7 +83,7 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
 
   return <article className="update-row" aria-labelledby={`${id}-subject`}>
     <div className="update-row__evidence">
-      <p className="update-row__step">1 · Source evidence</p>
+      <p className="update-row__step">1 · Source evidence <span className="update-row__source">{proposal.mailSource === "gmail" ? "Gmail" : "Demo"}</span></p>
       <h2 id={`${id}-subject`}>{proposal.source.subject}</h2>
       <p><strong>{application ? `${application.company} · ${application.role}` : "Unmatched application"}</strong></p>
       {proposal.source.fromName && <p>{proposal.source.fromName}</p>}

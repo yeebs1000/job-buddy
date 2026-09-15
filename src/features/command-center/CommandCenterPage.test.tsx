@@ -1,8 +1,13 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import "fake-indexeddb/auto";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { sampleApplications } from "../../fixtures/sampleApplications";
 import { CommandCenterPage } from "./CommandCenterPage";
+import type { MailAdapter } from "../../integrations/mail/MailAdapter";
+import { defaultGmailPreferences } from "../settings/gmailPreferences";
+import { jobBuddyDb } from "../../db/database";
 
 const { list, seedDemoData } = vi.hoisted(() => ({ list: vi.fn(), seedDemoData: vi.fn() }));
 
@@ -72,6 +77,32 @@ it("renders a safe meeting link for the next deadline", async () => {
   expect(meeting).toHaveAttribute("href", "https://meet.example/interview");
   expect(meeting).toHaveAttribute("target", "_blank");
   expect(meeting).toHaveAttribute("rel", "noopener noreferrer");
+});
+
+afterEach(async () => {
+  cleanup();
+  await jobBuddyDb.delete();
+  await jobBuddyDb.open();
+});
+
+it("never falls back to demo when a live scan fails", async () => {
+  list.mockResolvedValue(sampleApplications);
+  const gmailScan = vi.fn().mockRejectedValue(new Error("private live failure"));
+  const fixtureScan = vi.fn().mockResolvedValue({ messages: [], nextCursor: "fixture-1", scannedAt: "2026-09-15T08:00:00.000Z" });
+  const gmailAdapter: MailAdapter = { source: "gmail", scan: gmailScan };
+  const fixtureAdapter: MailAdapter = { source: "simulated", scan: fixtureScan };
+  render(<MemoryRouter><CommandCenterPage
+    gmailAdapter={gmailAdapter}
+    fixtureAdapter={fixtureAdapter}
+    gmailStatus={{ state: "connected", accountEmail: "user@example.com", platformSupported: true }}
+    initialPreferences={{ ...defaultGmailPreferences, selectedSource: "gmail", initialSyncCompleted: true }}
+  /></MemoryRouter>);
+
+  await userEvent.click(await screen.findByRole("button", { name: /scan Gmail now/i }));
+
+  await waitFor(() => expect(gmailScan).toHaveBeenCalledTimes(1));
+  expect(fixtureScan).not.toHaveBeenCalled();
+  expect(await screen.findByRole("alert")).toHaveTextContent(/Gmail scan could not be completed/i);
 });
 
 it("uses canonical state for an unsorted rejection history and labels other terminal outcomes", async () => {

@@ -54,6 +54,7 @@ it("shows source evidence and atomically applies edited stage and deadline, then
   const user = userEvent.setup();
   const view = inbox();
   expect(await screen.findByText("recruiting@meridianquant.example")).toBeVisible();
+  expect(screen.getByText("Demo")).toBeVisible();
   expect(screen.getByText(/company, role, sender domain/i)).toBeVisible();
   expect(screen.getByText(/Match confidence: 95%/)).toBeVisible();
   expect(screen.getByText(/Classification confidence: 95%/)).toBeVisible();
@@ -236,9 +237,9 @@ it("shows scan progress and refreshes the command center deadline after unrestri
   const fixture = new FixtureMailAdapter([technicalInterviewMail]);
   render(<MemoryRouter><CommandCenterPage mailAdapter={{ source: "simulated", async scan(cursor) { await gate; return fixture.scan(cursor); } }} /></MemoryRouter>);
   await userEvent.selectOptions(await screen.findByLabelText("Scan mode"), "unrestricted");
-  await userEvent.click(screen.getByRole("button", { name: "Scan now (simulated)" }));
-  expect(await screen.findByRole("button", { name: "Scanning simulated mail…" })).toBeDisabled();
-  expect(screen.getByRole("status")).toHaveTextContent(/Checking fictional messages/);
+  await userEvent.click(screen.getByRole("button", { name: "Scan demo inbox" }));
+  expect(await screen.findByRole("button", { name: "Scanning demo inbox…" })).toBeDisabled();
+  expect(screen.getAllByRole("status").some((status) => /Checking fictional messages/.test(status.textContent ?? ""))).toBe(true);
   expect(screen.getByLabelText("Scan mode")).toBeDisabled();
   release();
   expect(await screen.findByText(/Overdue: Technical interview|Today: Technical interview|Tomorrow: Technical interview|Due .+: Technical interview/)).toBeVisible();
@@ -252,7 +253,7 @@ it("shows stable skeletons before the empty inbox and links to a simulated scan"
   expect(screen.getAllByTestId("update-skeleton")).toHaveLength(3);
   expect(await screen.findByRole("heading", { name: "No updates yet" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Open scan controls" })).toHaveAttribute("href", "/");
-  expect(screen.getByText(/simulated mail/i)).toBeVisible();
+  expect(screen.getByText(/Gmail or demo scan/i)).toBeVisible();
 });
 
 it("updates the navigation pending badge when a proposal is reviewed", async () => {
@@ -268,12 +269,12 @@ it("retries a failed simulated scan safely and keeps approval as the default mod
   const fixture = new FixtureMailAdapter([technicalInterviewMail]);
   const adapter = { source: "simulated" as const, async scan(cursor: string | null) { if (!failed) { failed = true; throw new Error("secret provider error"); } return fixture.scan(cursor); } };
   render(<MemoryRouter><CommandCenterPage mailAdapter={adapter} /></MemoryRouter>);
-  const scan = await screen.findByRole("button", { name: "Scan now (simulated)" });
+  const scan = await screen.findByRole("button", { name: "Scan demo inbox" });
   expect(screen.getByLabelText("Scan mode")).toHaveValue("approval");
   await userEvent.click(scan);
   expect(await screen.findByRole("alert")).toHaveTextContent(/could not be completed/i);
   expect(screen.queryByText(/secret provider error/)).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Retry simulated scan" }));
+  await userEvent.click(screen.getByRole("button", { name: "Retry demo scan" }));
   expect(await screen.findByRole("link", { name: "Review 1 pending update" })).toBeVisible();
   expect(screen.getByText(/Last successful scan:/)).not.toHaveTextContent("Never");
   expect((await applicationRepository.get("application-1"))?.stage).toBe("applied");
