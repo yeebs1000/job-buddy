@@ -102,6 +102,23 @@ it("labels retained matching evidence as the original inference after selecting 
   expect(screen.getByText(/Original inference: company, role, sender domain/i)).toBeVisible();
 });
 
+it("persists original inference labels after approving a different application and reloading", async () => {
+  await applicationRepository.create({
+    id: "application-2", company: "Other Company", role: "Other role", discipline: "finance",
+    location: { city: "Singapore", country: "Singapore" }, source: "manual", appliedAt: "2026-09-01T00:00:00Z", tags: [], deadlines: [], stageEvents: [],
+  });
+  await proposal();
+  const view = inbox();
+  await userEvent.selectOptions(await screen.findByLabelText("Application"), "application-2");
+  await userEvent.click(screen.getByRole("button", { name: "Approve update" }));
+  expect(await screen.findByText("Update applied.")).toBeVisible();
+
+  view.unmount(); inbox();
+  expect(await screen.findByText("Original match confidence: 95%")).toBeVisible();
+  expect(screen.getByText(/Original inference: company, role, sender domain/i)).toBeVisible();
+  expect((await updateRepository.get("proposal-1"))?.match).toMatchObject({ applicationId: "application-2", originalInference: { applicationId: "application-1", confidence: 0.95, reasons: ["company", "role", "sender-domain"] } });
+});
+
 it("requires selecting a persisted application for unmatched evidence", async () => {
   await proposal({ match: { applicationId: null, confidence: 0, reasons: ["unmatched"], conflicts: ["ambiguous"] } });
   inbox();

@@ -9,6 +9,7 @@ export interface ApplicationMatch {
 }
 
 const legalSuffixes = new Set(["ag", "bv", "co", "company", "corp", "corporation", "gmbh", "inc", "incorporated", "limited", "llc", "ltd", "plc", "pte", "pty", "sarl"]);
+const titleKeywords = new Set(["analyst", "architect", "associate", "consultant", "designer", "developer", "director", "engineer", "intern", "manager", "researcher", "scientist", "specialist"]);
 const minimumConfidence = 0.75;
 const requiredMargin = 0.15;
 
@@ -60,9 +61,10 @@ interface CandidateMatch {
 function explicitRoleTokens(message: MailEnvelope): Set<string> {
   const titles: string[] = [];
   const subjectTitle = /[—–]\s*([^.!?]{2,80})$/.exec(message.subject)?.[1];
-  if (subjectTitle) titles.push(subjectTitle);
+  if (subjectTitle && words(subjectTitle).some((token) => titleKeywords.has(token))) titles.push(subjectTitle);
   for (const text of [message.subject, message.excerpt]) {
     for (const match of text.matchAll(/\b(?:for|regarding)\s+(?:the\s+)?([^.!?]{2,80}?)\s+(?:role|position)\b/gi)) titles.push(match[1]);
+    for (const match of text.matchAll(/\b(?:role|job title)\s*:\s*([^.!?\n]{2,80})/gi)) titles.push(match[1]);
   }
   return new Set(words(titles.join(" ")));
 }

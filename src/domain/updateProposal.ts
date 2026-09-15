@@ -19,6 +19,7 @@ export interface UpdateProposalMatch {
   confidence: number;
   reasons: string[];
   conflicts: string[];
+  originalInference?: Pick<UpdateProposalMatch, "applicationId" | "confidence" | "reasons">;
 }
 
 type UnconflictedUpdateProposalMatch = Omit<UpdateProposalMatch, "conflicts"> & { conflicts: [] };

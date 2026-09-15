@@ -116,7 +116,13 @@ async function approve(id: string, edits: ProposalEdits, at: string, automatic: 
     });
     const approved = createUpdateProposal({
       ...existing, status: "approved", reviewedAt: at,
-      match: { ...existing.match, applicationId },
+      match: {
+        ...existing.match,
+        applicationId,
+        ...(applicationId !== existing.match.applicationId && !existing.match.originalInference
+          ? { originalInference: { applicationId: existing.match.applicationId, confidence: existing.match.confidence, reasons: existing.match.reasons } }
+          : {}),
+      },
       classification: { ...classification, requiresApproval: existing.classification.requiresApproval || !automatic },
     });
     const record: StoredUpdateProposal = { ...approved, state: "approved" };

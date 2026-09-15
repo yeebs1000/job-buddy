@@ -96,3 +96,37 @@ git diff --check    passed
 ## Remaining concerns
 
 The build and Playwright web server emit the existing non-blocking warning that the main bundle exceeds 500 kB after minification. Windows also reports its normal LF-to-CRLF checkout warning during diff checks. Neither gate reported an error.
+
+## Corrective residual pass — 2026-09-15
+
+### RED
+
+```text
+npm test -- src/features/updates/classifyMessage.test.ts src/features/updates/matchApplication.test.ts src/features/updates/UpdateInboxPage.test.tsx
+3 failures: ordinary "You have not been invited" body text auto-advanced the positive subject; arbitrary "— next steps" was a role mismatch; approval/reload lost the original-inference label.
+```
+
+The labelled body-title assertions initially passed spuriously because the unrelated dash-suffix defect forced a mismatch. Their fixture was corrected to remove that suffix before production code changed; no separate isolated RED command was captured for that corrected test, so none is claimed.
+
+### Implementation
+
+- `classifyMessage` now recognizes both `not invited` and `not been invited` interview/assessment phrasing as approval-required informational classifications; terminal rejection remains evaluated first.
+- `matchApplication` now reads explicit `Role:` and `Job title:` fields, while accepting a dash suffix as title evidence only when it contains a compact role keyword. Genuine analyst/engineer fixtures remain title evidence; `— next steps` does not.
+- `UpdateProposalMatch` now stores the original application, confidence, and reasons when approval intentionally selects another application. The row uses that durable field after reload.
+
+### GREEN
+
+```text
+npm test -- src/features/updates/classifyMessage.test.ts src/features/updates/matchApplication.test.ts src/features/updates/UpdateInboxPage.test.tsx src/features/updates/runMailScan.test.ts
+89 passed (4 files)
+```
+
+### Corrective full gate
+
+```text
+npm test            24 files, 230 passed
+npm run typecheck   passed
+npm run build       passed (existing >500 kB chunk warning)
+npm run test:e2e    3 passed
+git diff --check    passed
+```

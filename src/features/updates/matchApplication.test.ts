@@ -144,6 +144,26 @@ describe("matchApplication", () => {
     });
   });
 
+  it.each(["Role: Product Manager", "Job title: Product Manager"])("blocks a recruiter match when an explicit body title is incompatible: %s", (field) => {
+    // Catches explicit labelled role fields bypassing the contradiction guard because they are not written as "for X role".
+    expect(matchApplication({ ...meridianMail, subject: "Technical interview invitation", excerpt: `Meridian Quant would like to invite you to an interview. ${field}` }, [application({ recruiter: meridianMail.fromAddress })])).toEqual({
+      applicationId: null,
+      confidence: 0.9,
+      reasons: ["recruiter", "sender-domain", "company"],
+      conflicts: ["role-mismatch"],
+    });
+  });
+
+  it("does not treat a non-title dash suffix as contradictory role evidence", () => {
+    // Catches arbitrary subject suffix prose such as "next steps" being parsed as an incompatible role title.
+    expect(matchApplication({ ...meridianMail, subject: "Technical interview invitation — next steps", excerpt: "Meridian Quant would like to invite you to a technical interview." }, [application({ recruiter: meridianMail.fromAddress })])).toEqual({
+      applicationId: "app-meridian-quant",
+      confidence: 0.9,
+      reasons: ["recruiter", "sender-domain", "company"],
+      conflicts: [],
+    });
+  });
+
   it("preserves a high-confidence match when the message has no explicit role evidence", () => {
     // Catches conservative mismatch handling that mistakes missing title evidence for contradictory title evidence.
     const message: MailEnvelope = {

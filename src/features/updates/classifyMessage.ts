@@ -58,7 +58,7 @@ const terminalSignals: readonly { outcome: ApplicationOutcome; reason: string; m
 
 const negativeInvitationSignals: readonly { reason: string; matches: (text: string) => boolean }[] = [
   { reason: "interview-cancellation", matches: (text) => /\b(?:interview|assessment)\b.{0,80}\b(?:cancelled|canceled)\b|\b(?:cancelled|canceled)\b.{0,80}\b(?:interview|assessment)\b/i.test(text) },
-  { reason: "not-invited-language", matches: (text) => /\bnot invited\b.{0,80}\b(?:interview|assessment)\b|\b(?:interview|assessment)\b.{0,80}\bnot invited\b/i.test(text) },
+  { reason: "not-invited-language", matches: (text) => /\bnot(?:\s+been)? invited\b.{0,80}\b(?:interview|assessment)\b|\b(?:interview|assessment)\b.{0,80}\bnot(?:\s+been)? invited\b/i.test(text) },
 ];
 
 function sentences(value: string): string[] {

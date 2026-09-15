@@ -180,6 +180,22 @@ describe("classifyMessage", () => {
     });
   });
 
+  it.each([
+    ["Technical interview invitation", "You have not been invited to the technical interview."],
+    ["Assessment invitation", "You were not invited to the assessment."],
+    ["Technical interview invitation", "We have not invited you to the technical interview."],
+  ])("treats ordinary negative invitation grammar as informational review: %s / %s", (subject, excerpt) => {
+    // Catches positive subjects auto-advancing when the body uses not-been-invited grammar instead of the shorter negation.
+    expect(classifyMessage(mail({ subject, excerpt }))).toEqual({
+      confidence: 0.95,
+      reasons: ["not-invited-language"],
+      evidenceExcerpt: excerpt,
+      deadlines: [],
+      links: [],
+      requiresApproval: true,
+    });
+  });
+
   it("keeps explicit rejection authoritative over a positive interview subject", () => {
     // Catches informational negative handling that accidentally hides an explicit rejection outcome.
     expect(classifyMessage(mail({

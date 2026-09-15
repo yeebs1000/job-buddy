@@ -40,6 +40,8 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
   const reviewed = proposal.status === "approved" || proposal.status === "rejected";
   const application = applications.find((item) => item.id === (reviewed ? proposal.match.applicationId : applicationId));
   const manuallySelectedApplication = !reviewed && Boolean(applicationId) && applicationId !== proposal.match.applicationId;
+  const inference = proposal.match.originalInference ?? proposal.match;
+  const showsOriginalInference = manuallySelectedApplication || Boolean(proposal.match.originalInference);
   const closed = Boolean(application?.outcome);
   const displayedStage = reviewed ? proposal.classification.proposedStage : stage;
   const displayedOutcome = reviewed ? proposal.classification.proposedOutcome : outcome;
@@ -92,8 +94,8 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
     </div>
     <div className="update-row__basis">
       <p className="update-row__step">2 · Match &amp; interpretation</p>
-      <p>{manuallySelectedApplication ? "Original match confidence" : "Match confidence"}: {Math.round(proposal.match.confidence * 100)}%</p>
-      <p>{manuallySelectedApplication ? "Original inference" : "Because"}: {proposal.match.reasons.map(humanize).join(", ") || "no matching evidence was found"}.</p>
+      <p>{showsOriginalInference ? "Original match confidence" : "Match confidence"}: {Math.round(inference.confidence * 100)}%</p>
+      <p>{showsOriginalInference ? "Original inference" : "Because"}: {inference.reasons.map(humanize).join(", ") || "no matching evidence was found"}.</p>
       <p>Classification confidence: {Math.round(proposal.classification.confidence * 100)}%</p>
       <ul aria-label="Classification reasons">{proposal.classification.reasons.map((reason) => <li key={reason}>{humanize(reason)}</li>)}</ul>
       {proposal.match.conflicts.length > 0 ? <p className="update-row__conflict">Scan-time conflicts: {proposal.match.conflicts.map(humanize).join(", ")}. Review carefully.</p> : <p>No scan-time matching conflicts recorded.</p>}
