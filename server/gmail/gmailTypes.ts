@@ -20,5 +20,6 @@ export interface GmailMessage {
   id?: string;
   threadId?: string;
   internalDate?: string;
+  labelIds?: string[];
   payload?: GmailMessagePart;
 }
