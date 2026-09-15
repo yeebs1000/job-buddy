@@ -37,7 +37,7 @@ afterEach(async () => { cleanup(); await jobBuddyDb.delete(); await jobBuddyDb.o
 
 async function proposal(overrides: Partial<UpdateProposalInput> = {}) {
   await updateRepository.create(createUpdateProposal({
-    id: "proposal-1", status: "pending", createdAt: "2026-09-12T09:00:00Z",
+    id: "proposal-1", status: "pending", mailSource: "simulated", createdAt: "2026-09-12T09:00:00Z",
     source: technicalInterviewMail,
     match: { applicationId: "application-1", confidence: 0.95, reasons: ["company", "role", "sender-domain"], conflicts: [] },
     classification: { confidence: 0.95, reasons: ["technical-interview-invitation"], evidenceExcerpt: technicalInterviewMail.excerpt,
@@ -218,7 +218,7 @@ it.each(["2026-09-20T14:00", "2026-02-31T14:00:00+08:00"])("rejects invalid dead
 it("rolls back a failed approval, shows safe feedback, and permits retry", async () => {
   await proposal();
   const collisionId = JSON.stringify(["mail-action", "proposal-1", "approved"]);
-  await jobBuddyDb.activityEntries.add({ id: collisionId, proposalId: "proposal-1", applicationId: "application-1", at: "2026-09-01T00:00:00Z", action: "approved", automatic: false });
+  await jobBuddyDb.activityEntries.add({ id: collisionId, proposalId: "proposal-1", applicationId: "application-1", at: "2026-09-01T00:00:00Z", action: "approved", automatic: false, mailSource: "simulated" });
   inbox();
   await userEvent.click(await screen.findByRole("button", { name: "Approve update" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(/could not be saved/i);
@@ -234,7 +234,7 @@ it("shows scan progress and refreshes the command center deadline after unrestri
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
   const fixture = new FixtureMailAdapter([technicalInterviewMail]);
-  render(<MemoryRouter><CommandCenterPage mailAdapter={{ async scan(cursor) { await gate; return fixture.scan(cursor); } }} /></MemoryRouter>);
+  render(<MemoryRouter><CommandCenterPage mailAdapter={{ source: "simulated", async scan(cursor) { await gate; return fixture.scan(cursor); } }} /></MemoryRouter>);
   await userEvent.selectOptions(await screen.findByLabelText("Scan mode"), "unrestricted");
   await userEvent.click(screen.getByRole("button", { name: "Scan now (simulated)" }));
   expect(await screen.findByRole("button", { name: "Scanning simulated mail…" })).toBeDisabled();
@@ -266,7 +266,7 @@ it("updates the navigation pending badge when a proposal is reviewed", async () 
 it("retries a failed simulated scan safely and keeps approval as the default mode", async () => {
   let failed = false;
   const fixture = new FixtureMailAdapter([technicalInterviewMail]);
-  const adapter = { async scan(cursor: string | null) { if (!failed) { failed = true; throw new Error("secret provider error"); } return fixture.scan(cursor); } };
+  const adapter = { source: "simulated" as const, async scan(cursor: string | null) { if (!failed) { failed = true; throw new Error("secret provider error"); } return fixture.scan(cursor); } };
   render(<MemoryRouter><CommandCenterPage mailAdapter={adapter} /></MemoryRouter>);
   const scan = await screen.findByRole("button", { name: "Scan now (simulated)" });
   expect(screen.getByLabelText("Scan mode")).toHaveValue("approval");

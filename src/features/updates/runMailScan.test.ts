@@ -32,7 +32,7 @@ function application(stage: ApplicationStage = "applied", overrides: Partial<App
 }
 
 function adapter(messages: MailEnvelope[] = [mail], nextCursor = "cursor-1"): MailAdapter {
-  return { async scan() { return { messages, nextCursor, scannedAt: now }; } };
+  return { source: "simulated", async scan() { return { messages, nextCursor, scannedAt: now }; } };
 }
 
 async function approveProposal(id: string, edits: ProposalEdits = {}) {
@@ -45,6 +45,26 @@ async function approveProposal(id: string, edits: ProposalEdits = {}) {
 afterEach(async () => {
   await jobBuddyDb.delete();
   await jobBuddyDb.open();
+});
+
+it("keeps live and simulated cursors independent", async () => {
+  await updateRepository.saveScanState("simulated", { cursor: "fixture-4" });
+  await updateRepository.saveScanState("gmail", { cursor: "184000" });
+
+  expect((await updateRepository.getScanState("simulated")).cursor).toBe("fixture-4");
+  expect((await updateRepository.getScanState("gmail")).cursor).toBe("184000");
+});
+
+it("persists the adapter source on proposals and review activity", async () => {
+  await applicationRepository.create(application());
+  await runMailScan({ adapter: adapter(), mode: "approval", now });
+  const [proposal] = await updateRepository.listPending();
+
+  expect(proposal.mailSource).toBe("simulated");
+  await approveProposal(proposal.id);
+  expect(await jobBuddyDb.activityEntries.toArray()).toEqual([
+    expect.objectContaining({ proposalId: proposal.id, mailSource: "simulated" }),
+  ]);
 });
 
 it("deduplicates provider identifiers within and across scans without overriding a manual stage", async () => {
@@ -183,9 +203,9 @@ it("keeps ambiguous and unmatched classified mail pending and records irrelevant
 it("preserves successful cursor and timestamp after adapter failure and hides raw provider errors", async () => {
   await runMailScan({ adapter: adapter([], "prior"), mode: "approval", now });
   const later = "2026-09-15T00:00:00.000Z";
-  const result = await runMailScan({ adapter: { async scan() { throw new Error("SECRET recruiter@example.test full private body"); } }, mode: "approval", now: later });
+  const result = await runMailScan({ adapter: { source: "simulated", async scan() { throw new Error("SECRET recruiter@example.test full private body"); } }, mode: "approval", now: later });
   expect(result.error).toBeTruthy();
-  const state = await updateRepository.getScanState();
+  const state = await updateRepository.getScanState("simulated");
   expect(state).toMatchObject({ cursor: "prior", lastSuccessfulScanAt: now, lastAttemptedScanAt: later });
   expect(JSON.stringify(state)).not.toMatch(/SECRET|recruiter@example|private body/);
 });
@@ -199,14 +219,14 @@ it("rolls back processed ids, proposals and automatic side effects when persiste
     const failed = await runMailScan({ adapter: adapter(), mode: "unrestricted", now: "2026-09-15T00:00:00.000Z" });
     expect(failed.error).toBeTruthy();
   } finally { jobBuddyDb.activityEntries.hook("creating").unsubscribe(failWrite); }
-  expect(await updateRepository.getScanState()).toMatchObject({ cursor: "prior", lastSuccessfulScanAt: now });
+  expect(await updateRepository.getScanState("simulated")).toMatchObject({ cursor: "prior", lastSuccessfulScanAt: now });
   expect(await jobBuddyDb.processedMessages.count()).toBe(0);
   expect(await jobBuddyDb.updateProposals.count()).toBe(0);
   expect(await jobBuddyDb.stageEvents.count()).toBe(1);
   expect(await jobBuddyDb.deadlines.count()).toBe(0);
   expect((await applicationRepository.get("app-1"))?.stage).toBe("applied");
   await runMailScan({ adapter: adapter(), mode: "unrestricted", now });
-  expect((await updateRepository.getScanState()).cursor).toBe("cursor-1");
+  expect((await updateRepository.getScanState("simulated")).cursor).toBe("cursor-1");
   expect(await jobBuddyDb.stageEvents.count()).toBe(2);
   expect(await jobBuddyDb.activityEntries.count()).toBe(1);
 });
@@ -265,7 +285,7 @@ it("does not report an idle hook while a second requested scan is still running"
   const first = new Promise<void>((resolve) => { finishFirst = resolve; });
   const second = new Promise<void>((resolve) => { finishSecond = resolve; });
   let scanNumber = 0;
-  const slowAdapter: MailAdapter = { async scan(cursor) {
+  const slowAdapter: MailAdapter = { source: "simulated", async scan(cursor) {
     const current = ++scanNumber;
     await (current === 1 ? first : second);
     if (current === 2 && cursor !== "first") throw new Error("Second scan lost the committed cursor");
@@ -282,15 +302,15 @@ it("does not report an idle hook while a second requested scan is still running"
     await act(async () => { finishSecond(); await secondRun; });
     unmount();
   }
-  expect((await updateRepository.getScanState()).cursor).toBe("second");
+  expect((await updateRepository.getScanState("simulated")).cursor).toBe("second");
 });
 
 it("retries from another tab's committed cursor rather than advancing a stale scan result", async () => {
-  await runMailScan({ adapter: { async scan() {
-    await updateRepository.saveScanState({ cursor: "other-tab", lastSuccessfulScanAt: now });
+  await runMailScan({ adapter: { source: "simulated", async scan() {
+    await updateRepository.saveScanState("simulated", { cursor: "other-tab", lastSuccessfulScanAt: now });
     return { messages: [mail], nextCursor: "stale", scannedAt: now };
   } }, mode: "approval", now });
-  expect((await updateRepository.getScanState()).cursor).toBe("other-tab");
+  expect((await updateRepository.getScanState("simulated")).cursor).toBe("other-tab");
   expect(await jobBuddyDb.processedMessages.count()).toBe(0);
   expect(await jobBuddyDb.updateProposals.count()).toBe(0);
 });
@@ -308,7 +328,7 @@ it("makes explicit approval take effect after newer manual history instead of ba
 
 it("surfaces safe scan failure through the live hook and clears it on successful retry", async () => {
   let fail = true;
-  const flakyAdapter: MailAdapter = { async scan() {
+  const flakyAdapter: MailAdapter = { source: "simulated", async scan() {
     if (fail) throw new Error("private provider error");
     return { messages: [], nextCursor: "recovered", scannedAt: now };
   } };
@@ -326,15 +346,15 @@ it("surfaces safe scan failure through the live hook and clears it on successful
 });
 
 it("cannot overwrite another tab's successful cursor while recording a scan attempt", async () => {
-  await updateRepository.saveScanState({ cursor: "prior", lastSuccessfulScanAt: now });
+  await updateRepository.saveScanState("simulated", { cursor: "prior", lastSuccessfulScanAt: now });
   let queued = false;
   let otherTabWrite: Promise<unknown> | undefined;
   const interleaveWrite = (record: { key: string; value: string }) => {
-    if (record?.key === scanStateKey && !queued) {
+    if (record?.key === scanStateKey("simulated") && !queued) {
       queued = true;
       // Queue a real competing IndexedDB write exactly between the initial read
       // and attempt persistence. An atomic read/write must serialize this.
-      otherTabWrite = Dexie.ignoreTransaction(() => jobBuddyDb.metadata.put({ key: scanStateKey, value: JSON.stringify({ cursor: "other-tab", lastSuccessfulScanAt: now }) }));
+      otherTabWrite = Dexie.ignoreTransaction(() => jobBuddyDb.metadata.put({ key: scanStateKey("simulated"), value: JSON.stringify({ cursor: "other-tab", lastSuccessfulScanAt: now }) }));
     }
     return record;
   };
@@ -343,7 +363,7 @@ it("cannot overwrite another tab's successful cursor while recording a scan atte
     await runMailScan({ adapter: adapter([], "stale-result"), mode: "approval", now });
     await otherTabWrite;
   } finally { jobBuddyDb.metadata.hook("reading").unsubscribe(interleaveWrite); }
-  expect((await updateRepository.getScanState()).cursor).toBe("other-tab");
+  expect((await updateRepository.getScanState("simulated")).cursor).toBe("other-tab");
 });
 
 it("applies the terminal outcome only on explicit approval while retaining the last stage", async () => {
@@ -403,7 +423,7 @@ it.each<[string, ProposalEdits]>([
 ])("records manual lifecycle provenance when %s", async (_name, edits) => {
   await applicationRepository.create(application());
   await updateRepository.create({
-    id: "lifecycle-proposal", status: "pending", source: mail,
+    id: "lifecycle-proposal", status: "pending", mailSource: "simulated", source: mail,
     match: { applicationId: "app-1", confidence: 1, reasons: ["recruiter"], conflicts: [] },
     classification: {
       proposedStage: "assessment", proposedOutcome: "rejected", confidence: 0.95,

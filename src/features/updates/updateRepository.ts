@@ -3,12 +3,14 @@ import { jobBuddyDb, type StoredUpdateProposal } from "../../db/database";
 import { isSafeExternalHttpsUrl } from "../../domain/jobUrl";
 import { applicationStages } from "../../domain/stage";
 import { createUpdateProposal, type UpdateProposal, type UpdateProposalClassificationInput } from "../../domain/updateProposal";
+import type { MailScanDiagnostics, MailSource } from "../../domain/mail";
 
 export interface MailScanState {
   cursor: string | null;
   lastAttemptedScanAt?: string;
   lastSuccessfulScanAt?: string;
   error?: string;
+  diagnostics?: MailScanDiagnostics;
 }
 
 export type ProposalEdits = Partial<Pick<UpdateProposalClassificationInput, "proposedStage" | "proposedOutcome" | "interviewSubtype" | "deadlines" | "links">> & {
@@ -16,7 +18,9 @@ export type ProposalEdits = Partial<Pick<UpdateProposalClassificationInput, "pro
   expectedApplicationUpdatedAt?: string;
 };
 
-export const scanStateKey = "mail-scan-state";
+export function scanStateKey(source: MailSource): string {
+  return `mail-scan:${source}`;
+}
 
 export function proposalConflicts(application: PersistedApplication, proposal: Pick<UpdateProposal, "classification" | "source">): string[] {
   const { proposedStage } = proposal.classification;
@@ -43,13 +47,13 @@ export function canAutomaticallyApprove(proposal: UpdateProposal, application: P
 
 export const approvalTables = [jobBuddyDb.updateProposals, jobBuddyDb.applications, jobBuddyDb.stageEvents, jobBuddyDb.deadlines, jobBuddyDb.activityEntries];
 
-async function getScanState(): Promise<MailScanState> {
-  const record = await jobBuddyDb.metadata.get(scanStateKey);
+async function getScanState(source: MailSource): Promise<MailScanState> {
+  const record = await jobBuddyDb.metadata.get(scanStateKey(source));
   return record ? JSON.parse(record.value) as MailScanState : { cursor: null };
 }
 
-async function saveScanState(state: MailScanState): Promise<void> {
-  await jobBuddyDb.metadata.put({ key: scanStateKey, value: JSON.stringify(state) });
+async function saveScanState(source: MailSource, state: MailScanState): Promise<void> {
+  await jobBuddyDb.metadata.put({ key: scanStateKey(source), value: JSON.stringify(state) });
 }
 
 async function create(proposal: UpdateProposal): Promise<void> {
@@ -129,7 +133,7 @@ async function approve(id: string, edits: ProposalEdits, at: string, automatic: 
     await jobBuddyDb.updateProposals.put(record);
     await jobBuddyDb.activityEntries.add({
       id: JSON.stringify(["mail-action", id, "approved"]), proposalId: id, applicationId,
-      at, action: "approved", automatic,
+      at, action: "approved", automatic, mailSource: existing.mailSource,
     });
     return record;
   });
@@ -143,7 +147,7 @@ async function setReviewStatus(id: string, status: "rejected" | "deferred"): Pro
     if (proposal.status === "approved" || proposal.status === "rejected") throw new Error("Reviewed proposals cannot be changed");
     const at = new Date().toISOString();
     await jobBuddyDb.updateProposals.update(id, { status, state: status, reviewedAt: at });
-    await jobBuddyDb.activityEntries.add({ id: JSON.stringify(["mail-action", id, status]), proposalId: id, applicationId: proposal.match.applicationId, at, action: status, automatic: false });
+    await jobBuddyDb.activityEntries.add({ id: JSON.stringify(["mail-action", id, status]), proposalId: id, applicationId: proposal.match.applicationId, at, action: status, automatic: false, mailSource: proposal.mailSource });
   });
 }
 

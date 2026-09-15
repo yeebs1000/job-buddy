@@ -17,9 +17,10 @@ const safeFailure = "Mail scan could not be completed. Please try again.";
 let scanQueue: Promise<unknown> = Promise.resolve();
 
 async function scan({ adapter, mode, now = new Date().toISOString() }: RunMailScanOptions): Promise<MailScanState> {
+  const source = adapter.source;
   const prior = await jobBuddyDb.transaction("rw", jobBuddyDb.metadata, async () => {
-    const state = await updateRepository.getScanState();
-    await updateRepository.saveScanState({ ...state, lastAttemptedScanAt: now });
+    const state = await updateRepository.getScanState(source);
+    await updateRepository.saveScanState(source, { ...state, lastAttemptedScanAt: now });
     return state;
   });
   try {
@@ -27,7 +28,7 @@ async function scan({ adapter, mode, now = new Date().toISOString() }: RunMailSc
     return await jobBuddyDb.transaction("rw", [...approvalTables, jobBuddyDb.processedMessages, jobBuddyDb.metadata], async () => {
       // Another tab may have committed while the adapter was reading. Retry from
       // that cursor instead of committing an older page over its progress.
-      if ((await updateRepository.getScanState()).cursor !== prior.cursor) throw new Error("Scan cursor changed");
+      if ((await updateRepository.getScanState(source)).cursor !== prior.cursor) throw new Error("Scan cursor changed");
       for (const message of result.messages) {
         if (await jobBuddyDb.processedMessages.get(message.providerMessageId)) continue;
         const classification = classifyMessage(message);
@@ -40,7 +41,7 @@ async function scan({ adapter, mode, now = new Date().toISOString() }: RunMailSc
           if (application) match.conflicts.push(...proposalConflicts(application, { classification, source: message }));
           proposalId = JSON.stringify(["mail-proposal", message.providerMessageId]);
           const proposal = createUpdateProposal({
-            id: proposalId, status: "pending", source: message, match, createdAt: now,
+            id: proposalId, status: "pending", mailSource: source, source: message, match, createdAt: now,
             classification: { ...classification, requiresApproval: classification.requiresApproval || !match.applicationId || match.conflicts.length > 0 },
           });
           await updateRepository.create(proposal);
@@ -48,17 +49,22 @@ async function scan({ adapter, mode, now = new Date().toISOString() }: RunMailSc
         }
         await jobBuddyDb.processedMessages.add({ id: message.providerMessageId, processedAt: now, proposalId });
       }
-      const state: MailScanState = { cursor: result.nextCursor, lastAttemptedScanAt: now, lastSuccessfulScanAt: now };
-      await updateRepository.saveScanState(state);
+      const state: MailScanState = {
+        cursor: result.nextCursor,
+        lastAttemptedScanAt: now,
+        lastSuccessfulScanAt: now,
+        ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
+      };
+      await updateRepository.saveScanState(source, state);
       return state;
     });
   } catch {
     // Read current state so failure in another tab never rolls its successful
     // cursor back. Provider content and raw errors must not reach persisted UI.
     return jobBuddyDb.transaction("rw", jobBuddyDb.metadata, async () => {
-      const current = await updateRepository.getScanState();
+      const current = await updateRepository.getScanState(source);
       const state = { ...current, lastAttemptedScanAt: now, error: safeFailure };
-      await updateRepository.saveScanState(state);
+      await updateRepository.saveScanState(source, state);
       return state;
     });
   }

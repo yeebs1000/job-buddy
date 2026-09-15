@@ -1,13 +1,16 @@
 {
   "name": "job-buddy",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node --env-file-if-exists=.env.local scripts/dev.mjs",
+    "dev:web": "vite",
+    "dev:server": "tsx watch server/start.ts",
+    "start": "node --env-file-if-exists=.env.local --import tsx server/start.ts",
     "preview": "vite preview",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --pretty false",
@@ -30,11 +33,13 @@
     "@testing-library/jest-dom": "latest",
     "@testing-library/react": "latest",
     "@testing-library/user-event": "latest",
+    "@types/node": "^26.5.1",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "@vitejs/plugin-react": "latest",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "latest",
+    "tsx": "^4.23.13",
     "typescript": "latest",
     "vite": "latest",
     "vitest": "latest"

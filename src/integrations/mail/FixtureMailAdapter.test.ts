@@ -10,6 +10,8 @@ describe("FixtureMailAdapter", () => {
     const first = await adapter.scan(null);
     const second = await adapter.scan(first.nextCursor);
 
+    expect(adapter.source).toBe("simulated");
+    expect(first.diagnostics).toEqual({ truncated: false, recoverySync: false, ignoredMessageCount: 0 });
     expect(first.messages.length).toBeGreaterThan(0);
     expect(second.messages).toEqual([]);
   });

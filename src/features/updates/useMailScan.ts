@@ -5,7 +5,7 @@ import { runMailScan, type MailScanMode } from "./runMailScan";
 import { updateRepository } from "./updateRepository";
 
 export function useMailScan(adapter: MailAdapter, mode: MailScanMode = "approval") {
-  const state = useLiveQuery(() => updateRepository.getScanState(), []);
+  const state = useLiveQuery(() => updateRepository.getScanState(adapter.source), [adapter.source]);
   const pending = useLiveQuery(() => updateRepository.listPending(), []);
   const [activeScans, setActiveScans] = useState(0);
 

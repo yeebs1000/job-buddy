@@ -4,6 +4,7 @@ import { createUpdateProposal, type UpdateProposalInput } from "./updateProposal
 const input = (): UpdateProposalInput => ({
   id: "proposal-1",
   status: "pending",
+  mailSource: "simulated",
   source: {
     providerMessageId: "mail-1",
     fromAddress: "recruiting@example.test",

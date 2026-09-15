@@ -10,6 +10,7 @@ export const fixtureMailAdapterStatus = {
 const cursorPrefix = "fixture-mail-cursor-";
 
 export class FixtureMailAdapter implements MailAdapter {
+  readonly source = "simulated" as const;
   readonly status = fixtureMailAdapterStatus;
 
   constructor(private readonly messages: readonly MailEnvelope[]) {}
@@ -24,6 +25,7 @@ export class FixtureMailAdapter implements MailAdapter {
       messages: this.messages.slice(startIndex).map((message) => ({ ...message, links: [...message.links] })),
       nextCursor: `${cursorPrefix}${this.messages.length}`,
       scannedAt: fixtureMailScannedAt,
+      diagnostics: { truncated: false, recoverySync: false, ignoredMessageCount: 0 },
     };
   }
 

@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from "dexie";
 import type { Application, Deadline } from "../domain/application";
 import type { ApplicationOutcome, ApplicationStage, StageEvent } from "../domain/stage";
 import type { UpdateProposal } from "../domain/updateProposal";
+import type { MailSource } from "../domain/mail";
 
 // Keep the existing v1 state index while exposing the domain's status field.
 export type StoredUpdateProposal = UpdateProposal & { state: UpdateProposal["status"] };
@@ -27,6 +28,7 @@ export interface ActivityEntry {
   at: string;
   action: "approved" | "rejected" | "deferred";
   automatic: boolean;
+  mailSource: MailSource;
 }
 
 export type StoredApplication = Omit<Application, "stageEvents"> & {

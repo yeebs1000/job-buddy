@@ -13,8 +13,11 @@ export interface MailScanResult {
   messages: MailEnvelope[];
   nextCursor: string;
   scannedAt: string;
+  diagnostics?: MailScanDiagnostics;
 }
 
 export interface MailAdapter {
-  scan(cursor: string | null): Promise<MailScanResult>;
+  readonly source: MailSource;
+  scan(cursor: string | null, context?: MailScanContext): Promise<MailScanResult>;
 }
+import type { MailScanContext, MailScanDiagnostics, MailSource } from "../../domain/mail";

@@ -1,4 +1,5 @@
 import type { Deadline } from "./application";
+import type { MailSource } from "./mail";
 import type { ApplicationOutcome, ApplicationStage } from "./stage";
 
 export type UpdateProposalStatus = "pending" | "approved" | "rejected" | "deferred";
@@ -54,6 +55,7 @@ export interface UpdateProposalClassificationInput extends UpdateProposalClassif
 interface UpdateProposalFields<TClassification> {
   id: string;
   status: UpdateProposalStatus;
+  mailSource: MailSource;
   source: UpdateProposalSource;
   match: UpdateProposalMatch;
   classification: TClassification;
