@@ -8,6 +8,11 @@ import { seedDemoData } from "../../db/seed";
 import type { Application } from "../../domain/application";
 import { applicationStages, deriveApplicationState } from "../../domain/stage";
 import { rankNextActions, summarizeStages } from "./commandCenterSelectors";
+import { fixtureMessages } from "../../fixtures/mail/messages";
+import { FixtureMailAdapter } from "../../integrations/mail/FixtureMailAdapter";
+import type { MailAdapter } from "../../integrations/mail/MailAdapter";
+import type { MailScanMode } from "../updates/runMailScan";
+import { useMailScan } from "../updates/useMailScan";
 import "./command-center.css";
 
 const stageLabels = {
@@ -28,7 +33,29 @@ function salarySnapshot(application: Application): string {
 
 const outcomeLabels = { rejected: "Rejected", withdrawn: "Withdrawn", expired: "Expired", offer_declined: "Offer declined", offer_accepted: "Offer accepted", hired: "Hired" } as const;
 
-export function CommandCenterPage() {
+const simulatedMail = new FixtureMailAdapter(fixtureMessages);
+
+function MailScanStatus({ adapter, onScanned }: { adapter: MailAdapter; onScanned: () => Promise<void> }) {
+  const [mode, setMode] = useState<MailScanMode>("approval");
+  const [failed, setFailed] = useState(false);
+  const { state, pending, isScanning, scan } = useMailScan(adapter, mode);
+  async function startScan() {
+    setFailed(false);
+    try { const result = await scan(); if (!result.error) await onScanned(); }
+    catch { setFailed(true); }
+  }
+  return <section aria-label="Simulated mail scan" className="command-center__scan">
+    <div><strong>Simulated mail</strong><p>Fictional messages · No credentials, live Gmail access or background scanning.</p><p>Last successful scan: {state?.lastSuccessfulScanAt ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", dateStyle: "medium", timeStyle: "short" }).format(new Date(state.lastSuccessfulScanAt)) + " SGT (UTC+08:00)" : "Never"}</p></div>
+    <label>Scan mode<select value={mode} disabled={isScanning} onChange={(event) => setMode(event.target.value as MailScanMode)}><option value="approval">Approval</option><option value="unrestricted">Unrestricted simulation</option></select></label>
+    <Button disabled={isScanning} onClick={() => void startScan()}>{isScanning ? "Scanning simulated mail…" : state?.error || failed ? "Retry simulated scan" : "Scan now (simulated)"}</Button>
+    <Link to="/updates">Review {pending.length} pending update{pending.length === 1 ? "" : "s"}</Link>
+    {isScanning && <p role="status">Checking fictional messages…</p>}
+    {mode === "unrestricted" && <p role="alert" className="command-center__scan-warning">Unrestricted simulation can automatically apply confident forward updates to your tracker. Offers, terminal outcomes and conflicts still require explicit approval. This setting lasts until you leave this page.</p>}
+    {(state?.error || failed) && <p role="alert" className="command-center__scan-warning">Mail scan could not be completed. Please try again.</p>}
+  </section>;
+}
+
+export function CommandCenterPage({ mailAdapter = simulatedMail }: { mailAdapter?: MailAdapter } = {}) {
   const [applications, setApplications] = useState<Application[] | null>(null);
   const [error, setError] = useState(false);
 
@@ -65,7 +92,7 @@ export function CommandCenterPage() {
   }
 
   if (!applications.length) {
-    return <section className="command-center"><EmptyState title="Start your tracker">Add your first application or load fictional sample data to see the workflow.</EmptyState><div className="command-center__actions"><Link className="button button--secondary" to="/import">Import tracker</Link><Link className="button button--secondary" to="/applications?new=1">Add application</Link><Button onClick={() => void loadApplications()}>Load sample data</Button></div></section>;
+    return <section className="command-center"><EmptyState title="Start your tracker">Add your first application or load fictional sample data to see the workflow.</EmptyState><div className="command-center__actions"><Link className="button button--secondary" to="/import">Import tracker</Link><Link className="button button--secondary" to="/applications?new=1">Add application</Link><Button onClick={() => void loadApplications()}>Load sample data</Button></div><MailScanStatus adapter={mailAdapter} onScanned={loadApplications} /></section>;
   }
 
   const summary = summarizeStages(applications);
@@ -77,6 +104,8 @@ export function CommandCenterPage() {
         <div><h1>Application command center</h1><p>See what needs your attention across Singapore and Hong Kong.</p></div>
         <div className="command-center__actions"><Link className="button button--secondary" to="/import">Import tracker</Link><Link className="button button--primary" to="/applications?new=1">Add application</Link></div>
       </header>
+
+      <MailScanStatus adapter={mailAdapter} onScanned={loadApplications} />
 
       <section aria-labelledby="portfolio-overview" className="command-center__section">
         <div className="command-center__section-heading"><h2 id="portfolio-overview">Portfolio overview</h2><span>{applications.length} applications</span></div>

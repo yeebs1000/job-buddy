@@ -1,0 +1,34 @@
+.updates__header { display: grid; gap: .5rem; }
+.updates__header p, .updates__summary { color: var(--color-muted); margin: 0; }
+.updates a { color: #174db5; overflow-wrap: anywhere; }
+.updates__feedback { min-height: 1.5rem; margin: 1rem 0 .5rem; }
+.updates__summary { margin-bottom: .75rem; }
+.updates__list { background: var(--color-surface); border: 1px solid var(--color-border); }
+.update-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .85fr) minmax(0, 1.3fr); }
+.update-row + .update-row, .updates__skeleton + .updates__skeleton { border-top: 1px solid var(--color-border); }
+.update-row > div { min-width: 0; padding: 1.25rem; overflow-wrap: anywhere; }
+.update-row > div + div { border-left: 1px solid var(--color-border); }
+.update-row p, .update-row ul { font-size: .875rem; line-height: 1.5; margin: 0 0 .75rem; }
+.update-row h2 { font-size: 1rem; line-height: 1.4; margin: 0 0 1rem; }
+.update-row__step { color: var(--color-muted); font-weight: 600; }
+.update-row time { color: var(--color-muted); font-size: .8125rem; line-height: 1.5; }
+.update-row blockquote { font-size: .9375rem; line-height: 1.5; margin: 1rem 0; }
+.update-row ul { padding-left: 1.2rem; }
+.update-row__fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.update-row__fields label { display: grid; gap: .375rem; font-size: .875rem; margin-bottom: .75rem; font-weight: 600; }
+.update-row input, .update-row select { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: .25rem; color: var(--color-text); font: inherit; width: 100%; min-width: 0; padding: .625rem; }
+.update-row__deadline { border-top: 1px solid var(--color-border); padding: .75rem 0; }
+.update-row__actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+.update-row .button { border-radius: .375rem; font-size: .8125rem; padding: .625rem .75rem; }
+.update-row button:disabled { cursor: default; opacity: .65; }
+.update-row__conflict { color: #b91c1c; }
+.update-row__confirmation { border: 1px solid var(--color-border); padding: .75rem; margin-top: 1rem; }
+.update-row__confirmation h3 { font-size: 1rem; margin: 0 0 .5rem; }
+.update-row__confirmation .button + .button { margin-left: .5rem; }
+.update-row .stage-rail { border-radius: .375rem; padding: .75rem; }
+.updates__skeleton { display: grid; grid-template-columns: 1.1fr .85fr 1.3fr; min-height: 30rem; }
+.updates__skeleton span { margin: 1.25rem; background: #eef0f2; height: 8rem; border-radius: .25rem; }
+@media (max-width: 58rem) {
+  .update-row, .updates__skeleton { grid-template-columns: 1fr; }
+  .update-row > div + div { border-left: 0; border-top: 1px solid var(--color-border); }
+}

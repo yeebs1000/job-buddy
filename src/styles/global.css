@@ -20,6 +20,7 @@ button, a { transition: color 180ms ease, background-color 180ms ease, border-co
 .app-shell__nav { display: flex; gap: var(--space-1); overflow-x: auto; }
 .app-shell__nav a { border-radius: var(--radius-sm); color: var(--color-muted); padding: var(--space-2) var(--space-3); text-decoration: none; white-space: nowrap; }
 .app-shell__nav a[aria-current="page"] { background: #eef0f2; color: var(--color-text); font-weight: 600; }
+.app-shell__badge { border: 1px solid var(--color-border); border-radius: .25rem; color: var(--color-text); font-size: .75rem; margin-left: .375rem; padding: .0625rem .3125rem; }
 .app-shell__main { margin: 0 auto; max-width: 72rem; padding: 2rem var(--space-6); }
 .app-shell h1 { font-size: clamp(1.5rem, 3vw, 2rem); letter-spacing: -0.02em; margin: 0; }
 

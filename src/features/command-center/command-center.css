@@ -28,3 +28,12 @@
 .command-center__skeleton { background: #e8eaed; border-radius: var(--radius-sm); height: 5.5rem; }
 @media (max-width: 56rem) { .command-center__application { align-items: start; grid-template-columns: 1fr; } }
 @media (max-width: 48rem) { .command-center__header { align-items: start; flex-direction: column; } .command-center__stage-summary { grid-template-columns: repeat(3, 1fr); gap: var(--space-4) 0; } .command-center__stage-summary > div:nth-child(4) { border-left: 0; padding-left: 0; } }
+.command-center__scan { align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); display: flex; flex-wrap: wrap; gap: .75rem 1rem; padding: 1rem; }
+.command-center__scan > div { flex: 1 1 21rem; }
+.command-center__scan p { font-size: .8125rem; line-height: 1.5; margin: .25rem 0 0; }
+.command-center__scan label { display: grid; font-size: .8125rem; gap: .375rem; }
+.command-center__scan select { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: .25rem; color: var(--color-text); font: inherit; padding: .5rem; }
+.command-center__scan a { color: #174db5; font-size: .875rem; }
+.command-center__scan .button { border-radius: .375rem; font-size: .875rem; }
+.command-center__scan button:disabled { cursor: default; opacity: .65; }
+.command-center__scan .command-center__scan-warning { color: #b91c1c; flex-basis: 100%; }
