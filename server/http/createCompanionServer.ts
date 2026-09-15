@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
-import type { GmailConnectionStatus } from "../gmail/GmailConnectionService";
+import type { GmailConnectionStatus } from "../../src/domain/mail";
 import type { GmailScanResponse } from "../gmail/GmailSyncService";
 
 interface ConnectionServicePort {

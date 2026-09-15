@@ -1,15 +1,9 @@
 import type { CompanionConfig } from "../config";
 import type { GmailConnectionMetadata } from "../secrets/ConnectionMetadataStore";
 import type { SecretStore } from "../secrets/SecretStore";
+import type { GmailConnectionStatus } from "../../src/domain/mail";
 import { GoogleOAuthClient, GoogleOAuthError, type GoogleTokens } from "./GoogleOAuthClient";
 import { OAuthAttemptStore } from "./OAuthAttemptStore";
-
-export type GmailConnectionStatus = {
-  state: "unconfigured" | "disconnected" | "connected" | "reconnect-required";
-  accountEmail?: string;
-  platformSupported: boolean;
-  lastError?: "missing-config" | "token-revoked" | "platform-unsupported";
-};
 
 interface ConnectionMetadataPort {
   get(): Promise<GmailConnectionMetadata | null>;

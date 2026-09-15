@@ -1,0 +1,49 @@
+.settings-page { display: grid; gap: 1.5rem; }
+.settings-page__header { align-items: end; border-bottom: 1px solid var(--color-border); display: flex; justify-content: space-between; gap: 1rem; padding-bottom: 1.5rem; }
+.settings-page__header h1, .settings-page__header p { margin: 0; }
+.settings-page__header p { color: var(--color-muted); line-height: 1.5; margin-top: .375rem; }
+.settings-page__header > span { color: #475467; font-size: .8125rem; white-space: nowrap; }
+.settings-page__message { border: 1px solid var(--color-border); margin: 0; padding: .75rem 1rem; }
+.settings-page__message--status { background: #f0faf3; border-color: #a9d9b7; color: #14532d; }
+.settings-page__message--error { background: #fff5f5; border-color: #efb4b4; color: #991b1b; }
+
+.gmail-settings { background: var(--color-surface); border: 1px solid #cfd4dc; border-radius: 1rem; overflow: hidden; }
+.gmail-settings__heading, .gmail-settings__row { align-items: center; display: flex; justify-content: space-between; gap: 2rem; padding: 1.25rem 1.5rem; }
+.gmail-settings__heading { background: #fafbfc; border-bottom: 1px solid #cfd4dc; }
+.gmail-settings__heading h2, .gmail-settings__heading p, .gmail-settings__row h3, .gmail-settings__row p { margin: 0; }
+.gmail-settings__heading h2 { font-size: 1.125rem; letter-spacing: -.01em; }
+.gmail-settings__heading p, .gmail-settings__row p, .gmail-settings__mode small { color: #526071; font-size: .875rem; line-height: 1.5; margin-top: .25rem; max-width: 68ch; }
+.gmail-settings__row { border-top: 1px solid #d7dbe2; min-height: 6.25rem; }
+.gmail-settings__heading + .gmail-settings__row { border-top: 0; }
+.gmail-settings__row h3 { font-size: .9375rem; }
+.gmail-settings__state { align-items: center; color: #344054; display: inline-flex; font-size: .8125rem; font-weight: 600; gap: .5rem; white-space: nowrap; }
+.gmail-settings__state > span { background: #98a2b3; border-radius: 50%; height: .5rem; width: .5rem; }
+.gmail-settings__state[data-state="connected"] > span { background: var(--success-500); box-shadow: 0 0 0 3px var(--success-100); }
+.gmail-settings__state[data-state="reconnect-required"] > span { background: var(--error-500); }
+.gmail-settings__account { color: #202124 !important; font-weight: 600; }
+.gmail-settings__actions, .gmail-settings__source { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; }
+.gmail-settings .button { border-radius: .5rem; font-size: .875rem; min-height: 2.5rem; }
+.gmail-settings__check { align-items: center; color: #202124; display: flex; font-size: .875rem; font-weight: 600; gap: .625rem; white-space: nowrap; }
+.gmail-settings__check input, .gmail-settings__choice-group input { accent-color: #202124; height: 1rem; width: 1rem; }
+.gmail-settings__mode { border: 0; border-top: 1px solid #d7dbe2; margin: 0; }
+.gmail-settings__mode legend { display: block; flex: 1 1 18rem; padding: 0; }
+.gmail-settings__mode legend > span { display: block; font-size: .9375rem; font-weight: 700; }
+.gmail-settings__mode legend small { display: block; font-weight: 400; }
+.gmail-settings__choice-group { display: flex; flex: 0 1 34rem; gap: .5rem; }
+.gmail-settings__choice-group label { align-items: flex-start; border: 1px solid #cfd4dc; border-radius: .625rem; cursor: pointer; display: flex; flex: 1; gap: .625rem; min-width: 13rem; padding: .75rem; }
+.gmail-settings__choice-group label:has(input:checked) { background: #f1f3f5; border-color: #667085; }
+.gmail-settings__choice-group strong, .gmail-settings__choice-group small { display: block; }
+.gmail-settings__choice-group strong { font-size: .8125rem; }
+.gmail-settings__choice-group small { font-size: .75rem; margin-top: .125rem; }
+.gmail-settings--loading { padding: 1.5rem; }
+.gmail-settings--loading div { background: #e8eaed; border-radius: .5rem; height: 4.5rem; margin-top: .75rem; }
+.gmail-settings--loading div:first-child { margin-top: 0; }
+
+@media (max-width: 44rem) {
+  .settings-page__header, .gmail-settings__heading, .gmail-settings__row { align-items: flex-start; flex-direction: column; gap: 1rem; }
+  .gmail-settings__heading, .gmail-settings__row { padding: 1rem; }
+  .gmail-settings__state { white-space: normal; }
+  .gmail-settings__actions, .gmail-settings__source, .gmail-settings__choice-group { justify-content: flex-start; width: 100%; }
+  .gmail-settings__choice-group { flex-direction: column; }
+  .gmail-settings__choice-group label { width: 100%; }
+}

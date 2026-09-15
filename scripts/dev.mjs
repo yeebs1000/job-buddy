@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmEntryPoint = process.env.npm_execpath;
+if (!npmEntryPoint) throw new Error("Start development with npm run dev");
 const children = ["dev:web", "dev:server"].map((script) => spawn(
-  npmCommand,
-  ["run", script],
+  process.execPath,
+  [npmEntryPoint, "run", script],
   {
     stdio: "inherit",
     env: { ...process.env, ...(script === "dev:server" ? { JOB_BUDDY_UI_ORIGIN: "http://127.0.0.1:5173" } : {}) },

@@ -9,3 +9,10 @@ export interface MailScanDiagnostics {
 export interface MailScanContext {
   initialSyncConfirmed?: boolean;
 }
+
+export type GmailConnectionStatus = {
+  state: "unconfigured" | "disconnected" | "connected" | "reconnect-required";
+  accountEmail?: string;
+  platformSupported: boolean;
+  lastError?: "missing-config" | "token-revoked" | "platform-unsupported";
+};
