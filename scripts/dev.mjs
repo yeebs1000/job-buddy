@@ -4,7 +4,10 @@ const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 const children = ["dev:web", "dev:server"].map((script) => spawn(
   npmCommand,
   ["run", script],
-  { stdio: "inherit", env: process.env },
+  {
+    stdio: "inherit",
+    env: { ...process.env, ...(script === "dev:server" ? { JOB_BUDDY_UI_ORIGIN: "http://127.0.0.1:5173" } : {}) },
+  },
 ));
 
 let stopping = false;

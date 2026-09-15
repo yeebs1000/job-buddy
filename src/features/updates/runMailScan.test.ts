@@ -67,6 +67,23 @@ it("persists the adapter source on proposals and review activity", async () => {
   ]);
 });
 
+it("hands first-sync consent to the adapter without changing the transactional cursor", async () => {
+  let receivedContext: unknown;
+  const gmailAdapter: MailAdapter = {
+    source: "gmail",
+    async scan(cursor, context) {
+      expect(cursor).toBeNull();
+      receivedContext = context;
+      return { messages: [], nextCursor: "184100", scannedAt: now };
+    },
+  };
+
+  await runMailScan({ adapter: gmailAdapter, mode: "approval", now, initialSyncConfirmed: true });
+
+  expect(receivedContext).toEqual({ initialSyncConfirmed: true });
+  expect((await updateRepository.getScanState("gmail")).cursor).toBe("184100");
+});
+
 it("deduplicates provider identifiers within and across scans without overriding a manual stage", async () => {
   await applicationRepository.create(application("final"));
   await runMailScan({ adapter: adapter([mail, mail]), mode: "unrestricted", now });

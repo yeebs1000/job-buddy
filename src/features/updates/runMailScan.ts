@@ -11,12 +11,13 @@ export interface RunMailScanOptions {
   adapter: MailAdapter;
   mode: MailScanMode;
   now?: string;
+  initialSyncConfirmed?: boolean;
 }
 
 const safeFailure = "Mail scan could not be completed. Please try again.";
 let scanQueue: Promise<unknown> = Promise.resolve();
 
-async function scan({ adapter, mode, now = new Date().toISOString() }: RunMailScanOptions): Promise<MailScanState> {
+async function scan({ adapter, mode, now = new Date().toISOString(), initialSyncConfirmed = false }: RunMailScanOptions): Promise<MailScanState> {
   const source = adapter.source;
   const prior = await jobBuddyDb.transaction("rw", jobBuddyDb.metadata, async () => {
     const state = await updateRepository.getScanState(source);
@@ -24,7 +25,7 @@ async function scan({ adapter, mode, now = new Date().toISOString() }: RunMailSc
     return state;
   });
   try {
-    const result = await adapter.scan(prior.cursor);
+    const result = await adapter.scan(prior.cursor, { initialSyncConfirmed });
     return await jobBuddyDb.transaction("rw", [...approvalTables, jobBuddyDb.processedMessages, jobBuddyDb.metadata], async () => {
       // Another tab may have committed while the adapter was reading. Retry from
       // that cursor instead of committing an older page over its progress.

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { SecretKey, SecretStore } from "./SecretStore";
 
@@ -23,8 +24,7 @@ function encodedCommand(script: string): string {
 
 function defaultRoot(): string {
   const localAppData = process.env.LOCALAPPDATA;
-  if (!localAppData) throw new Error("LOCALAPPDATA is unavailable");
-  return join(localAppData, "JobBuddy");
+  return localAppData ? join(localAppData, "JobBuddy") : join(homedir(), ".job-buddy");
 }
 
 class SpawnCommandRunner implements CommandRunner {
