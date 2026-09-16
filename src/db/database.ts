@@ -3,6 +3,7 @@ import type { Application, Deadline } from "../domain/application";
 import type { ApplicationOutcome, ApplicationStage, StageEvent } from "../domain/stage";
 import type { UpdateProposal } from "../domain/updateProposal";
 import type { MailSource } from "../domain/mail";
+import type { RoleAliasOverride, SalaryEstimateSnapshot, SalaryObservation } from "../domain/research";
 
 // Keep the existing v1 state index while exposing the domain's status field.
 export type StoredUpdateProposal = UpdateProposal & { state: UpdateProposal["status"] };
@@ -59,6 +60,9 @@ class JobBuddyDb extends Dexie {
   stageEvents!: EntityTable<StageEvent, "id">;
   deadlines!: EntityTable<StoredDeadline, "id">;
   researchSnapshots!: EntityTable<IdentifiedRecord, "id">;
+  salaryObservations!: EntityTable<SalaryObservation, "id">;
+  salaryEstimateSnapshots!: EntityTable<SalaryEstimateSnapshot, "id">;
+  roleAliasOverrides!: EntityTable<RoleAliasOverride, "id">;
   savedViews!: EntityTable<SavedView, "id">;
   updateProposals!: EntityTable<StoredUpdateProposal, "id">;
   processedMessages!: EntityTable<ProcessedMessageRecord, "id">;
@@ -74,6 +78,22 @@ class JobBuddyDb extends Dexie {
       stageEvents: "id, applicationId",
       deadlines: "id",
       researchSnapshots: "id",
+      savedViews: "id",
+      updateProposals: "id, state",
+      processedMessages: "id",
+      prepSessions: "id",
+      profileFields: "id",
+      activityEntries: "id",
+      metadata: "key",
+    });
+    this.version(2).stores({
+      applications: "id, stage, outcome, market, roleFamily, updatedAt",
+      stageEvents: "id, applicationId",
+      deadlines: "id",
+      researchSnapshots: "id",
+      salaryObservations: "id, applicationId, market, canonicalRole, observedAt",
+      salaryEstimateSnapshots: "id, applicationId, calculatedAt",
+      roleAliasOverrides: "id, [market+normalizedTitle]",
       savedViews: "id",
       updateProposals: "id, state",
       processedMessages: "id",

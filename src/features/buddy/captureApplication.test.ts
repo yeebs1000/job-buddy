@@ -42,8 +42,13 @@ describe("captureApplication", () => {
     ]);
   });
 
+  it("accepts U.S. captures with a state and rejects incomplete U.S. metadata", async () => {
+    await expect(captureApplication(pending, { ...edits, country: "United States", city: "New York", state: "NY" })).resolves.toMatchObject({ created: true });
+    await expect(captureApplication({ ...pending, sourceUrl: "https://jobs.example/roles/43" }, { ...edits, country: "United States", city: "New York" })).rejects.toThrow("invalid-capture-metadata");
+  });
+
   it("rejects unsupported markets and incomplete metadata before writing", async () => {
-    await expect(captureApplication(pending, { ...edits, country: "United States" as never })).rejects.toThrow("invalid-capture-metadata");
+    await expect(captureApplication(pending, { ...edits, country: "Canada" as never })).rejects.toThrow("invalid-capture-metadata");
     expect(await applicationRepository.list()).toHaveLength(0);
   });
 });

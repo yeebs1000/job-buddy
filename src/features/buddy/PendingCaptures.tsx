@@ -31,7 +31,7 @@ export function PendingCaptures({ client = buddyClient, capture = captureApplica
     const value = (name: string) => String(data.get(name) ?? "").trim();
     const edits: CaptureEdits = {
       company: value("company"), role: value("role"), country: value("country") as CaptureEdits["country"],
-      city: value("city"), discipline: value("discipline") as CaptureEdits["discipline"],
+      city: value("city"), state: value("state") || undefined, discipline: value("discipline") as CaptureEdits["discipline"],
       industry: value("industry"), roleFamily: value("roleFamily") as CaptureEdits["roleFamily"],
       source: value("source"), appliedDate: value("appliedDate"),
     };
@@ -56,13 +56,16 @@ export function PendingCaptures({ client = buddyClient, capture = captureApplica
     <div className="pending-captures__list">
       {captures.map((pending) => {
         const hongKong = /hong\s*kong|\bhk\b/i.test(pending.location);
-        const country = hongKong ? "Hong Kong" : "Singapore";
+        const unitedStates = /united\s*states|\busa?\b/i.test(pending.location);
+        const country = unitedStates ? "United States" : hongKong ? "Hong Kong" : "Singapore";
         return <form className="pending-captures__card" key={pending.id} onSubmit={(event) => void add(event, pending)}>
           <div className="pending-captures__source"><strong>{pending.platform}</strong><a href={pending.sourceUrl} target="_blank" rel="noopener noreferrer">Review job page</a></div>
           <label>Company<input name="company" required maxLength={300} defaultValue={pending.company} /></label>
           <label>Role<input name="role" required maxLength={300} defaultValue={pending.role} /></label>
-          <label>Market<select name="country" defaultValue={country}><option>Singapore</option><option>Hong Kong</option></select></label>
+          <label>Market<select name="country" defaultValue={country}><option>Singapore</option><option>Hong Kong</option><option>United States</option></select></label>
           <label>City<input name="city" required maxLength={300} defaultValue={country} /></label>
+          <label>State / region<input name="state" maxLength={100} aria-describedby={`state-help-${pending.id}`} /></label>
+          <span className="application-help" id={`state-help-${pending.id}`}>Required for U.S. applications.</span>
           <label>Discipline<select name="discipline" defaultValue="software_it"><option value="software_it">Software &amp; IT</option><option value="finance">Finance</option></select></label>
           <label>Industry<input name="industry" required maxLength={160} defaultValue="Technology" /></label>
           <label>Role family<select name="roleFamily" defaultValue="software">{roleFamilies.map((family) => <option key={family} value={family}>{family}</option>)}</select></label>

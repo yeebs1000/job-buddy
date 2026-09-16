@@ -57,7 +57,7 @@ function boolean(value: unknown, label: string, errors: string[]): boolean | und
   if (["false", "no", "0", "n"].includes(key(value))) return false;
   errors.push(`${label} must be yes/no or true/false.`); return undefined;
 }
-const schema = z.object({ company: z.string().min(1, "Company is required."), role: z.string().min(1, "Role is required."), source: z.string().min(1, "Source is required."), location: z.object({ city: z.string().min(1, "Location is required.") }), discipline: z.enum(["finance", "software_it"]), market: z.enum(["SG", "HK"]), stage: z.enum(applicationStages).nullable(), roleFamily: z.enum(roleFamilies).optional(), workArrangement: z.enum(workArrangements).optional(), priority: z.enum(priorities).optional() });
+const schema = z.object({ company: z.string().min(1, "Company is required."), role: z.string().min(1, "Role is required."), source: z.string().min(1, "Source is required."), location: z.object({ city: z.string().min(1, "Location is required.") }), discipline: z.enum(["finance", "software_it"]), market: z.enum(["SG", "HK", "US"]), stage: z.enum(applicationStages).nullable(), roleFamily: z.enum(roleFamilies).optional(), workArrangement: z.enum(workArrangements).optional(), priority: z.enum(priorities).optional() });
 function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: number): ImportRow {
   const errors: string[] = [], warnings: string[] = [];
   const escaped = text(values.escaped).split(";");
@@ -67,7 +67,7 @@ function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: nu
     return field === "notes" ? restored : restored.trim();
   };
   const marketKey = key(values.market || values.city);
-  const market = ["sg", "singapore"].includes(marketKey) ? "SG" : ["hk", "hong kong", "hongkong"].includes(marketKey) ? "HK" : undefined;
+  const market = ["sg", "singapore"].includes(marketKey) ? "SG" : ["hk", "hong kong", "hongkong"].includes(marketKey) ? "HK" : ["us", "usa", "united states", "united states of america"].includes(marketKey) ? "US" : undefined;
   const rawFamily = key(values.roleFamily);
   const roleFamily = (rawFamily === "it" ? "IT" : rawFamily === "software engineering" ? "software" : rawFamily || undefined) as Application["roleFamily"];
   const discipline = (get("discipline") || (roleFamily ? roleFamily === "finance" ? "finance" : "software_it" : "")) as Application["discipline"];
@@ -79,8 +79,8 @@ function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: nu
     if (!escaped.includes("tag-uri-v1")) return value;
     try { return decodeURIComponent(value); } catch { return value; }
   });
-  const normalized: NormalizedApplication = { company: get("company"), role: get("role"), discipline, market, location: { city: get("city"), country: market === "SG" ? "Singapore" : "Hong Kong" }, source: get("source"), appliedAt: date(values.appliedAt, "Applied date", errors, true) ?? "", stage: currentStage, outcome: currentOutcome, tags: [...new Set(tags)], deadlines: [] };
-  if (!market) errors.push("Market is required: SG/Singapore or HK/Hong Kong.");
+  const normalized: NormalizedApplication = { company: get("company"), role: get("role"), discipline, market, location: { city: get("city"), country: market === "SG" ? "Singapore" : market === "HK" ? "Hong Kong" : "United States" }, source: get("source"), appliedAt: date(values.appliedAt, "Applied date", errors, true) ?? "", stage: currentStage, outcome: currentOutcome, tags: [...new Set(tags)], deadlines: [] };
+  if (!market) errors.push("Market is required: SG/Singapore, HK/Hong Kong or US/United States.");
   if (!discipline) errors.push("Role Family or Discipline is required (finance, software, data, cybersecurity, cloud or IT).");
   if (roleFamily) normalized.roleFamily = roleFamily;
   for (const field of ["industry", "workArrangement", "priority", "recruiter", "notes", "interviewSubtype"] as const) if (get(field)) Object.assign(normalized, { [field]: ["workArrangement", "priority", "interviewSubtype"].includes(field) ? key(get(field)) : get(field) });
@@ -91,13 +91,13 @@ function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: nu
   if (get("jobUrl")) { if (isSafeExternalJobUrl(get("jobUrl"))) normalized.jobUrl = get("jobUrl"); else warnings.push("Link is not a valid http/https URL and will be omitted."); }
   const salaryText = get("salary");
   if (["salary", "salaryMax", "currency", "period"].some(f => get(f as TrackerField))) {
-    const range = salaryText.toUpperCase().replace(/SGD|HKD|S\$|HK\$/g, "").replace(/,/g, "").trim().split(/\s*[–—-]\s*/);
+    const range = salaryText.toUpperCase().replace(/SGD|HKD|USD|S\$|HK\$|US\$/g, "").replace(/,/g, "").trim().split(/\s*[–—-]\s*/);
     const minimum = range[0] ? Number(range[0]) : NaN;
     const maxText = get("salaryMax") || range[1]; const maximum = maxText ? Number(maxText.replace(/,/g, "")) : undefined;
-    const currency = (get("currency").toUpperCase() || (salaryText.match(/SGD|HKD/i)?.[0].toUpperCase()) || (salaryText.includes("HK$") ? "HKD" : salaryText.includes("S$") ? "SGD" : "")) as "SGD" | "HKD";
+    const currency = (get("currency").toUpperCase() || (salaryText.match(/SGD|HKD|USD/i)?.[0].toUpperCase()) || (salaryText.includes("HK$") ? "HKD" : salaryText.includes("S$") ? "SGD" : salaryText.includes("US$") ? "USD" : "")) as "SGD" | "HKD" | "USD";
     const periodKey = key(values.period); const period = (["yearly", "year", "per year"].includes(periodKey) ? "annual" : ["month", "per month"].includes(periodKey) ? "monthly" : periodKey) as "monthly" | "annual";
     if (!Number.isFinite(minimum) || minimum < 0 || (maximum !== undefined && (!Number.isFinite(maximum) || maximum < minimum)) || range.length > 2) errors.push("Salary must be a non-negative amount or ascending range.");
-    else if (!["SGD", "HKD"].includes(currency) || !["monthly", "annual"].includes(period)) errors.push("Salary needs an explicit SGD/HKD currency and monthly/annual pay period.");
+    else if (!["SGD", "HKD", "USD"].includes(currency) || !["monthly", "annual"].includes(period)) errors.push("Salary needs an explicit SGD/HKD/USD currency and monthly/annual pay period.");
     else normalized.research = { salary: { minimum, ...(maximum !== undefined ? { maximum } : {}), currency, period } };
   }
   if (["rating", "ratingOutOf", "ratingSource"].some(f => get(f as TrackerField))) {

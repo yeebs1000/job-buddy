@@ -5,8 +5,9 @@ import { applicationRepository } from "../../db/applicationRepository";
 export interface CaptureEdits {
   company: string;
   role: string;
-  country: "Singapore" | "Hong Kong";
+  country: "Singapore" | "Hong Kong" | "United States";
   city: string;
+  state?: string;
   discipline: Application["discipline"];
   industry: string;
   roleFamily: NonNullable<Application["roleFamily"]>;
@@ -38,8 +39,8 @@ export async function captureApplication(pendingInput: PendingCapture, editsInpu
       discipline: edits.discipline,
       industry: edits.industry,
       roleFamily: edits.roleFamily,
-      market: edits.country === "Singapore" ? "SG" : "HK",
-      location: { city: edits.city, country: edits.country },
+      market: edits.country === "Singapore" ? "SG" : edits.country === "Hong Kong" ? "HK" : "US",
+      location: { city: edits.city, country: edits.country, ...(edits.state ? { state: edits.state } : {}) },
       source: edits.source,
       jobUrl: pending.sourceUrl,
       appliedAt,
@@ -61,14 +62,15 @@ function validateEdits(input: CaptureEdits): CaptureEdits {
   const company = text(input.company);
   const role = text(input.role);
   const city = text(input.city);
+  const state = text(input.state, 100);
   const industry = text(input.industry, 160);
   const source = text(input.source, 160);
-  const country = input.country === "Singapore" || input.country === "Hong Kong" ? input.country : undefined;
+  const country = input.country === "Singapore" || input.country === "Hong Kong" || input.country === "United States" ? input.country : undefined;
   const discipline = input.discipline === "finance" || input.discipline === "software_it" ? input.discipline : undefined;
   const roleFamily = roleFamilies.includes(input.roleFamily) ? input.roleFamily : undefined;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(input.appliedDate) ? new Date(`${input.appliedDate}T00:00:00.000Z`) : new Date(Number.NaN);
-  if (!company || !role || !city || !industry || !source || !country || !discipline || !roleFamily || Number.isNaN(date.getTime())) throw new Error("invalid-capture-metadata");
-  return { company, role, city, industry, source, country, discipline, roleFamily, appliedDate: input.appliedDate };
+  if (!company || !role || !city || !industry || !source || !country || (country === "United States" && !state) || !discipline || !roleFamily || Number.isNaN(date.getTime())) throw new Error("invalid-capture-metadata");
+  return { company, role, city, ...(state ? { state } : {}), industry, source, country, discipline, roleFamily, appliedDate: input.appliedDate };
 }
 
 function stableHash(value: string): string {

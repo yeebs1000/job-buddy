@@ -14,6 +14,16 @@ it("maps fresh graduate headings and normalizes dates, currencies, markets and s
   expect(preview.rows[0].normalized.research?.companyRating).toBeUndefined();
   expect(preview.mapping).toContainEqual({ source: "Title", field: "role" });
 });
+it("imports a U.S. application and USD salary without cross-currency conversion", async () => {
+  const preview = await parseTracker(csv("Company,Role,Stage,Date Applied,Market,Role Family,Source,Location,Salary,Pay Period\nExample Inc,Software Engineer,Applied,2026-09-12,US,software,Company careers,New York,USD 120000-160000,annual"));
+
+  expect(preview.rows[0].errors).toEqual([]);
+  expect(preview.rows[0].normalized).toMatchObject({
+    market: "US",
+    location: { city: "New York", country: "United States" },
+    research: { salary: { minimum: 120_000, maximum: 160_000, currency: "USD", period: "annual" } },
+  });
+});
 it("keeps legacy unmarked comma-separated tags separate", async () => {
   const preview = await parseTracker(csv("Company,Role,Stage,Date Applied,Market,Role Family,Source,Location,Tags\nBank,Analyst,Applied,2026-09-12,SG,finance,Campus,Singapore,\"graduate,priority\""));
 

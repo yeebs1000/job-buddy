@@ -33,10 +33,10 @@ export const sampleApplications: Application[] = [
   },
   {
     id: "app-moon-interview", company: "Moonbeam Systems", role: "Data Engineer", discipline: "software_it",
-    market: "HK", roleFamily: "data", industry: "Technology", workArrangement: "hybrid", priority: "high",
-    location: { city: "Hong Kong", country: "Hong Kong" }, source: "Referral", appliedAt: "2026-08-20T07:45:00Z", tags: ["data", "python"], interviewSubtype: "video",
+    market: "US", roleFamily: "data", industry: "Technology", workArrangement: "hybrid", priority: "high",
+    location: { city: "Seattle", state: "WA", country: "United States" }, source: "Referral", appliedAt: "2026-08-20T07:45:00Z", tags: ["data", "python"], interviewSubtype: "video",
     deadlines: [{ id: "d4", label: "Video interview", at: "2026-09-13T06:00:00Z", completed: false }],
-    research: { salary: { minimum: 30000, maximum: 42000, currency: "HKD", period: "monthly" }, companyRating: { score: 4.3, outOf: 5, source: "Fictional Reviews" } },
+    research: { salary: { minimum: 120000, maximum: 155000, currency: "USD", period: "annual" }, companyRating: { score: 4.3, outOf: 5, source: "Fictional Reviews" } },
     stageEvents: [
       { id: "e4a", applicationId: "app-moon-interview", at: "2026-08-20T07:45:00Z", toStage: "applied", origin: "manual", accepted: true },
       { id: "e4b", applicationId: "app-moon-interview", at: "2026-09-05T05:00:00Z", fromStage: "applied", toStage: "interview", origin: "gmail", accepted: true, confidence: 0.98 },

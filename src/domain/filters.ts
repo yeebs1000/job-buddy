@@ -27,7 +27,8 @@ export interface ApplicationFilterState {
   includeArchived?: boolean;
 }
 
-export const applicationMarket = (application: Application) => application.market ?? (application.location.country === "Singapore" ? "SG" : "HK");
+export const applicationMarket = (application: Application) => application.market
+  ?? (application.location.country === "Singapore" ? "SG" : application.location.country === "Hong Kong" ? "HK" : "US");
 export const applicationRoleFamily = (application: Application) => application.roleFamily ?? (application.discipline === "finance" ? "finance" : "software");
 export const nextDeadline = (application: Application) => application.deadlines.filter(d => !d.completed).sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0];
 export const dateOnly = (value: string) => value.slice(0, 10);

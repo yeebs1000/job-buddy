@@ -6,6 +6,7 @@ import { jobBuddyDb, type SavedView } from "../../db/database";
 import { seedDemoData } from "../../db/seed";
 import { savedViewRepository } from "../../db/viewRepository";
 import { priorities, roleFamilies, workArrangements, type Application } from "../../domain/application";
+import type { Market } from "../../domain/research";
 import { matchesApplicationFilters, type ApplicationFilterState } from "../../domain/filters";
 import { applicationStages, deriveApplicationState, type ApplicationStage } from "../../domain/stage";
 import { ApplicationFilters } from "./ApplicationFilters";
@@ -38,18 +39,24 @@ function NewApplication({ onSave, onCancel, busy }: { onSave: (application: Appl
     const value = (key: string) => String(data.get(key) ?? "").trim();
     if (["company", "role", "industry", "source", "appliedAt"].some(key => !value(key))) { setError("Fill in company, role, industry, source and applied date."); return; }
     const id = crypto.randomUUID();
-    const market = value("market") as "SG" | "HK";
+    const market = value("market") as Market;
     const roleFamily = value("roleFamily") as Application["roleFamily"];
     const appliedAt = new Date(`${value("appliedAt")}T00:00:00Z`).toISOString();
+    const country = market === "SG" ? "Singapore" : market === "HK" ? "Hong Kong" : "United States";
+    const city = value("city") || (market === "SG" ? "Singapore" : market === "HK" ? "Hong Kong" : "");
+    const state = value("state");
+    if (!city || (market === "US" && !state)) { setError("Add a city and state for U.S. applications."); return; }
     setError("");
-    await onSave({ id, company: value("company"), role: value("role"), industry: value("industry"), market, roleFamily, discipline: roleFamily === "finance" ? "finance" : "software_it", workArrangement: value("workArrangement") as Application["workArrangement"], location: { city: market === "SG" ? "Singapore" : "Hong Kong", country: market === "SG" ? "Singapore" : "Hong Kong" }, source: value("source"), appliedAt, priority: value("priority") as Application["priority"], tags: parseTags(value("tags")), deadlines: [], stageEvents: [{ id: crypto.randomUUID(), applicationId: id, at: appliedAt, toStage: value("stage") as ApplicationStage, origin: "manual", accepted: true }] });
+    await onSave({ id, company: value("company"), role: value("role"), industry: value("industry"), market, roleFamily, discipline: roleFamily === "finance" ? "finance" : "software_it", workArrangement: value("workArrangement") as Application["workArrangement"], location: { city, country, ...(state ? { state } : {}) }, source: value("source"), appliedAt, priority: value("priority") as Application["priority"], tags: parseTags(value("tags")), deadlines: [], stageEvents: [{ id: crypto.randomUUID(), applicationId: id, at: appliedAt, toStage: value("stage") as ApplicationStage, origin: "manual", accepted: true }] });
   }
   return <form aria-label="New application" className="application-create" onSubmit={event => void submit(event)}>
     <h2>New application</h2><p>Start with the essentials. Research and deadlines can be added later.</p>
     {error && <p role="alert">{error}</p>}
     <fieldset disabled={busy}><legend className="sr-only">Application details</legend><div className="application-form-grid">
       <label>Company<input name="company" required autoFocus maxLength={160} /></label><label>Role<input name="role" required maxLength={160} /></label>
-      <label>Market<select name="market"><option>SG</option><option>HK</option></select></label>
+      <label>Market<select name="market"><option>SG</option><option>HK</option><option>US</option></select></label>
+      <label>City<input name="city" maxLength={100} placeholder="Auto-filled for SG/HK" /></label>
+      <label>State / region<input name="state" maxLength={100} placeholder="Required for U.S." /></label>
       <label>Industry<input name="industry" required maxLength={100} /></label>
       <label>Role family<select name="roleFamily">{roleFamilies.map(value => <option key={value}>{value}</option>)}</select></label>
       <label>Work arrangement<select name="workArrangement">{workArrangements.map(value => <option key={value}>{value}</option>)}</select></label>

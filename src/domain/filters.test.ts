@@ -45,4 +45,12 @@ describe("matchesApplicationFilters", () => {
     expect(matchesApplicationFilters({ ...sampleApplications[1], market: undefined, roleFamily: undefined }, { markets: ["SG"], roleFamilies: ["software"] }, now)).toBe(true);
     expect(matchesApplicationFilters(application, { roleFamilies: ["finance"] }, now)).toBe(false);
   });
+
+  it("infers the U.S. market for legacy U.S. records", () => {
+    expect(matchesApplicationFilters({
+      ...sampleApplications[1],
+      market: undefined,
+      location: { city: "New York", state: "NY", country: "United States" },
+    }, { markets: ["US"] }, now)).toBe(true);
+  });
 });
