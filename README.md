@@ -7,6 +7,7 @@
 [![Storage](https://img.shields.io/badge/Storage-Local--first-2ea44f)](#privacy-and-security)
 [![Markets](https://img.shields.io/badge/Markets-Singapore_%2B_Hong_Kong_%2B_US-f59e0b)](#project-status)
 [![Preview](https://img.shields.io/badge/Status-Public_beta_candidate-6f42c1)](https://github.com/yeebs1000/job-buddy)
+[![CI](https://github.com/yeebs1000/job-buddy/actions/workflows/ci.yml/badge.svg)](https://github.com/yeebs1000/job-buddy/actions/workflows/ci.yml)
 
 [中文文档](README.zh-CN.md)
 
@@ -247,4 +248,4 @@ A shoutout to [JobSpy](https://github.com/speedyapply/JobSpy). We adopted severa
 
 ## License
 
-No license file is included yet. Until a license is added, do not assume permission to reuse or redistribute this code beyond the rights that apply to your copy.
+Job Buddy is available under the [MIT License](LICENSE).
