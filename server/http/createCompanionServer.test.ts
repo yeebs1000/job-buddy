@@ -1,5 +1,6 @@
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { emptyCandidateProfile } from "../../src/domain/profile";
 import { createCompanionServer, type CompanionServerServices } from "./createCompanionServer";
 
 const openServers: Array<ReturnType<typeof createCompanionServer>> = [];
@@ -25,6 +26,13 @@ function services(overrides: Partial<CompanionServerServices> = {}): CompanionSe
       disconnect: async () => ({ revocationConfirmed: true }),
     },
     sync: { scan: vi.fn().mockResolvedValue({ source: "gmail", messages: [], nextCursor: "184100", scannedAt: "2026-09-15T08:00:00.000Z", diagnostics: { truncated: false, recoverySync: false, ignoredMessageCount: 0 } }) },
+    profile: {
+      status: vi.fn().mockResolvedValue({ platformSupported: true, hasProfile: false }),
+      read: vi.fn().mockResolvedValue(emptyCandidateProfile),
+      replace: vi.fn().mockResolvedValue(emptyCandidateProfile),
+      select: vi.fn().mockResolvedValue({}),
+      delete: vi.fn().mockResolvedValue(undefined),
+    },
     ...overrides,
   };
 }
@@ -78,5 +86,75 @@ describe("createCompanionServer", () => {
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe("http://127.0.0.1:5173/settings?gmail=connected");
     expect(response.headers.get("location")).not.toMatch(/private-code|private-state/);
+  });
+
+  it("returns profile status and values only to the dashboard origin", async () => {
+    const profile = {
+      status: vi.fn().mockResolvedValue({ platformSupported: true, hasProfile: true }),
+      read: vi.fn().mockResolvedValue({ ...emptyCandidateProfile, identity: { givenName: "Alex" } }),
+      replace: vi.fn(),
+      select: vi.fn().mockResolvedValue({}),
+      delete: vi.fn(),
+    };
+    const base = await start(services({ profile }));
+
+    const denied = await fetch(`${base}/api/profile`, { headers: { origin: "https://evil.example" } });
+    const allowed = await fetch(`${base}/api/profile`, { headers: { origin: "http://127.0.0.1:5173" } });
+
+    expect(denied.status).toBe(403);
+    expect(allowed.status).toBe(200);
+    expect(await allowed.json()).toEqual({
+      platformSupported: true,
+      hasProfile: true,
+      profile: { ...emptyCandidateProfile, identity: { givenName: "Alex" } },
+    });
+  });
+
+  it("accepts a validated profile replacement only from the dashboard origin", async () => {
+    const profile = {
+      status: vi.fn().mockResolvedValue({ platformSupported: true, hasProfile: false }),
+      read: vi.fn().mockResolvedValue(emptyCandidateProfile),
+      replace: vi.fn().mockResolvedValue({ ...emptyCandidateProfile, identity: { givenName: "Alex" } }),
+      select: vi.fn().mockResolvedValue({}),
+      delete: vi.fn(),
+    };
+    const base = await start(services({ profile }));
+    const next = { ...emptyCandidateProfile, identity: { givenName: "Alex" } };
+
+    const denied = await fetch(`${base}/api/profile`, {
+      method: "PUT",
+      headers: { origin: "https://evil.example", "content-type": "application/json" },
+      body: JSON.stringify(next),
+    });
+    const allowed = await fetch(`${base}/api/profile`, {
+      method: "PUT",
+      headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" },
+      body: JSON.stringify(next),
+    });
+
+    expect(denied.status).toBe(403);
+    expect(allowed.status).toBe(200);
+    expect(await allowed.json()).toEqual({ profile: { ...emptyCandidateProfile, identity: { givenName: "Alex" } } });
+    expect(profile.replace).toHaveBeenCalledWith(next);
+  });
+
+  it("deletes only the profile and enforces the larger profile body cap", async () => {
+    const testServices = services();
+    const base = await start(testServices);
+    const deleted = await fetch(`${base}/api/profile`, {
+      method: "DELETE",
+      headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" },
+      body: "{}",
+    });
+    const oversized = await fetch(`${base}/api/profile`, {
+      method: "PUT",
+      headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" },
+      body: JSON.stringify({ padding: "x".repeat(129 * 1024) }),
+    });
+
+    expect(deleted.status).toBe(204);
+    expect(testServices.profile.delete).toHaveBeenCalledOnce();
+    expect(oversized.status).toBe(413);
+    expect(testServices.profile.replace).not.toHaveBeenCalled();
   });
 });

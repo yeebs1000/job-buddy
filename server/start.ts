@@ -4,6 +4,8 @@ import { GmailConnectionService } from "./gmail/GmailConnectionService";
 import { GmailSyncService } from "./gmail/GmailSyncService";
 import { GmailTransport } from "./gmail/GmailTransport";
 import { createCompanionServer } from "./http/createCompanionServer";
+import { ProfileService } from "./profile/ProfileService";
+import { WindowsDpapiProfileVault } from "./profile/WindowsDpapiProfileVault";
 import { ConnectionMetadataStore } from "./secrets/ConnectionMetadataStore";
 import { WindowsDpapiSecretStore } from "./secrets/WindowsDpapiSecretStore";
 
@@ -15,8 +17,9 @@ const secrets = new WindowsDpapiSecretStore();
 const metadata = new ConnectionMetadataStore();
 const connection = new GmailConnectionService({ config, secrets, metadata });
 const sync = new GmailSyncService(new GmailTransport(connection));
+const profile = new ProfileService(new WindowsDpapiProfileVault());
 const server = createCompanionServer({
-  services: { connection, sync },
+  services: { connection, sync, profile },
   allowedOrigins: config.uiOrigins,
   uiOrigin,
   ...(uiOrigin === productionOrigin ? { staticDir: resolve("dist") } : {}),

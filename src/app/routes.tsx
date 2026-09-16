@@ -6,6 +6,7 @@ import { ApplicationDetailPage } from "../features/application-detail/Applicatio
 import { ImportTrackerPage } from "../features/import-export/ImportTrackerPage";
 import { UpdateInboxPage } from "../features/updates/UpdateInboxPage";
 import { SettingsPage } from "../features/settings/SettingsPage";
+import { ProfilePage } from "../features/profile/ProfilePage";
 
 function Page({ title }: { title: string }) {
   return <section><h1>{title}</h1></section>;
@@ -21,7 +22,7 @@ export const appRoutes: RouteObject[] = [
       { path: "applications/:id", element: <ApplicationDetailPage /> },
       { path: "updates", element: <UpdateInboxPage /> },
       { path: "prepare", element: <Page title="Prepare" /> },
-      { path: "profile", element: <Page title="Profile" /> },
+      { path: "profile", element: <ProfilePage /> },
       { path: "settings", element: <SettingsPage /> },
     ],
   },

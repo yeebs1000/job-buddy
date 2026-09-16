@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import type { GmailConnectionStatus } from "../../src/domain/mail";
+import type { CandidateProfile, ProfileSelection } from "../../src/domain/profile";
 import type { GmailScanResponse } from "../gmail/GmailSyncService";
 
 interface ConnectionServicePort {
@@ -15,9 +16,18 @@ interface SyncServicePort {
   scan(input: { cursor: string | null; initialSyncConfirmed: boolean }): Promise<GmailScanResponse>;
 }
 
+interface ProfileServicePort {
+  status(): Promise<{ platformSupported: boolean; hasProfile: boolean }>;
+  read(): Promise<CandidateProfile>;
+  replace(input: unknown): Promise<CandidateProfile>;
+  select(paths: readonly string[]): Promise<ProfileSelection>;
+  delete(): Promise<void>;
+}
+
 export interface CompanionServerServices {
   connection: ConnectionServicePort;
   sync: SyncServicePort;
+  profile: ProfileServicePort;
 }
 
 export interface CompanionServerOptions {
@@ -32,6 +42,7 @@ class HttpInputError extends Error {
 }
 
 const maxBodyBytes = 16 * 1024;
+const maxProfileBodyBytes = 128 * 1024;
 
 function applySecurityHeaders(response: ServerResponse): void {
   response.setHeader("cache-control", "no-store");
@@ -51,16 +62,16 @@ function allowedOrigin(request: IncomingMessage, options: CompanionServerOptions
   return typeof origin === "string" && options.allowedOrigins.includes(origin) ? origin : null;
 }
 
-async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
+async function readJson(request: IncomingMessage, limit = maxBodyBytes): Promise<Record<string, unknown>> {
   if (!request.headers["content-type"]?.toLowerCase().startsWith("application/json")) throw new HttpInputError(415, "json-required");
   const declared = Number(request.headers["content-length"] ?? 0);
-  if (Number.isFinite(declared) && declared > maxBodyBytes) throw new HttpInputError(413, "body-too-large");
+  if (Number.isFinite(declared) && declared > limit) throw new HttpInputError(413, "body-too-large");
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.byteLength;
-    if (size > maxBodyBytes) throw new HttpInputError(413, "body-too-large");
+    if (size > limit) throw new HttpInputError(413, "body-too-large");
     chunks.push(buffer);
   }
   try {
@@ -84,6 +95,7 @@ function safeError(error: unknown): { status: number; code: string } {
     "reconnect-required": 409,
     "request-failed": 502,
     "invalid-history": 502,
+    "invalid-profile": 400,
   };
   return { status: statuses[code] ?? 500, code: code in statuses ? code : "internal-error" };
 }
@@ -113,7 +125,7 @@ export function createCompanionServer(options: CompanionServerOptions) {
     try {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
       const origin = allowedOrigin(request, options);
-      if (request.method === "POST") {
+      if (request.method === "POST" || request.method === "PUT" || request.method === "DELETE") {
         if (!origin) throw new HttpInputError(403, "origin-not-allowed");
         response.setHeader("access-control-allow-origin", origin);
         response.setHeader("vary", "Origin");
@@ -164,6 +176,30 @@ export function createCompanionServer(options: CompanionServerOptions) {
         await readJson(request);
         json(response, 200, await options.services.connection.disconnect());
         return;
+      }
+      if (url.pathname === "/api/profile") {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        if (request.method === "GET") {
+          const status = await options.services.profile.status();
+          json(response, 200, {
+            ...status,
+            profile: status.platformSupported ? await options.services.profile.read() : null,
+          });
+          return;
+        }
+        if (request.method === "PUT") {
+          const profile = await options.services.profile.replace(await readJson(request, maxProfileBodyBytes));
+          json(response, 200, { profile });
+          return;
+        }
+        if (request.method === "DELETE") {
+          await readJson(request);
+          await options.services.profile.delete();
+          applySecurityHeaders(response);
+          response.statusCode = 204;
+          response.end();
+          return;
+        }
       }
       if (options.staticDir && await serveStatic(request, response, options.staticDir)) return;
       json(response, 404, { error: { code: "not-found" } });
