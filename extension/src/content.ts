@@ -5,7 +5,7 @@ import { selectAdapter, type AdapterField, type FormAdapter } from "./adapters/t
 import { snapshotFields } from "./adapters/dom";
 import { planFill, type FieldSnapshot } from "./matching/planFill";
 import { BuddyPanel } from "./ui/BuddyPanel";
-import { detectSalary } from "./research/detectSalary";
+import { detectSalary, detectSalaryJsonLd } from "./research/detectSalary";
 
 export interface ContentRuntimeDependencies {
   document: Document;
@@ -219,9 +219,11 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
 
   function detectSalaryEvidence(): void {
     const text = (pageDocument.body.textContent ?? "").slice(0, 200_000);
-    const market = inferMarket(pageDocument, text);
+    const structured = [...pageDocument.querySelectorAll<HTMLScriptElement>('script[type="application/ld+json"]')]
+      .map((script) => script.textContent ?? "").join("\n").slice(0, 100_000);
+    const market = inferMarket(pageDocument, `${text}\n${structured}`);
     if (!market) return;
-    const detected = detectSalary(text, { market });
+    const detected = detectSalary(text, { market }) ?? detectSalaryJsonLd(structured, { market });
     if (!detected) return;
     pendingSalaryEvidence = {
       id: `salary-${stableFingerprint(`${sanitizedUrl(pageUrl)}|${detected.currency}|${detected.minimum}|${detected.maximum}|${detected.period}`)}`,
