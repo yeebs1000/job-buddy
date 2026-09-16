@@ -21,7 +21,15 @@ button, input { font: inherit; }
 form { display: grid; gap: 10px; }
 label { color: #344054; display: grid; font-size: 12px; font-weight: 700; gap: 5px; }
 input { border: 1px solid #cfd4dc; border-radius: 9px; color: #182230; min-height: 42px; padding: 0 11px; text-transform: uppercase; }
+.review-form { gap: 12px; }
+.review-list { border: 1px solid #e4e7ec; border-radius: 12px; display: grid; max-height: 240px; overflow: auto; }
+.review-field { align-items: center; display: grid; font-size: 13px; font-weight: 650; gap: 2px 9px; grid-template-columns: 20px 1fr; padding: 11px 12px; }
+.review-field + .review-field { border-top: 1px solid #eef0f3; }
+.review-field input { grid-row: 1 / span 2; height: 16px; min-height: 0; padding: 0; text-transform: none; width: 16px; }
+.review-field small { font-size: 11px; font-weight: 500; grid-column: 2; }
+.guarantee { border-top: 1px solid #eef0f3; padding-top: 10px; }
 .primary { background: #111827; border: 0; border-radius: 9px; color: white; cursor: pointer; min-height: 42px; padding: 0 14px; }
+.primary:disabled { cursor: not-allowed; opacity: .45; }
 button:focus-visible, input:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
 `;

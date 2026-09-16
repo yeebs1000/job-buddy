@@ -33,4 +33,27 @@ describe("BuddyPanel", () => {
     expect(onPair).toHaveBeenCalledWith("ABCDE-FGHJK");
     expect(panel.shadowRoot.querySelector("a")?.getAttribute("href") ?? "").not.toContain("ABCDE-FGHJK");
   });
+
+  it("requires explicit field selection before approval-mode filling", () => {
+    const onFillApproved = vi.fn();
+    const panel = new BuddyPanel(document.body, { onFillApproved });
+    panel.render({
+      state: "review",
+      mode: "approval",
+      matched: 2,
+      manual: 1,
+      autoFilled: 0,
+      fields: [
+        { id: "first-name", label: "First name", risk: "safe" },
+        { id: "salary", label: "Expected salary", risk: "review" },
+      ],
+    });
+    panel.expand();
+
+    panel.shadowRoot.querySelector<HTMLInputElement>('input[value="first-name"]')!.click();
+    panel.shadowRoot.querySelector<HTMLButtonElement>("button[data-action='fill-approved']")!.click();
+
+    expect(onFillApproved).toHaveBeenCalledWith(["first-name"]);
+    expect(panel.shadowRoot.textContent).toContain("Buddy never submits applications");
+  });
 });

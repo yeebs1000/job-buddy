@@ -4,9 +4,14 @@ export type BuddyPanelModel =
   | { state: "unpaired" }
   | { state: "idle" }
   | { state: "fields-found"; matched: number; review: number; manual: number }
+  | { state: "review"; mode: "approval" | "automatic"; matched: number; manual: number; autoFilled: number; fields: readonly BuddyReviewField[] }
   | { state: "error"; message: string };
 
-export interface BuddyPanelOptions { onPair?: (code: string) => Promise<void> | void; }
+export interface BuddyReviewField { id: string; label: string; risk: "safe" | "review"; }
+export interface BuddyPanelOptions {
+  onPair?: (code: string) => Promise<void> | void;
+  onFillApproved?: (fieldIds: string[]) => Promise<void> | void;
+}
 
 export class BuddyPanel {
   readonly host: HTMLDivElement;
@@ -14,6 +19,7 @@ export class BuddyPanel {
   expanded = false;
   private model: BuddyPanelModel = { state: "idle" };
   private readonly onPair: (code: string) => Promise<void> | void;
+  private readonly onFillApproved: (fieldIds: string[]) => Promise<void> | void;
 
   constructor(parent: HTMLElement, options: BuddyPanelOptions = {}) {
     this.host = parent.ownerDocument.createElement("div");
@@ -21,6 +27,7 @@ export class BuddyPanel {
     this.host.dataset.corner = "right";
     this.shadowRoot = this.host.attachShadow({ mode: "open" });
     this.onPair = options.onPair ?? (() => undefined);
+    this.onFillApproved = options.onFillApproved ?? (() => undefined);
     this.shadowRoot.addEventListener("keydown", (event) => { if ((event as KeyboardEvent).key === "Escape") this.collapse(); });
     parent.append(this.host);
     this.draw();
@@ -91,6 +98,47 @@ export class BuddyPanel {
       const counts = doc.createElement("div"); counts.className = "counts";
       counts.append(this.count("Matched", this.model.matched), this.count("Review", this.model.review), this.count("Manual", this.model.manual));
       body.append(heading, counts);
+      return;
+    }
+    if (this.model.state === "review") {
+      const heading = doc.createElement("h2");
+      heading.textContent = this.model.mode === "automatic" ? "Autofill review" : "Choose fields to fill";
+      const summary = doc.createElement("p");
+      summary.textContent = `${this.model.autoFilled} filled · ${this.model.fields.length} need review · ${this.model.manual} manual`;
+      const form = doc.createElement("form");
+      form.className = "review-form";
+      const list = doc.createElement("div");
+      list.className = "review-list";
+      for (const field of this.model.fields) {
+        const label = doc.createElement("label");
+        label.className = "review-field";
+        const checkbox = doc.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.name = "approved-field";
+        checkbox.value = field.id;
+        const text = doc.createElement("span");
+        text.textContent = field.label;
+        const badge = doc.createElement("small");
+        badge.textContent = field.risk === "review" ? "Check carefully" : "Profile match";
+        label.append(checkbox, text, badge);
+        list.append(label);
+      }
+      const submit = doc.createElement("button");
+      submit.className = "primary";
+      submit.dataset.action = "fill-approved";
+      submit.type = "submit";
+      submit.textContent = "Fill approved fields";
+      submit.disabled = this.model.fields.length === 0;
+      form.append(list, submit);
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const ids = [...form.querySelectorAll<HTMLInputElement>('input[name="approved-field"]:checked')].map((input) => input.value);
+        if (ids.length) void this.onFillApproved(ids);
+      });
+      const guarantee = doc.createElement("small");
+      guarantee.className = "guarantee";
+      guarantee.textContent = "Buddy never submits applications or fills files, credentials, or demographic fields.";
+      body.append(heading, summary, form, guarantee);
       return;
     }
     const heading = doc.createElement("h2");

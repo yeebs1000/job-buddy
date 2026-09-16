@@ -8,7 +8,7 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["chrome", "vitest/globals"]
+    "types": ["chrome", "node", "vitest/globals"]
   },
   "include": ["extension", "src/domain/profile.ts", "src/domain/buddy.ts"]
 }
