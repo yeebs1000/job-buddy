@@ -95,6 +95,7 @@ export function calculateEstimate(input: CalculateEstimateInput): EstimateResult
   const assumptions = [
     `Official ${input.benchmark.compensationScope.toLocaleLowerCase("en")} benchmark anchored at the 25th to 75th percentiles.`,
     ...(inflationMinimum ? [`${inflationMinimum.label}; this is purchasing-power adjustment, not a wage forecast.`] : []),
+    ...(inflationMinimum?.referenceFallback ? [`Reference CPI uses the closest earlier published period ${inflationMinimum.referencePeriod} because ${inflationMinimum.requestedReferencePeriod} is unavailable; no interpolation was used.`] : []),
   ];
   const exclusions = input.observations
     .filter((observation) => !eligible.some((candidate) => candidate.observation.id === observation.id))

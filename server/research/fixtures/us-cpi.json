@@ -1,0 +1,16 @@
+{
+  "status": "REQUEST_SUCCEEDED",
+  "Results": {
+    "series": [
+      {
+        "seriesID": "CUUR0000SA0",
+        "data": [
+          { "year": "2026", "period": "M08", "value": "331.1" },
+          { "year": "2026", "period": "M07", "value": "330.6" },
+          { "year": "2025", "period": "M09", "value": "324.8" },
+          { "year": "2025", "period": "M13", "value": "2.9" }
+        ]
+      }
+    ]
+  }
+}

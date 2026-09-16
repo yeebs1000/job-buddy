@@ -3,7 +3,9 @@ import type { CpiPoint } from "../../domain/research";
 export interface InflationAdjustment {
   amount: number;
   factor: number;
+  requestedReferencePeriod: string;
   referencePeriod: string;
+  referenceFallback: boolean;
   latestPeriod: string;
   label: string;
   referencePointId: string;
@@ -35,7 +37,9 @@ export function adjustForInflation(input: {
   const age = ageInDays(input.referencePeriod, input.calculatedAt);
   if (age === undefined || age <= 365) return undefined;
 
-  const reference = input.points.find((point) => point.period === input.referencePeriod);
+  const reference = input.points
+    .filter((point) => /^\d{4}-\d{2}$/.test(point.period) && point.period <= input.referencePeriod)
+    .sort((left, right) => right.period.localeCompare(left.period))[0];
   if (!reference) return undefined;
   const calculatedMonth = input.calculatedAt.slice(0, 7);
   const latest = input.points
@@ -47,7 +51,9 @@ export function adjustForInflation(input: {
   return {
     amount: input.amount * factor,
     factor,
+    requestedReferencePeriod: input.referencePeriod,
     referencePeriod: reference.period,
+    referenceFallback: reference.period !== input.referencePeriod,
     latestPeriod: latest.period,
     label: `Equivalent in ${latest.period} prices`,
     referencePointId: reference.id,
