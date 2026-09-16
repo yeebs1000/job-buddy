@@ -5,9 +5,15 @@ import type { AdapterField, FillResult } from "./types";
 type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement;
 
 export function scanControls(document: Document): AdapterField[] {
+  const seen = new Map<string, number>();
   return [...document.querySelectorAll<FormControl>("input, select, textarea, button[type='submit'], input[type='submit']")]
     .filter((element) => !element.disabled && inputType(element) !== "hidden")
-    .map((element, index) => toAdapterField(document, element, index));
+    .map((element, index) => toAdapterField(document, element, index))
+    .map((field) => {
+      const occurrence = (seen.get(field.id) ?? 0) + 1;
+      seen.set(field.id, occurrence);
+      return occurrence === 1 ? field : { ...field, id: `${field.id}--${occurrence}` };
+    });
 }
 
 export function fillControl(field: AdapterField, value: string | number | boolean | string[]): FillResult {
