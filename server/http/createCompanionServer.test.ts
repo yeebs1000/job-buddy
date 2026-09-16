@@ -61,6 +61,39 @@ afterEach(async () => {
 });
 
 describe("createCompanionServer", () => {
+  it("keeps research endpoints dashboard-only and validates lookup requests", async () => {
+    const research = {
+      status: vi.fn().mockResolvedValue([{ market: "US", activeReleaseId: "us-2025", quarantineCount: 0, latestQuarantinePath: "C:/private/cache.json" }]),
+      refresh: vi.fn().mockResolvedValue([{ market: "US", ok: true, releaseId: "us-2025" }]),
+      lookup: vi.fn().mockResolvedValue({ releaseId: "us-2025", benchmark: { id: "benchmark" }, cpiPoints: [], retrievedAt: "2026-09-16T00:00:00.000Z", fallback: "exact" }),
+    };
+    const base = await start(services({ research }));
+    const extensionOrigin = `chrome-extension://${"a".repeat(32)}`;
+
+    const denied = await fetch(`${base}/api/research/status`, { headers: { origin: extensionOrigin } });
+    const status = await fetch(`${base}/api/research/status`, { headers: { origin: "http://127.0.0.1:5173" } });
+    const invalid = await fetch(`${base}/api/research/lookup`, {
+      method: "POST",
+      headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" },
+      body: JSON.stringify({ market: "CA", canonicalRole: "software-engineer" }),
+    });
+    const lookup = await fetch(`${base}/api/research/lookup`, {
+      method: "POST",
+      headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" },
+      body: JSON.stringify({ market: "US", canonicalRole: "software-engineer", metroCode: "41860", state: "CA" }),
+    });
+
+    expect(denied.status).toBe(403);
+    const statusBody = await status.json();
+    expect(statusBody).toEqual({ markets: [{ market: "US", activeReleaseId: "us-2025", quarantineCount: 0 }] });
+    expect(JSON.stringify(statusBody)).not.toContain("private");
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toEqual({ error: { code: "invalid-research-query" } });
+    expect(lookup.status).toBe(200);
+    expect(research.lookup).toHaveBeenCalledWith({ market: "US", canonicalRole: "software-engineer", metroCode: "41860", state: "CA" });
+    expect(JSON.stringify(await lookup.json())).not.toContain("sourceBytes");
+  });
+
   it("rejects state-changing requests from an unknown origin", async () => {
     const testServices = services();
     const base = await start(testServices);

@@ -5,6 +5,8 @@ import type { GmailConnectionStatus } from "../../src/domain/mail";
 import type { BuddyActivityEntry, BuddyPreferences, PendingCapture } from "../../src/domain/buddy";
 import type { CandidateProfile, ProfileSelection } from "../../src/domain/profile";
 import type { GmailScanResponse } from "../gmail/GmailSyncService";
+import { z } from "zod";
+import { marketSchema, type Market } from "../../src/domain/research";
 
 interface ConnectionServicePort {
   status(): Promise<GmailConnectionStatus>;
@@ -43,11 +45,18 @@ interface BuddyServicePort {
   addCapture(auth: { token: string; origin: string }, input: unknown): Promise<PendingCapture>;
 }
 
+interface ResearchServicePort {
+  status(): Promise<Array<{ market: Market; activeReleaseId?: string; activatedAt?: string; quarantineCount: number; latestQuarantinePath?: string }>>;
+  refresh(market?: Market): Promise<Array<{ market: Market; ok: boolean; releaseId?: string; error?: string }>>;
+  lookup(query: { market: Market; canonicalRole: string; metroCode?: string; state?: string }): Promise<unknown>;
+}
+
 export interface CompanionServerServices {
   connection: ConnectionServicePort;
   sync: SyncServicePort;
   profile: ProfileServicePort;
   buddy: BuddyServicePort;
+  research?: ResearchServicePort;
 }
 
 export interface CompanionServerOptions {
@@ -138,6 +147,10 @@ function safeError(error: unknown): { status: number; code: string } {
     "unauthorized": 401,
     "confirmation-required": 409,
     "invalid-preference": 400,
+    "research-unavailable": 503,
+    "invalid-research-query": 400,
+    "source-refresh-failed": 502,
+    "insufficient-evidence": 404,
   };
   return { status: statuses[code] ?? 500, code: code in statuses ? code : "internal-error" };
 }
@@ -206,6 +219,37 @@ export function createCompanionServer(options: CompanionServerOptions) {
           ...(status.lastError ? { lastError: status.lastError } : {}),
         });
         return;
+      }
+      if (url.pathname.startsWith("/api/research/")) {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        const research = options.services.research;
+        if (!research) throw new HttpInputError(503, "research-unavailable");
+        if (request.method === "GET" && url.pathname === "/api/research/status") {
+          const markets = (await research.status()).map(({ latestQuarantinePath: _, ...status }) => status);
+          json(response, 200, { markets });
+          return;
+        }
+        if (request.method === "POST" && url.pathname === "/api/research/refresh") {
+          const parsed = z.object({ market: marketSchema.optional() }).strict().safeParse(await readJson(request));
+          if (!parsed.success) throw new HttpInputError(400, "invalid-research-query");
+          const results = await research.refresh(parsed.data.market);
+          if (results.length && results.every((result) => !result.ok)) throw new HttpInputError(502, "source-refresh-failed");
+          json(response, 200, { results });
+          return;
+        }
+        if (request.method === "POST" && url.pathname === "/api/research/lookup") {
+          const parsed = z.object({
+            market: marketSchema,
+            canonicalRole: z.string().trim().min(1).max(100),
+            metroCode: z.string().trim().min(1).max(20).optional(),
+            state: z.string().trim().min(2).max(50).optional(),
+          }).strict().safeParse(await readJson(request));
+          if (!parsed.success) throw new HttpInputError(400, "invalid-research-query");
+          const result = await research.lookup(parsed.data);
+          if (result && typeof result === "object" && "status" in result && result.status === "insufficient_evidence") throw new HttpInputError(404, "insufficient-evidence");
+          json(response, 200, result);
+          return;
+        }
       }
       if (request.method === "POST" && url.pathname === "/api/gmail/oauth/start") {
         await readJson(request);

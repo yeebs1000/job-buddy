@@ -11,6 +11,11 @@ import { ProfileService } from "./profile/ProfileService";
 import { WindowsDpapiProfileVault } from "./profile/WindowsDpapiProfileVault";
 import { ConnectionMetadataStore } from "./secrets/ConnectionMetadataStore";
 import { WindowsDpapiSecretStore } from "./secrets/WindowsDpapiSecretStore";
+import { ResearchCache } from "./research/ResearchCache";
+import { ResearchService } from "./research/ResearchService";
+import { SingaporeMomAdapter } from "./research/adapters/SingaporeMomAdapter";
+import { HongKongCsdAdapter } from "./research/adapters/HongKongCsdAdapter";
+import { UnitedStatesBlsAdapter } from "./research/adapters/UnitedStatesBlsAdapter";
 
 const config = readCompanionConfig(process.env);
 const developmentOrigin = "http://127.0.0.1:5173";
@@ -23,8 +28,12 @@ const sync = new GmailSyncService(new GmailTransport(connection));
 const profile = new ProfileService(new WindowsDpapiProfileVault());
 const buddyStore = new BuddyStore();
 const buddy = new BuddyService({ pairing: new PairingService({ store: buddyStore }), profile, store: buddyStore });
+const research = new ResearchService({
+  cache: new ResearchCache(),
+  sources: [new SingaporeMomAdapter(), new HongKongCsdAdapter(), new UnitedStatesBlsAdapter()],
+});
 const server = createCompanionServer({
-  services: { connection, sync, profile, buddy },
+  services: { connection, sync, profile, buddy, research },
   allowedOrigins: config.uiOrigins,
   uiOrigin,
   ...(uiOrigin === productionOrigin ? { staticDir: resolve("dist") } : {}),
