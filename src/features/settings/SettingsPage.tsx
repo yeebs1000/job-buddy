@@ -5,6 +5,8 @@ import type { MailAdapter } from "../../integrations/mail/MailAdapter";
 import { runMailScan, type MailScanMode, type RunMailScanOptions } from "../updates/runMailScan";
 import { updateRepository, type MailScanState } from "../updates/updateRepository";
 import { GmailSettingsPanel } from "./GmailSettingsPanel";
+import { BuddySettings } from "../buddy/BuddySettings";
+import { buddyClient, type BuddyClient } from "../buddy/buddyClient";
 import { gmailClient, type GmailSettingsClient } from "./gmailClient";
 import { defaultGmailPreferences, gmailPreferences, type GmailPreferences, type GmailPreferencesStore } from "./gmailPreferences";
 import "./settings.css";
@@ -19,6 +21,9 @@ interface SettingsPageProps {
   navigateExternal?: (url: string) => void;
   confirmAutomation?: () => boolean;
   confirmDisconnect?: () => boolean;
+  buddy?: BuddyClient;
+  confirmBuddyAutomatic?: () => boolean;
+  confirmBuddyRevoke?: () => boolean;
 }
 
 const liveMail = new GmailMailAdapter();
@@ -31,6 +36,9 @@ export function SettingsPage({
   navigateExternal = (url) => window.location.assign(url),
   confirmAutomation = () => window.confirm("Allow Job Buddy to auto-apply high-confidence forward updates? Offers, rejections and conflicts will still require approval."),
   confirmDisconnect = () => window.confirm("Disconnect Gmail? Your existing applications and saved email evidence will stay in Job Buddy."),
+  buddy = buddyClient,
+  confirmBuddyAutomatic,
+  confirmBuddyRevoke,
 }: SettingsPageProps = {}) {
   const [status, setStatus] = useState<GmailConnectionStatus | null>(null);
   const [preference, setPreference] = useState<GmailPreferences | null>(null);
@@ -113,5 +121,6 @@ export function SettingsPage({
           onModeChange={changeMode}
           onSourceChange={(selectedSource) => void changePreference({ selectedSource })}
         />}
+    <BuddySettings client={buddy} confirmAutomatic={confirmBuddyAutomatic} confirmRevoke={confirmBuddyRevoke} />
   </div>;
 }

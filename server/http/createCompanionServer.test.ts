@@ -1,9 +1,11 @@
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { emptyCandidateProfile } from "../../src/domain/profile";
+import { defaultBuddyPreferences } from "../../src/domain/buddy";
 import { createCompanionServer, type CompanionServerServices } from "./createCompanionServer";
 
 const openServers: Array<ReturnType<typeof createCompanionServer>> = [];
+const pairedToken = "paired-token-abcdefghijklmnopqrstuvwxyz";
 
 async function start(services: CompanionServerServices) {
   const server = createCompanionServer({
@@ -32,6 +34,23 @@ function services(overrides: Partial<CompanionServerServices> = {}): CompanionSe
       replace: vi.fn().mockResolvedValue(emptyCandidateProfile),
       select: vi.fn().mockResolvedValue({}),
       delete: vi.fn().mockResolvedValue(undefined),
+    },
+    buddy: {
+      pairStart: vi.fn().mockReturnValue({ code: "ABCDE-FGHJK", expiresAt: "2026-09-16T02:05:00.000Z" }),
+      pairComplete: vi.fn().mockResolvedValue({ token: pairedToken }),
+      revoke: vi.fn().mockResolvedValue(undefined),
+      status: vi.fn().mockResolvedValue({ paired: false }),
+      getPreferences: vi.fn().mockResolvedValue(defaultBuddyPreferences),
+      setPreferences: vi.fn().mockResolvedValue(defaultBuddyPreferences),
+      listActivity: vi.fn().mockResolvedValue([]),
+      clearActivity: vi.fn().mockResolvedValue(undefined),
+      listCaptures: vi.fn().mockResolvedValue([]),
+      deleteCapture: vi.fn().mockResolvedValue(undefined),
+      selectProfile: vi.fn().mockResolvedValue({ "identity.givenName": "Alex" }),
+      readPreferences: vi.fn().mockResolvedValue(defaultBuddyPreferences),
+      updateExtensionPreference: vi.fn().mockResolvedValue(defaultBuddyPreferences),
+      appendActivity: vi.fn().mockResolvedValue(undefined),
+      addCapture: vi.fn().mockResolvedValue({}),
     },
     ...overrides,
   };
@@ -156,5 +175,96 @@ describe("createCompanionServer", () => {
     expect(testServices.profile.delete).toHaveBeenCalledOnce();
     expect(oversized.status).toBe(413);
     expect(testServices.profile.replace).not.toHaveBeenCalled();
+  });
+
+  it("starts pairing from the dashboard and completes it only from an extension origin", async () => {
+    const testServices = services();
+    const base = await start(testServices);
+    const dashboardStart = await fetch(`${base}/api/buddy/pairing/start`, {
+      method: "POST",
+      headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" },
+      body: "{}",
+    });
+    const deniedComplete = await fetch(`${base}/api/buddy/pairing/complete`, {
+      method: "POST",
+      headers: { origin: "https://jobs.example", "content-type": "application/json" },
+      body: JSON.stringify({ code: "ABCDE-FGHJK" }),
+    });
+    const extensionOrigin = `chrome-extension://${"a".repeat(32)}`;
+    const completed = await fetch(`${base}/api/buddy/pairing/complete`, {
+      method: "POST",
+      headers: { origin: extensionOrigin, "content-type": "application/json" },
+      body: JSON.stringify({ code: "ABCDE-FGHJK" }),
+    });
+
+    expect(dashboardStart.status).toBe(200);
+    expect(await dashboardStart.json()).toEqual({ code: "ABCDE-FGHJK", expiresAt: "2026-09-16T02:05:00.000Z" });
+    expect(deniedComplete.status).toBe(403);
+    expect(completed.status).toBe(200);
+    expect(await completed.json()).toEqual({ token: pairedToken });
+    expect(testServices.buddy.pairComplete).toHaveBeenCalledWith({ code: "ABCDE-FGHJK", origin: extensionOrigin });
+  });
+
+  it("requires paired extension origin and bearer token for selected profile reads", async () => {
+    const testServices = services();
+    const base = await start(testServices);
+    const extensionOrigin = `chrome-extension://${"a".repeat(32)}`;
+    const missing = await fetch(`${base}/api/buddy/profile/select`, {
+      method: "POST",
+      headers: { origin: extensionOrigin, "content-type": "application/json" },
+      body: JSON.stringify({ paths: ["identity.givenName"] }),
+    });
+    const allowed = await fetch(`${base}/api/buddy/profile/select`, {
+      method: "POST",
+      headers: { origin: extensionOrigin, authorization: `Bearer ${pairedToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ paths: ["identity.givenName"], profile: "must-ignore" }),
+    });
+
+    expect(missing.status).toBe(401);
+    expect(allowed.status).toBe(200);
+    expect(await allowed.json()).toEqual({ selection: { "identity.givenName": "Alex" } });
+    expect(testServices.buddy.selectProfile).toHaveBeenCalledWith({ token: pairedToken, origin: extensionOrigin }, ["identity.givenName"]);
+  });
+
+  it("answers extension CORS preflight without opening non-Buddy routes", async () => {
+    const base = await start(services());
+    const extensionOrigin = `chrome-extension://${"a".repeat(32)}`;
+    const allowed = await fetch(`${base}/api/buddy/profile/select`, {
+      method: "OPTIONS",
+      headers: {
+        origin: extensionOrigin,
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization,content-type",
+      },
+    });
+    const denied = await fetch(`${base}/api/gmail/status`, {
+      method: "OPTIONS",
+      headers: { origin: extensionOrigin, "access-control-request-method": "GET" },
+    });
+
+    expect(allowed.status).toBe(204);
+    expect(allowed.headers.get("access-control-allow-origin")).toBe(extensionOrigin);
+    expect(allowed.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(allowed.headers.get("access-control-allow-headers")).toBe("authorization, content-type");
+    expect(denied.status).toBe(404);
+    expect(denied.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("keeps activity listing dashboard-only while allowing authenticated extension appends", async () => {
+    const testServices = services();
+    const base = await start(testServices);
+    const extensionOrigin = `chrome-extension://${"a".repeat(32)}`;
+    const deniedList = await fetch(`${base}/api/buddy/activity`, { headers: { origin: extensionOrigin, authorization: `Bearer ${pairedToken}` } });
+    const appended = await fetch(`${base}/api/buddy/activity`, {
+      method: "POST",
+      headers: { origin: extensionOrigin, authorization: `Bearer ${pairedToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ activity: { id: "activity-1" } }),
+    });
+    const dashboardList = await fetch(`${base}/api/buddy/activity`, { headers: { origin: "http://127.0.0.1:5173" } });
+
+    expect(deniedList.status).toBe(403);
+    expect(appended.status).toBe(204);
+    expect(dashboardList.status).toBe(200);
+    expect(await dashboardList.json()).toEqual({ activity: [] });
   });
 });

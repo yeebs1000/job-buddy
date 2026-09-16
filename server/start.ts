@@ -1,4 +1,7 @@
 import { resolve } from "node:path";
+import { BuddyService } from "./buddy/BuddyService";
+import { BuddyStore } from "./buddy/BuddyStore";
+import { PairingService } from "./buddy/PairingService";
 import { readCompanionConfig } from "./config";
 import { GmailConnectionService } from "./gmail/GmailConnectionService";
 import { GmailSyncService } from "./gmail/GmailSyncService";
@@ -18,8 +21,10 @@ const metadata = new ConnectionMetadataStore();
 const connection = new GmailConnectionService({ config, secrets, metadata });
 const sync = new GmailSyncService(new GmailTransport(connection));
 const profile = new ProfileService(new WindowsDpapiProfileVault());
+const buddyStore = new BuddyStore();
+const buddy = new BuddyService({ pairing: new PairingService({ store: buddyStore }), profile, store: buddyStore });
 const server = createCompanionServer({
-  services: { connection, sync, profile },
+  services: { connection, sync, profile, buddy },
   allowedOrigins: config.uiOrigins,
   uiOrigin,
   ...(uiOrigin === productionOrigin ? { staticDir: resolve("dist") } : {}),

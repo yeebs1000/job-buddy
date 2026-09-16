@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import type { GmailConnectionStatus } from "../../src/domain/mail";
+import type { BuddyActivityEntry, BuddyPreferences, PendingCapture } from "../../src/domain/buddy";
 import type { CandidateProfile, ProfileSelection } from "../../src/domain/profile";
 import type { GmailScanResponse } from "../gmail/GmailSyncService";
 
@@ -24,10 +25,29 @@ interface ProfileServicePort {
   delete(): Promise<void>;
 }
 
+interface BuddyServicePort {
+  pairStart(): { code: string; expiresAt: string };
+  pairComplete(input: { code: string; origin: string }): Promise<{ token: string }>;
+  revoke(): Promise<void>;
+  status(): Promise<{ paired: false } | { paired: true; origin: string; pairedAt: string }>;
+  getPreferences(): Promise<BuddyPreferences>;
+  setPreferences(input: unknown): Promise<BuddyPreferences>;
+  listActivity(): Promise<BuddyActivityEntry[]>;
+  clearActivity(): Promise<void>;
+  listCaptures(): Promise<PendingCapture[]>;
+  deleteCapture(id: string): Promise<void>;
+  selectProfile(auth: { token: string; origin: string }, paths: readonly string[]): Promise<ProfileSelection>;
+  readPreferences(auth: { token: string; origin: string }): Promise<BuddyPreferences>;
+  updateExtensionPreference(auth: { token: string; origin: string }, input: unknown): Promise<BuddyPreferences>;
+  appendActivity(auth: { token: string; origin: string }, input: unknown): Promise<void>;
+  addCapture(auth: { token: string; origin: string }, input: unknown): Promise<PendingCapture>;
+}
+
 export interface CompanionServerServices {
   connection: ConnectionServicePort;
   sync: SyncServicePort;
   profile: ProfileServicePort;
+  buddy: BuddyServicePort;
 }
 
 export interface CompanionServerOptions {
@@ -60,6 +80,24 @@ function json(response: ServerResponse, status: number, body: unknown): void {
 function allowedOrigin(request: IncomingMessage, options: CompanionServerOptions): string | null {
   const origin = request.headers.origin;
   return typeof origin === "string" && options.allowedOrigins.includes(origin) ? origin : null;
+}
+
+function noContent(response: ServerResponse): void {
+  applySecurityHeaders(response);
+  response.statusCode = 204;
+  response.end();
+}
+
+function extensionOrigin(request: IncomingMessage): string | null {
+  const origin = request.headers.origin;
+  return typeof origin === "string" && /^chrome-extension:\/\/[a-p]{32}$/.test(origin) ? origin : null;
+}
+
+function bearerToken(request: IncomingMessage): string {
+  const authorization = request.headers.authorization;
+  const match = typeof authorization === "string" ? /^Bearer ([A-Za-z0-9_-]{20,200})$/.exec(authorization) : null;
+  if (!match) throw new HttpInputError(401, "unauthorized");
+  return match[1];
 }
 
 async function readJson(request: IncomingMessage, limit = maxBodyBytes): Promise<Record<string, unknown>> {
@@ -96,6 +134,10 @@ function safeError(error: unknown): { status: number; code: string } {
     "request-failed": 502,
     "invalid-history": 502,
     "invalid-profile": 400,
+    "invalid-pairing": 400,
+    "unauthorized": 401,
+    "confirmation-required": 409,
+    "invalid-preference": 400,
   };
   return { status: statuses[code] ?? 500, code: code in statuses ? code : "internal-error" };
 }
@@ -125,13 +167,34 @@ export function createCompanionServer(options: CompanionServerOptions) {
     try {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
       const origin = allowedOrigin(request, options);
+      const buddyPath = url.pathname.startsWith("/api/buddy/");
+      const pairedOrigin = buddyPath ? extensionOrigin(request) : null;
+      const responseOrigin = origin ?? pairedOrigin;
       if (request.method === "POST" || request.method === "PUT" || request.method === "DELETE") {
-        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
-        response.setHeader("access-control-allow-origin", origin);
+        if (buddyPath ? !responseOrigin : !origin) throw new HttpInputError(403, "origin-not-allowed");
+        response.setHeader("access-control-allow-origin", responseOrigin!);
         response.setHeader("vary", "Origin");
-      } else if (origin) {
-        response.setHeader("access-control-allow-origin", origin);
+      } else if (responseOrigin) {
+        response.setHeader("access-control-allow-origin", responseOrigin);
         response.setHeader("vary", "Origin");
+      }
+
+      if (request.method === "OPTIONS" && buddyPath && pairedOrigin) {
+        const requestedMethod = request.headers["access-control-request-method"]?.toUpperCase() ?? "";
+        const requestedHeaders = (request.headers["access-control-request-headers"] ?? "")
+          .split(",")
+          .map((header) => header.trim().toLowerCase())
+          .filter(Boolean);
+        const allowedMethods = ["GET", "POST", "PUT", "DELETE"];
+        const allowedHeaders = new Set(["authorization", "content-type"]);
+        if (!allowedMethods.includes(requestedMethod) || requestedHeaders.some((header) => !allowedHeaders.has(header))) {
+          throw new HttpInputError(403, "origin-not-allowed");
+        }
+        response.setHeader("access-control-allow-methods", allowedMethods.join(", "));
+        response.setHeader("access-control-allow-headers", "authorization, content-type");
+        response.setHeader("access-control-max-age", "600");
+        noContent(response);
+        return;
       }
 
       if (request.method === "GET" && url.pathname === "/api/gmail/status") {
@@ -200,6 +263,95 @@ export function createCompanionServer(options: CompanionServerOptions) {
           response.end();
           return;
         }
+      }
+      if (request.method === "GET" && url.pathname === "/api/buddy/status") {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        json(response, 200, await options.services.buddy.status());
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/buddy/pairing/start") {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        await readJson(request);
+        json(response, 200, options.services.buddy.pairStart());
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/buddy/pairing/complete") {
+        if (!pairedOrigin) throw new HttpInputError(403, "origin-not-allowed");
+        const body = await readJson(request);
+        if (typeof body.code !== "string") throw new HttpInputError(400, "invalid-pairing");
+        json(response, 200, await options.services.buddy.pairComplete({ code: body.code, origin: pairedOrigin }));
+        return;
+      }
+      if (request.method === "DELETE" && url.pathname === "/api/buddy/pairing") {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        await readJson(request);
+        await options.services.buddy.revoke();
+        noContent(response);
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/buddy/profile/select") {
+        if (!pairedOrigin) throw new HttpInputError(403, "origin-not-allowed");
+        const token = bearerToken(request);
+        const body = await readJson(request);
+        if (!Array.isArray(body.paths) || !body.paths.every((path) => typeof path === "string") || body.paths.length > 100) throw new HttpInputError(400, "invalid-profile-selection");
+        json(response, 200, { selection: await options.services.buddy.selectProfile({ token, origin: pairedOrigin }, body.paths) });
+        return;
+      }
+      if (url.pathname === "/api/buddy/preferences") {
+        if (request.method === "GET") {
+          if (origin) json(response, 200, { preferences: await options.services.buddy.getPreferences() });
+          else if (pairedOrigin) json(response, 200, { preferences: await options.services.buddy.readPreferences({ token: bearerToken(request), origin: pairedOrigin }) });
+          else throw new HttpInputError(403, "origin-not-allowed");
+          return;
+        }
+        if (request.method === "PUT") {
+          const body = await readJson(request);
+          if (origin) json(response, 200, { preferences: await options.services.buddy.setPreferences(body) });
+          else if (pairedOrigin) json(response, 200, { preferences: await options.services.buddy.updateExtensionPreference({ token: bearerToken(request), origin: pairedOrigin }, body) });
+          else throw new HttpInputError(403, "origin-not-allowed");
+          return;
+        }
+      }
+      if (url.pathname === "/api/buddy/activity") {
+        if (request.method === "GET") {
+          if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+          json(response, 200, { activity: await options.services.buddy.listActivity() });
+          return;
+        }
+        if (request.method === "POST") {
+          if (!pairedOrigin) throw new HttpInputError(403, "origin-not-allowed");
+          const body = await readJson(request);
+          await options.services.buddy.appendActivity({ token: bearerToken(request), origin: pairedOrigin }, body.activity);
+          noContent(response);
+          return;
+        }
+        if (request.method === "DELETE") {
+          if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+          await readJson(request);
+          await options.services.buddy.clearActivity();
+          noContent(response);
+          return;
+        }
+      }
+      if (url.pathname === "/api/buddy/captures" && request.method === "GET") {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        json(response, 200, { captures: await options.services.buddy.listCaptures() });
+        return;
+      }
+      if (url.pathname === "/api/buddy/captures" && request.method === "POST") {
+        if (!pairedOrigin) throw new HttpInputError(403, "origin-not-allowed");
+        const body = await readJson(request);
+        json(response, 201, { capture: await options.services.buddy.addCapture({ token: bearerToken(request), origin: pairedOrigin }, body.capture) });
+        return;
+      }
+      if (request.method === "DELETE" && url.pathname.startsWith("/api/buddy/captures/")) {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        await readJson(request);
+        const id = decodeURIComponent(url.pathname.slice("/api/buddy/captures/".length));
+        if (!id || id.length > 200 || id.includes("/")) throw new HttpInputError(400, "invalid-capture-id");
+        await options.services.buddy.deleteCapture(id);
+        noContent(response);
+        return;
       }
       if (options.staticDir && await serveStatic(request, response, options.staticDir)) return;
       json(response, 404, { error: { code: "not-found" } });
