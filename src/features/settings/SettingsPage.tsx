@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { connectGmailPopup, GmailPopupError } from "./gmailPopup";
 import type { GmailConnectionStatus } from "../../domain/mail";
 import { GmailMailAdapter } from "../../integrations/mail/GmailMailAdapter";
 import type { MailAdapter } from "../../integrations/mail/MailAdapter";
@@ -18,7 +19,6 @@ interface SettingsPageProps {
   preferences?: GmailPreferencesStore;
   mailAdapter?: MailAdapter;
   scan?: (options: RunMailScanOptions) => Promise<MailScanState>;
-  navigateExternal?: (url: string) => void;
   confirmAutomation?: () => boolean;
   confirmDisconnect?: () => boolean;
   buddy?: BuddyClient;
@@ -40,7 +40,6 @@ export function SettingsPage({
   preferences: preferenceStore = gmailPreferences,
   mailAdapter = liveMail,
   scan = runMailScan,
-  navigateExternal = (url) => window.location.assign(url),
   confirmAutomation = () => window.confirm("Allow Job Buddy to auto-apply high-confidence forward updates? Offers, rejections and conflicts will still require approval."),
   confirmDisconnect = () => window.confirm("Disconnect Gmail? Your existing applications and saved email evidence will stay in Job Buddy."),
   buddy = buddyClient,
@@ -51,6 +50,8 @@ export function SettingsPage({
   const [preference, setPreference] = useState<GmailPreferences | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "status" | "error"; text: string } | null>(null);
+  const popupAttempt = useRef<AbortController | null>(null);
+  useEffect(() => () => popupAttempt.current?.abort(), []);
 
   useEffect(() => {
     let mounted = true;
@@ -81,15 +82,42 @@ export function SettingsPage({
   }
 
   async function connect() {
-    setBusy("connect"); setMessage(null);
+    if (!preference || popupAttempt.current) return;
+    const controller = new AbortController();
+    popupAttempt.current = controller;
+    setBusy("connect"); setMessage({ tone: "status", text: "Complete Google sign-in in the popup. Your dashboard stays here." });
     try {
-      const { authorizationUrl } = await client.start();
-      const url = new URL(authorizationUrl);
-      if (url.origin !== "https://accounts.google.com" || url.pathname !== "/o/oauth2/v2/auth") throw new Error();
-      sessionStorage.setItem(connectIntentKey, String(Date.now()));
-      navigateExternal(url.toString());
+      await connectGmailPopup(client, {
+        signal: controller.signal,
+        prepare: async () => {
+          // Consent may switch accounts. Pause scans before contacting Google;
+          // cancellation leaves a manual first-scan action, never an old cursor.
+          await save({ ...preference, initialSyncCompleted: false, dailyActiveScanEnabled: false });
+          await updateRepository.saveScanState("gmail", { cursor: null });
+        },
+        onWindowClosed: () => setMessage({ tone: "status", text: "Waiting for Google confirmation. If you closed the sign-in window, stop waiting and try again." }),
+        onConnected: async () => {
+          const connected = await client.status();
+          if (controller.signal.aborted) throw new GmailPopupError("stopped");
+          if (connected.state !== "connected") throw new GmailPopupError("connection");
+          setStatus(connected);
+          await completeConnection(await preferenceStore.get());
+        },
+      });
+    } catch (error) {
+      const code = error instanceof GmailPopupError ? error.code : "connection";
+      const text = {
+        blocked: "Your browser blocked the Google sign-in window. Allow popups for Job Buddy, then click Connect Gmail again.",
+        stopped: "Stopped waiting for Google. If you already approved access, reload Settings to check the connection; otherwise try again.",
+        timeout: "Google sign-in timed out. Click Connect Gmail to start a new attempt.",
+        authorization: "Google sign-in was cancelled or could not finish. Click Connect Gmail to try again.",
+        connection: "Could not finish connecting Gmail. Check that the local companion is running and try again.",
+      }[code];
+      setMessage({ tone: "error", text });
+    } finally {
+      popupAttempt.current = null;
+      setBusy(null);
     }
-    catch { sessionStorage.removeItem(connectIntentKey); setMessage({ tone: "error", text: "Google sign-in could not start. Check that the companion is running and try again." }); setBusy(null); }
   }
 
   async function completeConnection(current: GmailPreferences) {
@@ -147,6 +175,7 @@ export function SettingsPage({
   return <div className="settings-page">
     <header className="settings-page__header"><div><h1>Settings</h1><p>Control how Job Buddy reads email and updates your tracker.</p></div><span>Stored locally</span></header>
     {message && <p className={`settings-page__message settings-page__message--${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p>}
+    {busy === "connect" && <button type="button" className="button button--secondary" onClick={() => popupAttempt.current?.abort()}>Stop waiting</button>}
     {!status || !preference
       ? <section className="gmail-settings gmail-settings--loading" aria-busy="true" aria-label="Loading Gmail settings"><div /><div /><div /></section>
       : <GmailSettingsPanel

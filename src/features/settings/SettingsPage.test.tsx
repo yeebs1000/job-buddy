@@ -15,6 +15,8 @@ function client(status: GmailConnectionStatus): GmailSettingsClient {
   return {
     status: vi.fn().mockResolvedValue(status),
     start: vi.fn().mockResolvedValue({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth" }),
+    startPopup: vi.fn().mockResolvedValue({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth", popupId: "a".repeat(48) }),
+    popupResult: vi.fn().mockResolvedValue("connected"),
     disconnect: vi.fn().mockResolvedValue({ revocationConfirmed: true }),
   };
 }
@@ -33,6 +35,33 @@ it("shows setup guidance without exposing a secret input", async () => {
   await userEvent.click(screen.getByText("Maintainer / self-host setup"));
   expect(screen.getByText(/copy .env.example to .env.local/i)).toBeVisible();
   expect(screen.queryByLabelText(/client secret/i)).not.toBeInTheDocument();
+});
+
+it("connects in a popup and updates the existing dashboard before syncing", async () => {
+  const popup = { opener: window, document: { title: "" }, location: { replace: vi.fn() }, close: vi.fn(), closed: false };
+  vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+  const gmail = client({ state: "disconnected", platformSupported: true });
+  vi.mocked(gmail.status).mockResolvedValueOnce({ state: "disconnected", platformSupported: true }).mockResolvedValue({ state: "connected", accountEmail: "test@example.com", platformSupported: true });
+  const scan = vi.fn().mockResolvedValue({ cursor: "new-cursor" });
+  const preferences = preferenceStore();
+  render(<MemoryRouter><SettingsPage client={gmail} preferences={preferences} scan={scan} mailAdapter={adapter} /></MemoryRouter>);
+  await userEvent.click(await screen.findByRole("button", { name: /^Connect Gmail$/ }));
+  await screen.findByText(/new updates are ready/i);
+  expect(screen.getByText("test@example.com")).toBeVisible();
+  expect(window.location.pathname).toBe("/");
+  expect(popup.close).toHaveBeenCalled();
+  expect(scan).toHaveBeenCalledOnce();
+  expect(await preferences.get()).toMatchObject({ dailyActiveScanEnabled: true, initialSyncCompleted: true });
+});
+
+it("offers retry when a popup is blocked without changing saved scan preferences", async () => {
+  vi.spyOn(window, "open").mockReturnValue(null);
+  const preferences = preferenceStore();
+  render(<MemoryRouter><SettingsPage client={client({ state: "disconnected", platformSupported: true })} preferences={preferences} /></MemoryRouter>);
+  await userEvent.click(await screen.findByRole("button", { name: /^Connect Gmail$/ }));
+  expect(await screen.findByText(/allow popups/i)).toHaveAttribute("role", "alert");
+  expect(screen.getByRole("button", { name: /^Connect Gmail$/ })).toBeEnabled();
+  expect(preferences.save).not.toHaveBeenCalled();
 });
 
 it("automatically performs the first scan only after a recent Connect action", async () => {

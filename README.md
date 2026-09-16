@@ -1,4 +1,4 @@
-# Job Buddy v1.0.0-beta.2
+# Job Buddy v1.0.0-beta.3
 
 > A local-first workspace for replacing the job-application spreadsheet.
 
@@ -38,7 +38,7 @@ The repository is structured as a reproducible local project: fixtures are ficti
 
 - Discover roles from an employer's public Greenhouse or Lever board, filter by role/location/market, and keep a persistent local shortlist distinct from submitted applications.
 - Company-posted salary ranges with source, role and location context. Compare SGD/HKD/USD using dated ECB reference rates; originals remain unchanged and missing pay periods are never assumed to be annual.
-- Connect → Google consent → first scan for configured Gmail clients, followed by eligible daily scans across active app pages. Cancellation, reconnect and failed-scan retry remain explicit.
+- Connect → Google consent popup → automatic first scan for configured Gmail clients. The dashboard stays open; eligible daily scans continue across active app pages. Blocked popups, cancellation, reconnect and failed-scan retry remain explicit.
 - Reusable SG/HK/US sponsorship and work-authorization answers, annual salary expectations, notice period, availability and relocation, with answer previews and per-form approval. Ambiguous markets and salary periods stay unresolved.
 - Command Center with a visual six-stage application journey and an explicit rejected state.
 - Active stages progress from light to vivid green; rejected applications use a constant red rail while retaining the stage reached.
@@ -87,7 +87,7 @@ Local persistence, visual stage tracking, filters and saved views, manual update
 
 ### Next work — connector release readiness
 
-Register and verify the maintainer-owned Google app, run a real-account acceptance check, and complete owner review before public launch. See [the beta.2 review notes](docs/releases/v1-beta-2.md) and [Gmail maintainer setup](docs/gmail-maintainer-setup.md).
+Register and verify the maintainer-owned Google app, run a real-account acceptance check, and complete owner review before public launch. See [the beta.3 review notes](docs/releases/v1-beta-3.md), [beta.2 features](docs/releases/v1-beta-2.md), and [Gmail maintainer setup](docs/gmail-maintainer-setup.md).
 
 ### V2.0 — Broader application assistance
 
@@ -164,7 +164,7 @@ The demo inbox works without Google configuration. The planned public distributi
 2. Configure the OAuth consent screen. For a personal prototype, keep the app in **Testing** and add the Gmail address you will connect as a test user.
 3. Create an OAuth 2.0 Client ID with application type **Desktop app**. The app uses a loopback callback and PKCE.
 4. Copy `.env.example` to `.env.local`, set `GOOGLE_OAUTH_CLIENT_TYPE=desktop` and the public client ID; keep the redirect URI unchanged. A desktop client does not rely on a confidential web-client secret. Never distribute a web-client secret.
-5. Restart `npm run dev`, open **Settings**, choose **Connect Gmail**, and complete Google's consent screen. This initiates the disclosed first 90-day scan; failures expose a retry button.
+5. Restart `npm run dev`, open **Settings**, choose **Connect Gmail**, and complete Google's consent popup. The dashboard stays open and starts the disclosed first 90-day scan after confirmation; failures expose a retry button.
 
 ```dotenv
 GOOGLE_OAUTH_CLIENT_TYPE=desktop
@@ -175,6 +175,8 @@ GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:43117/api/gmail/oauth/callback
 Job Buddy requests `https://www.googleapis.com/auth/gmail.readonly`, which Google classifies as a restricted scope. A Testing-mode app is suitable for named test users but may require periodic reconnection; broader public distribution can require Google verification and an appropriate security assessment. See Google's [OAuth web-server guide](https://developers.google.com/identity/protocols/oauth2/web-server) and [Gmail scope reference](https://developers.google.com/workspace/gmail/api/auth/scopes).
 
 ### Gmail troubleshooting
+
+- **Popup blocked:** allow popups for Job Buddy and click Connect Gmail again. **Stop waiting** closes the popup when browser isolation permits and stops dashboard polling; it does not revoke permission already granted to Google. If you already approved, reload Settings to check the connection. Automatic scans remain paused until a successful first scan.
 
 - **Setup needed:** configure the desktop client ID (or both ID/secret with `GOOGLE_OAUTH_CLIENT_TYPE=web` for an existing self-hosted web client), then fully restart the dev command.
 - **Redirect URI mismatch:** the Google Cloud redirect and `.env.local` value must exactly match the loopback URI above, including `127.0.0.1`, port `43117`, path, and `http` scheme.

@@ -64,6 +64,61 @@ afterEach(async () => {
 });
 
 describe("createCompanionServer", () => {
+  it("does not process duplicate popup callbacks while the first exchange is pending", async () => {
+    const testServices = services();
+    testServices.connection.start = async () => ({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=one-use" });
+    let finish!: () => void;
+    let entered!: () => void;
+    const exchanging = new Promise<void>((resolve) => { entered = resolve; });
+    testServices.connection.complete = vi.fn(() => { entered(); return new Promise<void>((resolve) => { finish = resolve; }); });
+    const base = await start(testServices);
+    const headers = { origin: "http://127.0.0.1:5173", "content-type": "application/json" };
+    const { popupId } = await (await fetch(`${base}/api/gmail/oauth/start`, { method: "POST", headers, body: '{"popup":true}' })).json() as { popupId: string };
+    const callbackUrl = `${base}/api/gmail/oauth/callback?state=one-use&code=private-code`;
+    const original = fetch(callbackUrl);
+    await exchanging;
+    try {
+      expect(await (await fetch(callbackUrl)).text()).toContain("Sign-in is processing");
+      expect(testServices.connection.complete).toHaveBeenCalledOnce();
+    } finally { finish(); await original; }
+    expect(await (await fetch(`${base}/api/gmail/oauth/popup-result`, { method: "POST", headers, body: JSON.stringify({ popupId }) })).json()).toEqual({ state: "connected" });
+    expect(await (await fetch(callbackUrl)).text()).toContain("Gmail connected");
+    expect(testServices.connection.complete).toHaveBeenCalledOnce();
+  });
+
+  it("completes a popup without redirecting the dashboard or exposing OAuth values", async () => {
+    const testServices = services();
+    testServices.connection.start = async () => ({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=popup-state" });
+    const base = await start(testServices);
+    const post = (path: string, body: unknown, origin = "http://127.0.0.1:5173") => fetch(base + path, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
+    const started = await post("/api/gmail/oauth/start", { popup: true });
+    const { popupId } = await started.json() as { popupId: string };
+    expect(popupId).toMatch(/^[a-f0-9]{48}$/);
+    expect(await (await post("/api/gmail/oauth/popup-result", { popupId })).json()).toEqual({ state: "pending" });
+    const callback = await fetch(`${base}/api/gmail/oauth/callback?state=popup-state&code=private-code`, { redirect: "manual" });
+    expect(callback.status).toBe(200);
+    expect(callback.headers.get("location")).toBeNull();
+    expect(callback.headers.get("content-security-policy")).toContain("default-src 'none'");
+    const html = await callback.text();
+    expect(html).toContain("window.close()");
+    expect(html).not.toContain("private-code");
+    expect(html).not.toContain("popup-state");
+    expect(await (await post("/api/gmail/oauth/popup-result", { popupId })).json()).toEqual({ state: "connected" });
+    expect(await (await post("/api/gmail/oauth/popup-result", { popupId }, "http://127.0.0.1:43117")).json()).toEqual({ state: "expired" });
+    expect((await post("/api/gmail/oauth/popup-result", { popupId }, "https://evil.example")).status).toBe(403);
+  });
+
+  it("reports cancelled or failed popup authorization without connecting", async () => {
+    const testServices = services();
+    testServices.connection.start = async () => ({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=cancelled-state" });
+    testServices.connection.complete = vi.fn().mockRejectedValue(new Error("private provider detail"));
+    const base = await start(testServices);
+    const headers = { origin: "http://127.0.0.1:5173", "content-type": "application/json" };
+    const { popupId } = await (await fetch(`${base}/api/gmail/oauth/start`, { method: "POST", headers, body: '{"popup":true}' })).json() as { popupId: string };
+    const callback = await fetch(`${base}/api/gmail/oauth/callback?state=cancelled-state&error=access_denied`);
+    expect(await callback.text()).not.toContain("private provider detail");
+    expect(await (await fetch(`${base}/api/gmail/oauth/popup-result`, { method: "POST", headers, body: JSON.stringify({ popupId }) })).json()).toEqual({ state: "error" });
+  });
   it("restricts discovery and FX to dashboard POSTs with validated identifiers", async () => {
     const discovery = { list: vi.fn().mockResolvedValue({ jobs: [], truncated: false, retrievedAt: "2026-09-16T12:00:00Z" }), salary: vi.fn().mockResolvedValue([]) };
     const fx = { quote: vi.fn().mockResolvedValue({ base: "USD", quote: "SGD", date: "2026-09-16", rate: 1.27, retrievedAt: "2026-09-16T12:00:00Z", sourceUrl: "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html" }) };

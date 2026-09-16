@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { randomBytes } from "node:crypto";
+import { OAuthPopupStore } from "../gmail/OAuthPopupStore";
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import type { GmailConnectionStatus } from "../../src/domain/mail";
@@ -93,6 +95,17 @@ function json(response: ServerResponse, status: number, body: unknown): void {
   response.end(JSON.stringify(body));
 }
 
+function popupComplete(response: ServerResponse, result: "pending" | "connected" | "error"): void {
+  const nonce = randomBytes(18).toString("base64");
+  applySecurityHeaders(response);
+  response.statusCode = 200;
+  response.setHeader("content-type", "text/html; charset=utf-8");
+  response.setHeader("content-security-policy", `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}'; frame-ancestors 'none'; base-uri 'none'`);
+  // Never reflect OAuth query values into this page or pass tokens to the opener.
+  const title = result === "connected" ? "Gmail connected" : result === "pending" ? "Sign-in is processing" : "Sign-in did not finish";
+  response.end(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Job Buddy — Gmail</title><style nonce="${nonce}">body{font:16px system-ui;color:#182230;background:#f5f5f7;margin:48px;line-height:1.6}h1{font-size:24px}</style><h1>${title}</h1><p>Return to your Job Buddy dashboard. You can close this window.</p><script nonce="${nonce}">history.replaceState(null,"","/api/gmail/oauth/callback");window.close();</script></html>`);
+}
+
 function allowedOrigin(request: IncomingMessage, options: CompanionServerOptions): string | null {
   const origin = request.headers.origin;
   return typeof origin === "string" && options.allowedOrigins.includes(origin) ? origin : null;
@@ -183,6 +196,7 @@ async function serveStatic(request: IncomingMessage, response: ServerResponse, s
 }
 
 export function createCompanionServer(options: CompanionServerOptions) {
+  const popups = new OAuthPopupStore();
   return createServer(async (request, response) => {
     try {
       const url = new URL(request.url ?? "/", "http://127.0.0.1");
@@ -287,18 +301,38 @@ export function createCompanionServer(options: CompanionServerOptions) {
         }
       }
       if (request.method === "POST" && url.pathname === "/api/gmail/oauth/start") {
-        await readJson(request);
-        json(response, 200, await options.services.connection.start());
+        const body = z.object({ popup: z.boolean().optional() }).strict().safeParse(await readJson(request));
+        if (!body.success) throw new HttpInputError(400, "invalid-oauth-request");
+        const result = await options.services.connection.start();
+        const popupId = body.data.popup ? popups.create(new URL(result.authorizationUrl).searchParams.get("state") ?? "", origin!) : undefined;
+        json(response, 200, { ...result, ...(popupId ? { popupId } : {}) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/gmail/oauth/popup-result") {
+        const body = z.object({ popupId: z.string().regex(/^[a-f0-9]{48}$/) }).strict().safeParse(await readJson(request));
+        if (!body.success) throw new HttpInputError(400, "invalid-popup-request");
+        json(response, 200, { state: popups.result(body.data.popupId, origin!) });
         return;
       }
       if (request.method === "GET" && url.pathname === "/api/gmail/oauth/callback") {
+        const state = url.searchParams.get("state") ?? "";
+        const popup = popups.find(state);
+        if (popup && !popups.claim(state)) {
+          popupComplete(response, popup.result);
+          return;
+        }
         try {
           const code = url.searchParams.get("code") ?? "";
-          const state = url.searchParams.get("state") ?? "";
           await options.services.connection.complete({ code, state });
+          if (popup) {
+            popups.finish(state, "connected"); popupComplete(response, "connected"); return;
+          }
           response.statusCode = 302;
           response.setHeader("location", `${options.uiOrigin}/settings?gmail=connected`);
         } catch {
+          if (popup) {
+            popups.finish(state, "error"); popupComplete(response, "error"); return;
+          }
           response.statusCode = 302;
           response.setHeader("location", `${options.uiOrigin}/settings?gmail=error`);
         }

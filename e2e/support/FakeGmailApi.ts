@@ -39,11 +39,14 @@ export class FakeGmailApi {
   private status: GmailConnectionStatus = { state: "unconfigured", platformSupported: true, lastError: "missing-config" };
   private readonly scans: FakeGmailScanResponse[] = [];
   disconnected = false;
+  scanRequests = 0;
+  private popupState: "pending" | "connected" | "error" = "pending";
 
   constructor(private readonly page: Page) {}
 
   setStatus(status: GmailConnectionStatus): void { this.status = status; }
   queueScan(result: FakeGmailScanResponse): void { this.scans.push(result); }
+  completePopup(state: "connected" | "error"): void { this.popupState = state; }
 
   async install(): Promise<void> {
     await this.page.route("**/api/gmail/**", (route) => this.handle(route));
@@ -55,6 +58,7 @@ export class FakeGmailApi {
     const method = request.method();
     if (path === "/api/gmail/status" && method === "GET") return this.json(route, this.status);
     if (path === "/api/gmail/scan" && method === "POST") {
+      this.scanRequests++;
       const result = this.scans.shift();
       if (!result) return this.unexpected(route, method, path);
       return this.json(route, result);
@@ -65,7 +69,11 @@ export class FakeGmailApi {
       return this.json(route, { revocationConfirmed: true });
     }
     if (path === "/api/gmail/oauth/start" && method === "POST") {
-      return this.json(route, { authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=fake" });
+      this.popupState = "pending";
+      return this.json(route, { authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=fake", popupId: "a".repeat(48) });
+    }
+    if (path === "/api/gmail/oauth/popup-result" && method === "POST") {
+      return this.json(route, { state: request.postDataJSON().popupId === "a".repeat(48) ? this.popupState : "expired" });
     }
     return this.unexpected(route, method, path);
   }

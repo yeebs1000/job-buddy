@@ -57,17 +57,63 @@ test("connects, scans, survives revoked Gmail, and returns to demo", async ({ pa
   await expect(page.getByText("Demo inbox", { exact: true })).toBeVisible();
 });
 
-test("returns from an initiated consent flow directly to a completed first scan", async ({ page }) => {
+test("connects through a popup and scans without navigating the dashboard", async ({ page }) => {
   const gmail = new FakeGmailApi(page);
   await gmail.install();
   gmail.setStatus({ state: "disconnected", platformSupported: true });
-  await page.route("https://accounts.google.com/**", (route) => route.fulfill({ contentType: "text/html", body: "<p>Test-only consent screen</p>" }));
+  await page.context().route("https://accounts.google.com/**", (route) => route.fulfill({ contentType: "text/html", body: "<p>Test-only consent screen</p>" }));
   await page.goto("/settings");
+  const opened = page.waitForEvent("popup");
   await page.getByRole("button", { name: "Connect Gmail", exact: true }).click();
-  await expect(page).toHaveURL(/accounts.google.com/);
+  const popup = await opened;
+  await expect(popup).toHaveURL(/accounts.google.com/);
+  await expect(page).toHaveURL(/\/settings$/);
   gmail.setStatus({ state: "connected", platformSupported: true, accountEmail: "user@example.com" });
   gmail.queueScan(liveInterviewScan);
-  await page.goto("/settings?gmail=connected");
+  // The provider's isolated window returns to the local callback, whose own
+  // script closes it. A dashboard window cannot reliably close a COOP popup.
+  await page.context().route("**/api/gmail/oauth/callback?*", async (route) => {
+    gmail.completePopup("connected");
+    await route.fulfill({ contentType: "text/html", body: '<script>history.replaceState(null,"","/api/gmail/oauth/callback");window.close();</script>' });
+  });
+  await popup.goto(new URL("/api/gmail/oauth/callback?state=fake&code=fake", page.url()).href, { waitUntil: "commit" });
   await expect(page.getByRole("status")).toContainText("New updates are ready in Updates");
   await expect(page.getByRole("checkbox", { name: /Daily active-session scan/i })).toBeChecked();
+  await expect.poll(() => popup.isClosed()).toBe(true);
+  expect(gmail.scanRequests).toBe(1);
+});
+
+test("a blocked popup is retryable and never scans", async ({ page }) => {
+  const gmail = new FakeGmailApi(page);
+  await gmail.install();
+  gmail.setStatus({ state: "disconnected", platformSupported: true });
+  await page.addInitScript(() => { window.open = () => null; });
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Connect Gmail", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: /allow popups/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Connect Gmail", exact: true })).toBeEnabled();
+  expect(gmail.scanRequests).toBe(0);
+});
+
+test("denied consent and a manually closed popup leave scan controls safe", async ({ page }) => {
+  const gmail = new FakeGmailApi(page);
+  await gmail.install();
+  gmail.setStatus({ state: "disconnected", platformSupported: true });
+  await page.context().route("https://accounts.google.com/**", (route) => route.fulfill({ contentType: "text/html", body: "<p>Test-only consent screen</p>" }));
+  await page.goto("/settings");
+  const deniedPopup = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Connect Gmail", exact: true }).click();
+  await expect(await deniedPopup).toHaveURL(/accounts.google.com/);
+  gmail.completePopup("error");
+  await expect(page.getByRole("alert").filter({ hasText: /cancelled or could not finish/i })).toBeVisible();
+  const closedPopup = page.waitForEvent("popup");
+  await page.getByRole("button", { name: "Connect Gmail", exact: true }).click();
+  const popup = await closedPopup;
+  await expect(popup).toHaveURL(/accounts.google.com/);
+  await popup.close();
+  await page.getByRole("button", { name: "Stop waiting" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: /stopped waiting/i })).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: /Daily active-session scan/i })).not.toBeChecked();
+  expect(gmail.scanRequests).toBe(0);
+  await expect(page).toHaveURL(/\/settings$/);
 });

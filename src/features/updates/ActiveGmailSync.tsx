@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { gmailClient } from "../settings/gmailClient";
+import { isGmailConnectionInProgress } from "../settings/gmailPopup";
 import { gmailPreferences } from "../settings/gmailPreferences";
 import { GmailMailAdapter } from "../../integrations/mail/GmailMailAdapter";
 import { updateRepository } from "./updateRepository";
@@ -9,7 +10,7 @@ import { isDailyScanEligible } from "./useDailyActiveScan";
 const adapter = new GmailMailAdapter();
 
 export async function checkActiveGmail(now = Date.now()): Promise<boolean> {
-  if (new URLSearchParams(window.location.search).has("gmail")) return false;
+  if (isGmailConnectionInProgress() || new URLSearchParams(window.location.search).has("gmail")) return false;
   const preferences = await gmailPreferences.get();
   if (preferences.selectedSource !== "gmail" || !preferences.initialSyncCompleted || !preferences.dailyActiveScanEnabled) return false;
   const state = await updateRepository.getScanState("gmail");
@@ -17,7 +18,7 @@ export async function checkActiveGmail(now = Date.now()): Promise<boolean> {
   if (state.lastAttemptedScanAt && now - Date.parse(state.lastAttemptedScanAt) < 15 * 60_000) return false;
   if (!isDailyScanEligible({ connected: true, enabled: true, initialSyncCompleted: true, lastSuccessfulScanAt: state.lastSuccessfulScanAt, now: new Date(now).toISOString() })) return false;
   const status = await gmailClient.status();
-  if (status.state !== "connected") return false;
+  if (status.state !== "connected" || isGmailConnectionInProgress()) return false;
   const result = await runMailScan({ adapter, mode: preferences.automationMode });
   if (!result.error) window.dispatchEvent(new Event("job-buddy-mail-updated"));
   return !result.error;

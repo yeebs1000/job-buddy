@@ -3,13 +3,15 @@ import type { GmailConnectionStatus } from "../../domain/mail";
 export interface GmailSettingsClient {
   status(): Promise<GmailConnectionStatus>;
   start(): Promise<{ authorizationUrl: string }>;
+  startPopup(signal?: AbortSignal): Promise<{ authorizationUrl: string; popupId: string }>;
+  popupResult(popupId: string, signal?: AbortSignal): Promise<"pending" | "connected" | "error" | "expired">;
   disconnect(): Promise<{ revocationConfirmed: boolean }>;
 }
 
 async function request(path: string, init?: RequestInit): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetch(path, init);
+    response = await fetch(path, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000) });
   } catch {
     throw new Error("The local Gmail companion is not running");
   }
@@ -40,6 +42,16 @@ function parseStatus(value: unknown): GmailConnectionStatus {
 }
 
 export const gmailClient: GmailSettingsClient = {
+  async startPopup(signal) {
+    const payload = object(await request("/api/gmail/oauth/start", { method: "POST", headers: { "content-type": "application/json" }, body: '{"popup":true}', signal }));
+    if (!payload || typeof payload.authorizationUrl !== "string" || typeof payload.popupId !== "string" || !/^[a-f0-9]{48}$/.test(payload.popupId)) throw new Error("Invalid popup response");
+    return { authorizationUrl: payload.authorizationUrl, popupId: payload.popupId };
+  },
+  async popupResult(popupId, signal) {
+    const payload = object(await request("/api/gmail/oauth/popup-result", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ popupId }), signal }));
+    if (!payload || !["pending", "connected", "error", "expired"].includes(String(payload.state))) throw new Error("Invalid popup result");
+    return payload.state as "pending" | "connected" | "error" | "expired";
+  },
   async status() { return parseStatus(await request("/api/gmail/status")); },
   async start() {
     const payload = object(await request("/api/gmail/oauth/start", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }));

@@ -35,7 +35,7 @@ export function GmailSettingsPanel(props: GmailSettingsPanelProps) {
   const connected = status.state === "connected";
   return <section className="gmail-settings" aria-labelledby="gmail-settings-heading">
     <header className="gmail-settings__heading">
-      <div><h2 id="gmail-settings-heading">Gmail connection</h2><p>Read-only email updates for your application tracker.</p></div>
+      <div><h2 id="gmail-settings-heading">Gmail connection</h2><p>Sign in through a secure Google popup. Your dashboard stays here.</p></div>
       <span className="gmail-settings__state" data-state={status.state}><span aria-hidden="true" />{stateLabels[status.state]}</span>
     </header>
 
@@ -70,8 +70,8 @@ export function GmailSettingsPanel(props: GmailSettingsPanelProps) {
     <div className="gmail-settings__row">
       <div><h3>Inbox source</h3><p>Switch to fictional messages anytime. Live scan failures never fall back automatically.</p></div>
       <div className="gmail-settings__source" role="group" aria-label="Inbox source">
-        <Button variant={preferences.selectedSource === "simulated" ? "primary" : "secondary"} onClick={() => props.onSourceChange("simulated")}>Use demo inbox</Button>
-        {connected && preferences.initialSyncCompleted && <Button variant={preferences.selectedSource === "gmail" ? "primary" : "secondary"} onClick={() => props.onSourceChange("gmail")}>Use live Gmail</Button>}
+        <Button disabled={Boolean(busy)} variant={preferences.selectedSource === "simulated" ? "primary" : "secondary"} onClick={() => props.onSourceChange("simulated")}>Use demo inbox</Button>
+        {connected && preferences.initialSyncCompleted && <Button disabled={Boolean(busy)} variant={preferences.selectedSource === "gmail" ? "primary" : "secondary"} onClick={() => props.onSourceChange("gmail")}>Use live Gmail</Button>}
       </div>
     </div>
   </section>;

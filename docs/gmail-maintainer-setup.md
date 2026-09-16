@@ -13,7 +13,11 @@ Status: connection UX and desktop OAuth support implemented; Google project regi
 
 ## User experience and boundaries
 
-Configured Windows build: Connect Gmail → Google consent → return → bounded initial scan (up to 500 inbox messages from the last 90 days). A recent same-tab connect intent is required for automatic first sync. Direct callback URLs without that intent still require the scan button. Successful setup enables daily active-session checks; failures preserve retry controls.
+Configured Windows build: Connect Gmail → Google consent popup → popup closes → bounded initial scan in the existing dashboard (up to 500 inbox messages from the last 90 days). Sign-in takes place on Google's origin, never an embedded imitation or iframe. The dashboard does not navigate away.
+
+An ephemeral, origin-bound receipt confirms the exact OAuth attempt; the app does not infer success from an existing account or a closed window. The popup has no opener access, and its local callback closes itself. Receipts expire after 10 minutes, contain no tokens/email, and are not persisted. PKCE and single-use OAuth state checks remain on the companion. Duplicate callbacks do not re-exchange a code.
+
+Blocked popups expose retry guidance without changing scan preferences. Starting consent pauses automatic scans and resets the previous account's history cursor. **Stop waiting** stops polling and attempts to close the popup; it does not revoke an authorization already granted. If approval already happened, reload Settings to check the connection and explicitly run the first scan if needed. Successful setup enables daily active-session checks; failures preserve retry controls. Legacy same-tab callbacks remain compatible, but direct callback URLs without a recent connect intent do not automatically scan.
 
 The browser must be open, visible, and the local companion running. Eligible scans are checked on app startup, focus and approximately every minute, with at least 24 hours between successful daily scans and a 15-minute failed-scan cooldown. Browser/device sleep delays scans. This is not a background mail daemon.
 
