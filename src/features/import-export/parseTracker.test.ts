@@ -1,14 +1,14 @@
 import { expect, it } from "vitest";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { parseTracker } from "./parseTracker";
 
 export function csv(text: string, name = "tracker.csv") { return new File([text], name, { type: "text/csv" }); }
-export function workbook(rows: unknown[][]) {
-  const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet(rows), "Tracker");
-  return new File([XLSX.write(book, { type: "array", bookType: "xlsx" })], "tracker.xlsx");
+export async function workbook(rows: unknown[][]) {
+  const book = new ExcelJS.Workbook(); book.addWorksheet("Tracker").addRows(rows);
+  return new File([new Uint8Array(await book.xlsx.writeBuffer())], "tracker.xlsx");
 }
 it("maps fresh graduate headings and normalizes dates, currencies, markets and stages", async () => {
-  const preview = await parseTracker(workbook([["Company", "Title", "Status", "Date Applied", "Location", "Role Family", "Salary", "Pay Period", "Tags", "Contact", "Link", "Source"], ["Example Bank", "Analyst", "Interviewing", 46277, "Singapore", "Finance", "SGD 4,000–5,000", "monthly", "graduate; priority;graduate", "Alex", "https://example.com/job", "Campus"]]));
+  const preview = await parseTracker(await workbook([["Company", "Title", "Status", "Date Applied", "Location", "Role Family", "Salary", "Pay Period", "Tags", "Contact", "Link", "Source"], ["Example Bank", "Analyst", "Interviewing", 46277, "Singapore", "Finance", "SGD 4,000–5,000", "monthly", "graduate; priority;graduate", "Alex", "https://example.com/job", "Campus"]]));
   expect(preview.rows[0].errors).toEqual([]);
   expect(preview.rows[0].normalized).toMatchObject({ company: "Example Bank", role: "Analyst", stage: "interview", market: "SG", appliedAt: "2026-09-12T00:00:00.000Z", recruiter: "Alex", jobUrl: "https://example.com/job", tags: ["graduate", "priority"], research: { salary: { minimum: 4000, maximum: 5000, currency: "SGD", period: "monthly" } } });
   expect(preview.rows[0].normalized.research?.companyRating).toBeUndefined();
@@ -58,14 +58,14 @@ it("warns on unknown headers and unsafe links, and rejects workbook formula cell
   expect(preview.rows[0].normalized.outcome).toBe("rejected");
   expect(preview.rows[0].errors.join(" ")).toMatch(/stage/i);
   expect(preview.mapping).toContainEqual({ source: "Other", field: null });
-  const book = XLSX.utils.book_new(); const sheet = XLSX.utils.aoa_to_sheet([["Company"], ["Bank"]]); sheet.A2 = { t: "n", f: "1+1", v: 2 }; XLSX.utils.book_append_sheet(book, sheet, "Tracker");
-  await expect(parseTracker(new File([XLSX.write(book, { type: "array", bookType: "xlsx" })], "formula.xlsx"))).rejects.toThrow(/formula/i);
+  const book = new ExcelJS.Workbook(); const sheet = book.addWorksheet("Tracker"); sheet.addRow(["Company"]); sheet.getCell("A2").value = { formula: "1+1", result: 2 };
+  await expect(parseTracker(new File([new Uint8Array(await book.xlsx.writeBuffer())], "formula.xlsx"))).rejects.toThrow(/formula/i);
 });
 
 it("handles the workbook's 1904 date system without shifting application dates", async () => {
-  const book = XLSX.utils.book_new(); book.Workbook = { WBProps: { date1904: true } };
-  XLSX.utils.book_append_sheet(book, XLSX.utils.aoa_to_sheet([["Company", "Role", "Stage", "Date Applied", "Market", "Role Family", "Source", "Location"], ["Bank", "Analyst", "Review", 44815, "SG", "finance", "Campus", "Singapore"]]), "Tracker");
-  const preview = await parseTracker(new File([XLSX.write(book, { type: "array", bookType: "xlsx" })], "mac.xlsx"));
+  const book = new ExcelJS.Workbook(); book.properties.date1904 = true;
+  book.addWorksheet("Tracker").addRows([["Company", "Role", "Stage", "Date Applied", "Market", "Role Family", "Source", "Location"], ["Bank", "Analyst", "Review", 44815, "SG", "finance", "Campus", "Singapore"]]);
+  const preview = await parseTracker(new File([new Uint8Array(await book.xlsx.writeBuffer())], "mac.xlsx"));
   expect(preview.rows[0].normalized.appliedAt).toBe("2026-09-12T00:00:00.000Z");
 });
 it("rejects duplicate mappings, incomplete salary and invalid optional enums or booleans", async () => {

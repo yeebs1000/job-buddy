@@ -15,7 +15,8 @@
     "build": "tsc -b && vite build",
     "build:extension": "node scripts/build-extension.mjs",
     "verify:client-secrets": "node --env-file-if-exists=.env.local scripts/verify-client-secrets.mjs dist dist-extension",
-    "check": "npm test && npm run typecheck && npm run build && npm run build:extension && npm run verify:client-secrets && npm run test:e2e && npm run test:e2e:extension",
+    "verify:research-sources": "node scripts/verify-research-sources.mjs dist dist-extension",
+    "check": "npm test && npm run typecheck && npm run build && npm run build:extension && npm run verify:client-secrets && npm run verify:research-sources && npm run test:e2e && npm run test:e2e:extension",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -32,7 +33,6 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router-dom": "^7.18.3",
-    "xlsx": "^0.18.5",
     "zod": "^4.6.2"
   },
   "devDependencies": {

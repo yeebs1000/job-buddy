@@ -1,10 +1,10 @@
-import type { WorkBook } from "xlsx";
 import { z } from "zod";
 import { priorities, roleFamilies, workArrangements, type Application } from "../../domain/application";
 import type { ImportPreview, ImportRow, NormalizedApplication } from "../../domain/import";
 import { applicationStages, type ApplicationOutcome, type ApplicationStage } from "../../domain/stage";
 import { isSafeExternalJobUrl } from "../../domain/jobUrl";
 import { mapHeading, type TrackerField } from "./trackerColumns";
+import { readTrackerWorkbook } from "./excelWorkbook";
 
 const MAX_ROWS = 2000;
 const MAX_COLUMNS = 80;
@@ -129,24 +129,18 @@ export async function parseTracker(file: File, existing: Pick<Application, "comp
     let content: string; try { content = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { throw new Error("CSV must use UTF-8 encoding."); }
     grid = readCsv(content.replace(/^\uFEFF/, ""));
   } else {
-    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error("This is not a valid .xlsx workbook.");
-    const XLSX = await import("xlsx");
-    let book: WorkBook;
-    try { book = XLSX.read(bytes, { type: "array", cellFormula: true, bookVBA: true, cellHTML: false, bookDeps: false }); } catch { throw new Error("Could not read this .xlsx workbook."); }
-    if (book.vbaraw) throw new Error("Macro content is not supported. Export a values-only workbook.");
-    const date1904 = Boolean(book.Workbook?.WBProps?.date1904);
+    const book = await readTrackerWorkbook(bytes);
+    const date1904 = book.date1904;
     serialDate = value => {
-      const parts = XLSX.SSF.parse_date_code(value, { date1904 });
-      return parts ? `${parts.y}-${String(parts.m).padStart(2, "0")}-${String(parts.d).padStart(2, "0")}T${String(parts.H).padStart(2, "0")}:${String(parts.M).padStart(2, "0")}:${String(parts.S).padStart(2, "0")}Z` : value;
+      const offset = date1904 ? 24_107 : 25_569;
+      const result = new Date((value - offset) * 86_400_000);
+      return Number.isFinite(result.getTime()) ? result.toISOString() : value;
     };
-    for (const sheet of Object.values(book.Sheets)) {
-      for (const [address, cell] of Object.entries(sheet)) if (!address.startsWith("!") && cell && typeof cell === "object" && "f" in cell) throw new Error("Workbook formulas are not supported. Export values only.");
-      if (sheet["!ref"]) { const range = XLSX.utils.decode_range(sheet["!ref"]); if (range.e.r >= MAX_ROWS + 1 || range.e.c >= MAX_COLUMNS) throw new Error("Use at most 2,000 rows and 80 columns per sheet."); }
-    }
-    const sheet = book.Sheets[book.SheetNames[0]];
+    for (const sheet of book.worksheets) if (sheet.rows.length > MAX_ROWS + 1 || sheet.rows.some((row) => row.length > MAX_COLUMNS)) throw new Error("Use at most 2,000 rows and 80 columns per sheet.");
+    const sheet = book.worksheets[0];
     if (!sheet) throw new Error("The workbook is empty.");
-    if (book.SheetNames.length > 1) warnings.push(`Only the first worksheet (${book.SheetNames[0]}) is previewed.`);
-    grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: "", blankrows: true, range: 0 });
+    if (book.worksheets.length > 1) warnings.push(`Only the first worksheet (${sheet.name}) is previewed.`);
+    grid = sheet.rows;
   }
   const headerIndex = grid.findIndex(row => row.some(v => text(v)));
   if (headerIndex < 0) throw new Error("The file is empty.");
