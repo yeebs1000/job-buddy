@@ -6,6 +6,7 @@ work/
 # Dependencies and builds
 node_modules/
 dist/
+dist-extension/
 coverage/
 test-results/
 playwright-report/
