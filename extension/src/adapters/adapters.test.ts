@@ -64,6 +64,14 @@ describe("form adapters", () => {
     expect(new Set(fields.map((field) => field.id)).size).toBe(fields.length);
     expect(fields).toHaveLength(2);
   });
+
+  it("reports only strong application confirmation states", () => {
+    loadFixture("generic");
+    const adapter = selectAdapter(document, new URL("https://jobs.example/apply"));
+    expect(adapter.confirmed()).toBe(false);
+    document.body.innerHTML = `<main><h2 data-qa="application-success">Application submitted</h2></main>`;
+    expect(adapter.confirmed()).toBe(true);
+  });
 });
 
 function loadFixture(name: string) {

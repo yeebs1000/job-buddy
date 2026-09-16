@@ -56,4 +56,16 @@ describe("BuddyPanel", () => {
     expect(onFillApproved).toHaveBeenCalledWith(["first-name"]);
     expect(panel.shadowRoot.textContent).toContain("Buddy never submits applications");
   });
+
+  it("requires an explicit send action for a confirmed application capture", () => {
+    const onSendCapture = vi.fn();
+    const panel = new BuddyPanel(document.body, { onSendCapture });
+    panel.render({ state: "capture", company: "Summit Pay", role: "Software Engineer", location: "Singapore" });
+    panel.expand();
+
+    expect(onSendCapture).not.toHaveBeenCalled();
+    panel.shadowRoot.querySelector<HTMLButtonElement>("button[data-action='send-capture']")!.click();
+
+    expect(onSendCapture).toHaveBeenCalledOnce();
+  });
 });

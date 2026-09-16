@@ -28,6 +28,11 @@ input { border: 1px solid #cfd4dc; border-radius: 9px; color: #182230; min-heigh
 .review-field input { grid-row: 1 / span 2; height: 16px; min-height: 0; padding: 0; text-transform: none; width: 16px; }
 .review-field small { font-size: 11px; font-weight: 500; grid-column: 2; }
 .guarantee { border-top: 1px solid #eef0f3; padding-top: 10px; }
+.capture-details { border: 1px solid #e4e7ec; border-radius: 12px; margin: 0; padding: 4px 12px; }
+.capture-details div { display: grid; gap: 2px; grid-template-columns: 72px 1fr; padding: 8px 0; }
+.capture-details div + div { border-top: 1px solid #eef0f3; }
+.capture-details dt { color: #667085; font-size: 11px; }
+.capture-details dd { font-size: 12px; font-weight: 650; margin: 0; }
 .primary { background: #111827; border: 0; border-radius: 9px; color: white; cursor: pointer; min-height: 42px; padding: 0 14px; }
 .primary:disabled { cursor: not-allowed; opacity: .45; }
 button:focus-visible, input:focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }

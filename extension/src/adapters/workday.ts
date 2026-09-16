@@ -1,4 +1,4 @@
-import { fillControl, scanControls } from "./dom";
+import { fillControl, hasStrongConfirmation, scanControls } from "./dom";
 import type { FormAdapter } from "./types";
 
 export function isWorkday(document: Document, url: URL): boolean {
@@ -7,5 +7,5 @@ export function isWorkday(document: Document, url: URL): boolean {
 }
 
 export function createWorkdayAdapter(document: Document): FormAdapter {
-  return { id: "workday", scan: () => scanControls(document), fill: fillControl };
+  return { id: "workday", scan: () => scanControls(document), fill: fillControl, confirmed: () => hasStrongConfirmation(document) };
 }

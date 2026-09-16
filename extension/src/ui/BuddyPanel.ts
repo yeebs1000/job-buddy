@@ -5,12 +5,15 @@ export type BuddyPanelModel =
   | { state: "idle" }
   | { state: "fields-found"; matched: number; review: number; manual: number }
   | { state: "review"; mode: "approval" | "automatic"; matched: number; manual: number; autoFilled: number; fields: readonly BuddyReviewField[] }
+  | { state: "capture"; company: string; role: string; location: string }
+  | { state: "capture-sent" }
   | { state: "error"; message: string };
 
 export interface BuddyReviewField { id: string; label: string; risk: "safe" | "review"; }
 export interface BuddyPanelOptions {
   onPair?: (code: string) => Promise<void> | void;
   onFillApproved?: (fieldIds: string[]) => Promise<void> | void;
+  onSendCapture?: () => Promise<void> | void;
 }
 
 export class BuddyPanel {
@@ -20,6 +23,7 @@ export class BuddyPanel {
   private model: BuddyPanelModel = { state: "idle" };
   private readonly onPair: (code: string) => Promise<void> | void;
   private readonly onFillApproved: (fieldIds: string[]) => Promise<void> | void;
+  private readonly onSendCapture: () => Promise<void> | void;
 
   constructor(parent: HTMLElement, options: BuddyPanelOptions = {}) {
     this.host = parent.ownerDocument.createElement("div");
@@ -28,6 +32,7 @@ export class BuddyPanel {
     this.shadowRoot = this.host.attachShadow({ mode: "open" });
     this.onPair = options.onPair ?? (() => undefined);
     this.onFillApproved = options.onFillApproved ?? (() => undefined);
+    this.onSendCapture = options.onSendCapture ?? (() => undefined);
     this.shadowRoot.addEventListener("keydown", (event) => { if ((event as KeyboardEvent).key === "Escape") this.collapse(); });
     parent.append(this.host);
     this.draw();
@@ -139,6 +144,27 @@ export class BuddyPanel {
       guarantee.className = "guarantee";
       guarantee.textContent = "Buddy never submits applications or fills files, credentials, or demographic fields.";
       body.append(heading, summary, form, guarantee);
+      return;
+    }
+    if (this.model.state === "capture") {
+      const heading = doc.createElement("h2"); heading.textContent = "Application completed?";
+      const copy = doc.createElement("p"); copy.textContent = "Review this metadata before sending it to your local tracker.";
+      const details = doc.createElement("dl"); details.className = "capture-details";
+      for (const [label, value] of [["Company", this.model.company], ["Role", this.model.role], ["Location", this.model.location]]) {
+        const row = doc.createElement("div"); const term = doc.createElement("dt"); const description = doc.createElement("dd");
+        term.textContent = label; description.textContent = value; row.append(term, description); details.append(row);
+      }
+      const send = doc.createElement("button"); send.className = "primary"; send.type = "button";
+      send.dataset.action = "send-capture"; send.textContent = "Send to Job Buddy";
+      send.addEventListener("click", () => void this.onSendCapture());
+      const guarantee = doc.createElement("small"); guarantee.textContent = "Only job metadata is sent—never form answers.";
+      body.append(heading, copy, details, send, guarantee);
+      return;
+    }
+    if (this.model.state === "capture-sent") {
+      const heading = doc.createElement("h2"); heading.textContent = "Ready in your dashboard";
+      const copy = doc.createElement("p"); copy.textContent = "Open Job Buddy to review the application before adding it to your tracker.";
+      body.append(heading, copy);
       return;
     }
     const heading = doc.createElement("h2");

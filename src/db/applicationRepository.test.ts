@@ -110,4 +110,20 @@ describe("applicationRepository", () => {
 
     expect(await savedViewRepository.get("interviews")).toMatchObject({ name: "Active Interviews" });
   });
+
+  it("finds a canonical job despite case, spacing, and private URL parameters", async () => {
+    await applicationRepository.create({
+      ...sampleApplications[1],
+      id: "canonical-job",
+      company: " Summit Pay ",
+      role: "Software   Engineer",
+      jobUrl: "https://jobs.example/roles/42",
+    });
+
+    expect(await applicationRepository.findByCanonicalJob({
+      company: "summit pay",
+      role: " software engineer ",
+      jobUrl: "https://jobs.example/roles/42?candidate=private#apply",
+    })).toMatchObject({ id: "canonical-job" });
+  });
 });

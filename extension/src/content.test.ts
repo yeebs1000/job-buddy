@@ -43,6 +43,35 @@ describe("content runtime", () => {
     expect(runtime.panel.shadowRoot.textContent).toContain("1 filled");
     runtime.destroy();
   });
+
+  it("queues metadata only after a submit interaction, confirmation state, and explicit send", async () => {
+    const page = applicationDocument();
+    page.querySelector("form")!.setAttribute("data-company", "Summit Pay");
+    page.querySelector("form")!.setAttribute("data-location", "Singapore");
+    const sendMessage = worker({ mode: "approval", paused: false, enabledDomains: ["jobs.example"] });
+    const values = new Map<string, string>();
+    const runtime = await mountContentRuntime({
+      document: page,
+      url: new URL("https://jobs.example/apply"),
+      sendMessage,
+      observeMutations: false,
+      allowUntrustedSubmitForTest: true,
+      intentStore: { get: (key) => values.get(key) ?? null, set: (key, value) => { values.set(key, value); }, remove: (key) => { values.delete(key); } },
+    });
+
+    page.querySelector("form")!.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    expect(sendMessage.mock.calls.some(([message]) => message.type === "queue-capture")).toBe(false);
+    page.body.innerHTML = `<main><h2 data-qa="application-success">Application submitted</h2></main>`;
+    await runtime.rescan();
+    runtime.panel.expand();
+    expect(sendMessage.mock.calls.some(([message]) => message.type === "queue-capture")).toBe(false);
+    runtime.panel.shadowRoot.querySelector<HTMLButtonElement>("button[data-action='send-capture']")!.click();
+
+    await vi.waitFor(() => expect(sendMessage.mock.calls.some(([message]) => message.type === "queue-capture")).toBe(true));
+    const queued = sendMessage.mock.calls.find(([message]) => message.type === "queue-capture")?.[0];
+    expect(JSON.stringify(queued)).not.toContain("alex@example.com");
+    runtime.destroy();
+  });
 });
 
 function applicationDocument(): Document {
@@ -65,6 +94,7 @@ function worker(preferences: { mode: "approval" | "automatic"; paused: boolean; 
       "identity.givenName": "Alex", "contact.email": "alex@example.com", "preferences.salarySGDAnnual": 120000,
     } };
     if (message.type === "record-activity") return { ok: true, type: "recorded" };
+    if (message.type === "queue-capture") return { ok: true, type: "captured" };
     return { ok: false, error: "invalid-request" };
   });
 }

@@ -25,6 +25,17 @@ export const applicationRepository = {
     return application && materialize(application);
   },
 
+  async findByCanonicalJob(input: { company: string; role: string; jobUrl?: string }): Promise<PersistedApplication | undefined> {
+    const company = canonicalText(input.company);
+    const role = canonicalText(input.role);
+    const jobUrl = canonicalJobUrl(input.jobUrl);
+    const applications = await jobBuddyDb.applications.toArray();
+    const match = applications.find((application) => canonicalText(application.company) === company
+      && canonicalText(application.role) === role
+      && (!jobUrl || canonicalJobUrl(application.jobUrl) === jobUrl));
+    return match && materialize(match);
+  },
+
   async create(input: Application): Promise<PersistedApplication> {
     const application = stored(input);
     await jobBuddyDb.transaction("rw", jobBuddyDb.applications, jobBuddyDb.stageEvents, async () => {
@@ -96,3 +107,16 @@ export const applicationRepository = {
     });
   },
 };
+
+function canonicalText(value: string): string {
+  return value.trim().toLocaleLowerCase("en").replace(/\s+/g, " ");
+}
+
+function canonicalJobUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return undefined;
+    return `${url.origin}${url.pathname}`.replace(/\/$/, "");
+  } catch { return undefined; }
+}

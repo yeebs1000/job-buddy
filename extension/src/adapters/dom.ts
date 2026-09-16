@@ -46,6 +46,17 @@ export function snapshotFields(fields: readonly AdapterField[]) {
   }]));
 }
 
+export function hasStrongConfirmation(document: Document): boolean {
+  const marked = document.querySelector("[data-job-buddy-confirmation], [data-qa='application-success'], [data-automation-id='applicationSubmitted']");
+  if (marked && confirmationText(marked.textContent ?? "")) return true;
+  return [...document.querySelectorAll("h1, h2, [role='status']")]
+    .some((element) => confirmationText(element.textContent ?? ""));
+}
+
+function confirmationText(value: string): boolean {
+  return /^(application (?:submitted|received|complete)|thank you for applying)[.!]?$/i.test(value.replace(/\s+/g, " ").trim());
+}
+
 function toAdapterField(document: Document, element: FormControl, index: number): AdapterField {
   const label = resolveLabel(document, element);
   const id = element.id || element.getAttribute("name") || `job-buddy-field-${index}`;

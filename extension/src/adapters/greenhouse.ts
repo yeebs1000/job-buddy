@@ -1,4 +1,4 @@
-import { fillControl, scanControls } from "./dom";
+import { fillControl, hasStrongConfirmation, scanControls } from "./dom";
 import type { FormAdapter } from "./types";
 
 export function isGreenhouse(document: Document, url: URL): boolean {
@@ -8,5 +8,5 @@ export function isGreenhouse(document: Document, url: URL): boolean {
 }
 
 export function createGreenhouseAdapter(document: Document): FormAdapter {
-  return { id: "greenhouse", scan: () => scanControls(document), fill: fillControl };
+  return { id: "greenhouse", scan: () => scanControls(document), fill: fillControl, confirmed: () => hasStrongConfirmation(document) };
 }

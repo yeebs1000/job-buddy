@@ -1,4 +1,4 @@
-import { fillControl, scanControls } from "./dom";
+import { fillControl, hasStrongConfirmation, scanControls } from "./dom";
 import type { FormAdapter } from "./types";
 
 export function isLever(document: Document, url: URL): boolean {
@@ -7,5 +7,5 @@ export function isLever(document: Document, url: URL): boolean {
 }
 
 export function createLeverAdapter(document: Document): FormAdapter {
-  return { id: "lever", scan: () => scanControls(document), fill: fillControl };
+  return { id: "lever", scan: () => scanControls(document), fill: fillControl, confirmed: () => hasStrongConfirmation(document) };
 }

@@ -19,6 +19,7 @@ import { useMailScan } from "../updates/useMailScan";
 import { useDailyActiveScan } from "../updates/useDailyActiveScan";
 import { gmailClient } from "../settings/gmailClient";
 import { defaultGmailPreferences, gmailPreferences, type GmailPreferences } from "../settings/gmailPreferences";
+import { PendingCaptures } from "../buddy/PendingCaptures";
 import "./command-center.css";
 
 const stageLabels = {
@@ -153,7 +154,7 @@ export function CommandCenterPage({ mailAdapter, gmailAdapter = liveMail, fixtur
 
   if (!applications.length) {
     const selectedAdapter = mailAdapter ?? (integration?.preferences.selectedSource === "gmail" ? gmailAdapter : fixtureAdapter);
-    return <section className="command-center"><EmptyState title="Start your tracker">Add your first application or load fictional sample data to see the workflow.</EmptyState><div className="command-center__actions"><Link className="button button--secondary" to="/import">Import tracker</Link><Link className="button button--secondary" to="/applications?new=1">Add application</Link><Button onClick={() => void loadApplications()}>Load sample data</Button></div>{integration && <MailScanStatus adapter={selectedAdapter} onScanned={loadApplications} mode={integration.preferences.automationMode} onModeChange={(mode) => void setScanMode(mode)} gmailStatus={integration.status} preferences={integration.preferences} />}</section>;
+    return <section className="command-center"><EmptyState title="Start your tracker">Add your first application or load fictional sample data to see the workflow.</EmptyState><div className="command-center__actions"><Link className="button button--secondary" to="/import">Import tracker</Link><Link className="button button--secondary" to="/applications?new=1">Add application</Link><Button onClick={() => void loadApplications()}>Load sample data</Button></div>{integration && <MailScanStatus adapter={selectedAdapter} onScanned={loadApplications} mode={integration.preferences.automationMode} onModeChange={(mode) => void setScanMode(mode)} gmailStatus={integration.status} preferences={integration.preferences} />}<PendingCaptures onImported={loadApplications} /></section>;
   }
 
   const summary = summarizeStages(applications);
@@ -167,6 +168,8 @@ export function CommandCenterPage({ mailAdapter, gmailAdapter = liveMail, fixtur
       </header>
 
       {integration ? <MailScanStatus adapter={mailAdapter ?? (integration.preferences.selectedSource === "gmail" ? gmailAdapter : fixtureAdapter)} onScanned={loadApplications} mode={integration.preferences.automationMode} onModeChange={(mode) => void setScanMode(mode)} gmailStatus={integration.status} preferences={integration.preferences} /> : <section className="command-center__scan command-center__scan--loading" aria-label="Loading inbox source" aria-busy="true" />}
+
+      <PendingCaptures onImported={loadApplications} />
 
       <section aria-labelledby="portfolio-overview" className="command-center__section">
         <div className="command-center__section-heading"><h2 id="portfolio-overview">Portfolio overview</h2><span>{applications.length} applications</span></div>

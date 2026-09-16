@@ -1,4 +1,4 @@
-import { fieldCategory, type BuddyPreferences, type ExtensionRequest, type ExtensionResponse } from "../../src/domain/buddy";
+import { fieldCategory, type AdapterId, type BuddyPreferences, type ExtensionRequest, type ExtensionResponse, type PendingCapture } from "../../src/domain/buddy";
 import type { ProfileSelection } from "../../src/domain/profile";
 import { selectAdapter, type AdapterField, type FormAdapter } from "./adapters/types";
 import { snapshotFields } from "./adapters/dom";
@@ -10,9 +10,12 @@ export interface ContentRuntimeDependencies {
   sendMessage(message: ExtensionRequest): Promise<ExtensionResponse>;
   url?: URL;
   observeMutations?: boolean;
+  allowUntrustedSubmitForTest?: boolean;
+  intentStore?: IntentStore;
 }
 
-export interface ContentRuntime { panel: BuddyPanel; destroy(): void; }
+export interface IntentStore { get(key: string): string | null; set(key: string, value: string): void; remove(key: string): void; }
+export interface ContentRuntime { panel: BuddyPanel; rescan(): Promise<void>; destroy(): void; }
 
 const runtimes = new WeakMap<Document, Promise<ContentRuntime>>();
 
@@ -33,13 +36,27 @@ interface ScanState {
   autoFilled: number;
 }
 
-async function start({ document: pageDocument, sendMessage, url, observeMutations = true }: ContentRuntimeDependencies): Promise<ContentRuntime> {
+interface SubmitIntent {
+  adapter: AdapterId;
+  company: string;
+  role: string;
+  location: string;
+  sourceUrl: string;
+  submittedAt: string;
+  completionId: string;
+}
+
+const intentKey = "job-buddy-submit-intent-v1";
+
+async function start({ document: pageDocument, sendMessage, url, observeMutations = true, allowUntrustedSubmitForTest = false, intentStore: suppliedIntentStore }: ContentRuntimeDependencies): Promise<ContentRuntime> {
   const pageUrl = url ?? new URL(pageDocument.location.href);
+  const intentStore = suppliedIntentStore ?? browserIntentStore(pageDocument);
   const controller = new AbortController();
   let state: ScanState | undefined;
   let observer: MutationObserver | undefined;
   let rescanTimer: ReturnType<typeof setTimeout> | undefined;
   let lastScanAt = 0;
+  let pendingCapture: PendingCapture | undefined;
   const panel = new BuddyPanel(pageDocument.body, {
     onPair: async (code) => {
       const result = await sendMessage({ version: 1, type: "pair", code });
@@ -47,7 +64,24 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
       else panel.render({ state: "error", message: "Pairing failed. Create a new code and try again." });
     },
     onFillApproved: async (fieldIds) => fillApproved(fieldIds),
+    onSendCapture: async () => sendCapture(),
   });
+  const submitListener = (event: Event) => {
+    if (!(event.target instanceof HTMLFormElement) || !event.isTrusted && !allowUntrustedSubmitForTest || !state) return;
+    const form = event.target;
+    const submittedAt = new Date().toISOString();
+    const intent: SubmitIntent = {
+      adapter: state.adapter.id,
+      company: metadataValue(form, pageDocument, "company") || pageUrl.hostname,
+      role: pageDocument.querySelector("h1")?.textContent?.trim().slice(0, 300) || "Role to review",
+      location: metadataValue(form, pageDocument, "location") || "Location to review",
+      sourceUrl: sanitizedUrl(pageUrl),
+      submittedAt,
+      completionId: `${state.adapter.id}-${Date.now()}-${stableFingerprint(sanitizedUrl(pageUrl))}`,
+    };
+    intentStore.set(intentKey, JSON.stringify(intent));
+  };
+  pageDocument.addEventListener("submit", submitListener, true);
   const status = await sendMessage({ version: 1, type: "status" });
   if (status.ok && status.type === "status" && status.paired) await scanAndRender();
   else panel.render({ state: "unpaired" });
@@ -57,7 +91,7 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
     observer.observe(pageDocument.body, { childList: true, subtree: true });
     pageDocument.defaultView.addEventListener("pagehide", destroy, { once: true });
   }
-  return { panel, destroy };
+  return { panel, rescan: scanAndRender, destroy };
 
   async function scanAndRender(): Promise<void> {
     if (controller.signal.aborted) return;
@@ -84,6 +118,7 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
       for (const decision of decisions) if (decision.action === "fill") await fillOne(decision.fieldId, "safe-high-confidence");
     }
     renderState();
+    detectCapture(adapter);
   }
 
   async function fillApproved(fieldIds: readonly string[]): Promise<void> {
@@ -148,6 +183,47 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
 
   function showError(message: string): void { panel.render({ state: "error", message }); }
 
+  function detectCapture(adapter: FormAdapter): void {
+    const intent = readIntent();
+    if (!intent || intent.adapter !== adapter.id && adapter.id !== "generic") return;
+    const submittedAt = Date.parse(intent.submittedAt);
+    if (!Number.isFinite(submittedAt) || Date.now() - submittedAt > 30 * 60 * 1_000) { intentStore.remove(intentKey); return; }
+    const navigated = sanitizedUrl(pageUrl) !== intent.sourceUrl;
+    if (!adapter.confirmed() && !navigated) return;
+    pendingCapture = {
+      id: `capture-${stableFingerprint(intent.completionId)}`,
+      company: intent.company,
+      role: intent.role,
+      location: intent.location,
+      sourceUrl: intent.sourceUrl,
+      platform: intent.adapter,
+      detectedAt: new Date().toISOString(),
+      completionId: intent.completionId,
+    };
+    panel.render({ state: "capture", company: pendingCapture.company, role: pendingCapture.role, location: pendingCapture.location });
+  }
+
+  async function sendCapture(): Promise<void> {
+    if (!pendingCapture) return;
+    const response = await sendMessage({ version: 1, type: "queue-capture", capture: pendingCapture });
+    if (!response.ok || response.type !== "captured") return showError("The completed application could not be sent to your dashboard.");
+    intentStore.remove(intentKey);
+    pendingCapture = undefined;
+    panel.render({ state: "capture-sent" });
+  }
+
+  function readIntent(): SubmitIntent | undefined {
+    try {
+      const value = intentStore.get(intentKey);
+      if (!value) return undefined;
+      const parsed = JSON.parse(value) as Partial<SubmitIntent>;
+      if (!parsed || typeof parsed !== "object" || typeof parsed.company !== "string" || typeof parsed.role !== "string"
+        || typeof parsed.location !== "string" || typeof parsed.sourceUrl !== "string" || typeof parsed.submittedAt !== "string"
+        || typeof parsed.completionId !== "string" || !["generic", "greenhouse", "workday", "oracle", "lever"].includes(parsed.adapter ?? "")) return undefined;
+      return parsed as SubmitIntent;
+    } catch { return undefined; }
+  }
+
   function scheduleRescan(): void {
     if (controller.signal.aborted || rescanTimer) return;
     const delay = Math.max(250, 1_000 - (Date.now() - lastScanAt));
@@ -159,8 +235,30 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
     controller.abort();
     observer?.disconnect();
     if (rescanTimer) clearTimeout(rescanTimer);
+    pageDocument.removeEventListener("submit", submitListener, true);
     panel.host.remove();
   }
+}
+
+function browserIntentStore(document: Document): IntentStore {
+  const storage = document.defaultView?.sessionStorage;
+  if (!storage) return { get: () => null, set: () => undefined, remove: () => undefined };
+  return { get: (key) => storage.getItem(key), set: (key, value) => storage.setItem(key, value), remove: (key) => storage.removeItem(key) };
+}
+
+function metadataValue(form: HTMLFormElement, document: Document, name: "company" | "location"): string {
+  const direct = form.dataset[name]?.trim();
+  if (direct) return direct.slice(0, 300);
+  const element = document.querySelector<HTMLElement>(`[data-${name}]`);
+  return (element?.dataset[name] || element?.textContent || "").trim().slice(0, 300);
+}
+
+function sanitizedUrl(url: URL): string { return `${url.origin}${url.pathname}`; }
+
+function stableFingerprint(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) { hash ^= value.charCodeAt(index); hash = Math.imul(hash, 0x01000193); }
+  return (hash >>> 0).toString(36);
 }
 
 if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage && typeof document !== "undefined") {

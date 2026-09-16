@@ -14,6 +14,7 @@ export interface FormAdapter {
   id: AdapterId;
   scan(): AdapterField[];
   fill(field: AdapterField, value: ProfileValue): FillResult;
+  confirmed(): boolean;
 }
 
 export function selectAdapter(document: Document, url: URL): FormAdapter {
