@@ -109,6 +109,7 @@ export function calculateEstimate(input: CalculateEstimateInput): EstimateResult
     currency: input.benchmark.currency,
     period: input.benchmark.period,
     benchmarkId: input.benchmark.id,
+    benchmarkSourceUrl: input.benchmark.sourceUrl,
     inputReleaseIds: [...new Set(inputReleaseIds)],
     roleMatch: input.roleMatch,
     geographyFallback: input.geographyFallback,

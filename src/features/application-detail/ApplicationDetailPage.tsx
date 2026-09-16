@@ -9,6 +9,7 @@ import { compareStageEvents } from "../../domain/stage";
 import { isSafeExternalHttpsUrl, isSafeExternalJobUrl } from "../../domain/jobUrl";
 import { ManualStageUpdate, type ManualUpdate } from "./ManualStageUpdate";
 import { formatDate, outcomeLabels, stageLabels, StageHistory } from "./StageHistory";
+import { ResearchPanel } from "../research/ResearchPanel";
 import "./application-detail.css";
 
 export function ApplicationDetailPage({ applicationId }: { applicationId?: string }) {
@@ -54,7 +55,6 @@ export function ApplicationDetailPage({ applicationId }: { applicationId?: strin
   const accepted = application.stageEvents.filter(event => event.accepted && (event.toStage || event.outcome)).sort(compareStageEvents);
   const latest = accepted.at(-1);
   const canUndo = Boolean(latest);
-  const salary = application.research?.salary;
   const rating = application.research?.companyRating;
   const evidence = application.stageEvents.filter(event => event.evidenceId).sort(compareStageEvents);
   async function undo() {
@@ -79,7 +79,7 @@ export function ApplicationDetailPage({ applicationId }: { applicationId?: strin
       <section className="detail-section" aria-labelledby="activity-title"><div className="detail-section-heading"><h2 id="activity-title">Activity</h2><Button variant="secondary" disabled={busy || !canUndo} onClick={() => void undo()}>Undo change</Button></div><p className="detail-meta">Oldest to newest. Undo reverts the latest applied change and preserves its record.</p><StageHistory events={application.stageEvents} /></section>
     </div><aside aria-label="Application context">
       <section className="detail-section" aria-labelledby="deadlines-title"><h2 id="deadlines-title">Deadlines & interviews</h2>{application.interviewSubtype && <p>Interview format: {application.interviewSubtype}</p>}{application.deadlines.length ? <ul className="detail-deadlines">{[...application.deadlines].sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id)).map(deadline => <li key={deadline.id}><strong>{deadline.label}</strong><span className="detail-meta"><time dateTime={deadline.at}>{formatDate(deadline.at)}</time> · {deadline.completed ? "Completed" : "Open"}</span>{deadline.links?.filter(isSafeExternalHttpsUrl).map((link) => <a key={link} href={link} target="_blank" rel="noopener noreferrer">Open meeting link</a>)}</li>)}</ul> : <p className="detail-meta">No deadlines recorded.</p>}{application.followUpAt && <p>Follow up: <time dateTime={application.followUpAt}>{formatDate(application.followUpAt)}</time></p>}</section>
-      <section className="detail-section" aria-labelledby="research-title"><h2 id="research-title">Salary & company</h2>{salary ? <><p className="detail-salary">{salary.currency} {salary.minimum.toLocaleString("en-US")}{salary.maximum !== undefined ? `–${salary.maximum.toLocaleString("en-US")}` : ""} <small>/ {salary.period === "monthly" ? "month" : "year"}</small></p><p className="detail-meta">Saved salary snapshot</p></> : <p className="detail-meta">Salary snapshot unavailable.</p>}{rating ? <p>Company rating: <strong>{rating.score} / {rating.outOf}</strong><span className="detail-meta"> · {rating.source}</span></p> : <p className="detail-meta">Company rating unavailable.</p>}</section>
+      <section className="detail-section" aria-labelledby="research-title"><h2 id="research-title">Salary & company</h2><ResearchPanel application={application} />{rating ? <p>Company rating: <strong>{rating.score} / {rating.outOf}</strong><span className="detail-meta"> · {rating.source}</span></p> : <p className="detail-meta">Company rating unavailable.</p>}</section>
       <section className="detail-section" aria-labelledby="contacts-title"><h2 id="contacts-title">Contacts</h2><p>{application.recruiter || "No contact recorded."}</p></section>
       <details className="detail-disclosure"><summary>Job description</summary><p>No job description is stored for this application.</p></details>
       <details className="detail-disclosure"><summary>Notes & documents</summary><p className="detail-note">{application.notes || "No notes recorded."}</p><p className="detail-meta">No documents attached.</p></details>

@@ -82,4 +82,5 @@ export function createResearchClient(fetchImpl: typeof fetch = fetch) {
   };
 }
 
+export type ResearchClient = ReturnType<typeof createResearchClient>;
 export const researchClient = createResearchClient();

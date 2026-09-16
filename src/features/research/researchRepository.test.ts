@@ -28,6 +28,7 @@ const snapshot: SalaryEstimateSnapshot = {
   currency: "USD",
   period: "annual",
   benchmarkId: "benchmark-1",
+  benchmarkSourceUrl: "https://www.bls.gov/oes/",
   inputReleaseIds: ["release-1"],
   roleMatch: {
     originalTitle: "Software Engineer",

@@ -56,6 +56,7 @@ describe("salary research contracts", () => {
       currency: "USD",
       period: "annual",
       benchmarkId: "us-15-1252-national-2025",
+      benchmarkSourceUrl: "https://www.bls.gov/oes/",
       inputReleaseIds: ["bls-oe-2025", "bls-cpi-2026-08"],
       roleMatch: {
         originalTitle: "Software Engineer",

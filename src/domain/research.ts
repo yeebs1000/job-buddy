@@ -111,6 +111,7 @@ export const salaryEstimateSnapshotSchema = z.object({
   currency: currencySchema,
   period: payPeriodSchema,
   benchmarkId: identifier,
+  benchmarkSourceUrl: z.string().url().max(2_048),
   inputReleaseIds: identifier.array().min(1).max(20),
   roleMatch: roleMatchSchema,
   geographyFallback: z.enum(["exact", "state", "national"]),
