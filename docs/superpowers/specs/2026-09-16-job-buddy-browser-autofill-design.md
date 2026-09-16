@@ -210,6 +210,7 @@ GET    /api/buddy/preferences
 PUT    /api/buddy/preferences
 GET    /api/buddy/activity
 POST   /api/buddy/activity
+DELETE /api/buddy/activity
 POST   /api/buddy/captures
 GET    /api/buddy/captures
 DELETE /api/buddy/captures/:id
