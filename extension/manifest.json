@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Job Buddy",
-  "version": "0.4.0",
-  "description": "Local, guarded autofill for job application forms.",
+  "version": "1.0.0",
+  "version_name": "1.0.0-beta.1",
+  "description": "Local, guarded autofill and confirmed salary evidence for job applications.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["http://127.0.0.1:43117/*"],
   "optional_host_permissions": ["https://*/*"],

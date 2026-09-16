@@ -8,6 +8,7 @@ const MAX_COLUMNS = 100;
 
 export function parseBoundedZip(bytes: Uint8Array): Map<string, Uint8Array> {
   if (archiveHasEncryptionFlag(bytes)) throw new Error("zip-encryption-not-supported");
+  if (archiveHasZip64Marker(bytes)) throw new Error("zip64-not-supported");
   let extracted: Record<string, Uint8Array>;
   try { extracted = unzipSync(bytes); }
   catch (error) { throw new Error("invalid-zip", { cause: error }); }
@@ -72,6 +73,21 @@ function archiveHasEncryptionFlag(bytes: Uint8Array): boolean {
     if (bytes[index] === 0x50 && bytes[index + 1] === 0x4b && bytes[index + 2] === 0x03 && bytes[index + 3] === 0x04) {
       const flags = bytes[index + 6] | (bytes[index + 7] << 8);
       if ((flags & 0x1) !== 0) return true;
+    }
+  }
+  return false;
+}
+
+function archiveHasZip64Marker(bytes: Uint8Array): boolean {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let index = 0; index + 4 <= bytes.length; index += 1) {
+    const signature = view.getUint32(index, true);
+    if (signature === 0x06064b50 || signature === 0x07064b50) return true;
+    if (signature === 0x06054b50 && index + 22 <= bytes.length) {
+      return view.getUint16(index + 8, true) === 0xffff
+        || view.getUint16(index + 10, true) === 0xffff
+        || view.getUint32(index + 12, true) === 0xffffffff
+        || view.getUint32(index + 16, true) === 0xffffffff;
     }
   }
   return false;

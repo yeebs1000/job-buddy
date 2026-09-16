@@ -1,16 +1,16 @@
-# Job Buddy v0.4
+# Job Buddy v1.0.0-beta.1
 
 > A local-first workspace for replacing the job-application spreadsheet.
 
 [![Built with React](https://img.shields.io/badge/Built_with-React_19-149eca?logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Storage](https://img.shields.io/badge/Storage-Local--first-2ea44f)](#privacy-and-security)
-[![Markets](https://img.shields.io/badge/Markets-Singapore_%2B_Hong_Kong-f59e0b)](#project-status)
-[![Preview](https://img.shields.io/badge/Status-Private_preview-6f42c1)](https://github.com/yeebs1000/job-buddy)
+[![Markets](https://img.shields.io/badge/Markets-Singapore_%2B_Hong_Kong_%2B_US-f59e0b)](#project-status)
+[![Preview](https://img.shields.io/badge/Status-Public_beta_candidate-6f42c1)](https://github.com/yeebs1000/job-buddy)
 
 [中文文档](README.zh-CN.md)
 
-Job Buddy v0.4 combines a local-first application tracker, optional read-only Gmail Update Intelligence, and a guarded Chrome/Edge autofill companion. It helps anyone looking for work keep applications, stage changes, deadlines, interviews, follow-ups, and notes in one place. The release is designed for Singapore and Hong Kong, with software roles first and finance, data, cybersecurity, cloud, and general IT records supported by the tracker.
+Job Buddy v1 beta combines a local-first application tracker, optional read-only Gmail Update Intelligence, source-backed salary research, and a guarded Chrome/Edge autofill companion. It helps anyone looking for work keep applications, stage changes, deadlines, interviews, follow-ups, notes, and grounded compensation evidence in one place. Salary research launches for software and IT roles in Singapore, Hong Kong, and the United States; the tracker can still hold broader roles.
 
 > [!TIP]
 > **Tiny promise:** Job Buddy may be opinionated about stage history, but it will never silently rewrite your past.
@@ -39,6 +39,9 @@ The repository is structured as a reproducible local project: fixtures are ficti
 - Active stages progress from light to vivid green; rejected applications use a constant red rail while retaining the stage reached.
 - Spreadsheet-style Applications workspace with search, filters, sorting, saved views, column visibility, inline edits, bulk actions, archive handling, and manual creation.
 - Application detail pages with deadlines, contacts, notes, research snapshots, chronological stage history, terminal-outcome confirmation, and preserved-event undo.
+- Source-backed salary estimates anchored to Singapore MOM/SingStat, Hong Kong C&SD, or U.S. BLS OEWS/CPI-U data, with role confirmation, geography fallbacks, confidence conditions, immutable snapshots, and safe source links.
+- Conservative purchasing-power equivalents for official data older than one year when matching CPI index levels exist. This is not a wage forecast; displayed ranges are rounded downward and exact values remain inspectable.
+- Confirmed job-posting salary capture through Browser Buddy. Detection never transmits automatically, including in Automatic autofill mode; the user reviews the range before it enters a bounded local queue.
 - Reviewed CSV/XLSX import with column mapping, normalization, row-level validation, duplicate review, include/exclude controls, and no writes before confirmation.
 - UTF-8 CSV and XLSX export for the current filtered set or the full tracker.
 - Fictional Singapore/Hong Kong demo records for finance, software, data, and general IT roles, covering lifecycle states. The app also supports cybersecurity and cloud roles when you add or import them.
@@ -58,7 +61,8 @@ Job Buddy distinguishes information you enter from information a connector may g
 | LinkedIn, company career sites, campus portals, referrals, job boards | Stored as a source label when you add/import an application | Keep the original application source and link | Not connected or scraped by v0.3 |
 | Gmail / Gmail API | Optional read-only OAuth companion on Windows, plus a separate fictional demo inbox | Active-session scans for recruiter/HR replies, proposed stage changes, interview dates, approved HTTPS meeting links, deadlines, and follow-up tasks | Refresh token is Windows-DPAPI encrypted; normalized evidence is stored locally; no background service and no automatic live-to-demo fallback |
 | Greenhouse, Workday, Oracle Recruiting, Lever and semantic web forms | Guarded local Chrome/Edge autofill with stable-marker detection and Generic fallback | Expand fixture coverage as vendors change | Exact-site permission only; no files, credentials, EEO/legal fields, CAPTCHA, or final submission |
-| Glassdoor, Levels.fyi, official salary postings, and regional salary datasets | Not connected | Region-specific salary ranges and company-review context for Singapore/Hong Kong | Availability, licensing, freshness, and regional coverage must be verified per source |
+| Singapore MOM/SingStat, Hong Kong C&SD, U.S. BLS OEWS/CPI-U | Local companion downloads and validates allowlisted official releases | Salary benchmarks and CPI purchasing-power equivalents for supported software/IT roles | No currency conversion; U.S. falls back metro → state → national; data older than three years is not used as a primary estimate |
+| Glassdoor, Levels.fyi, JobStreet, JobsDB | Not connected or scraped | Possible future links or user-entered evidence only | No commercial scraping or bundled commercial dataset in v1 beta; company-specific salary and review predictions are not claimed |
 | JobSpy and public job listings | Not connected | Optional job-discovery adapters and deduplication inputs | Discovery data is not application-status truth |
 | User-selected AI provider | Not connected | Lower-priority future interview-preparation assistance | v0.4 has no AI integration, API-key UI, or model dependency |
 
@@ -68,9 +72,9 @@ Future generated facts are intended to carry their source, region, retrieval tim
 
 Roadmap items are planned, not promises of current functionality.
 
-### V0.4 — Browser Buddy (current)
+### V1 beta — Local tracker, salary research, Gmail, and Browser Buddy (current)
 
-Everything in v0.3 plus an encrypted candidate profile, paired browser extension, guarded autofill for five adapter paths, and reviewed tracker capture after a confirmed application.
+Everything in v0.4 plus official-data salary research for SG/HK/US software and IT roles, local evidence blending, CPI purchasing-power context, and confirmed browser salary capture.
 
 ### V0.3 — Local tracker and live Gmail Update Intelligence
 
@@ -90,13 +94,15 @@ More regions, optional encrypted sync, backup/restore across devices, provider a
 
 ## Privacy and security
 
-V0.4 is single-user and local-first. Applications, imported records, events, saved views, normalized message evidence, and scan preferences live in the browser's IndexedDB. The local companion binds only to `127.0.0.1`; on Windows the Gmail refresh token and candidate profile are encrypted for the current Windows user with DPAPI under `%LOCALAPPDATA%\JobBuddy`. Access tokens and decrypted profile values stay in memory. The extension bearer token stays in extension-local storage, and profile responses contain only canonical paths requested for the current form. The browser bundle never receives the OAuth client secret or refresh token. There is no hosted database, background email service, AI credential, salary/review scraper, unattended submission, or remote job scraper in this release.
+V1 beta is single-user and local-first. Applications, salary observations and snapshots, imported records, events, saved views, normalized message evidence, and scan preferences live in the browser's IndexedDB. Official release caches and confirmed Browser Buddy salary evidence remain under the local companion. The companion binds only to `127.0.0.1`; on Windows the Gmail refresh token and candidate profile are encrypted for the current Windows user with DPAPI under `%LOCALAPPDATA%\JobBuddy`. Access tokens and decrypted profile values stay in memory. The extension bearer token stays in extension-local storage, and profile responses contain only canonical paths requested for the current form. The browser bundle never receives the OAuth client secret or refresh token. There is no hosted database, background email service, AI credential, commercial salary/review scraper, unattended submission, or remote job scraper in this release.
 
 Disconnect attempts Google token revocation and removes the local protected token and connection metadata. Existing applications, approved changes, and already-normalized evidence remain so the tracker does not lose its audit trail. Clearing browser storage is a separate destructive action.
 
 This is a privacy boundary, not a guarantee against someone who can access the same browser profile or device. Export a snapshot before clearing site data or changing devices, but do not treat the standard CSV/XLSX export as a restorable backup: it intentionally omits lifecycle history, event notes, evidence, internal IDs, and saved views. Never commit real trackers, exports, email bodies, API keys, cookies, or personal data.
 
-CSV and XLSX files are parsed locally. XLSX import is deliberately values-only: formulas, macros, oversized sheets, and workbook formatting are rejected or not preserved. The inherited `xlsx` advisory remains a release risk; the parser accepts explicit local files only, limits input size, and loads the spreadsheet library on demand.
+CSV and XLSX files are parsed locally. XLSX import uses an on-demand ExcelJS values-only boundary: formulas, macros, external links, encrypted packages, unsafe archive paths, ZIP64, excessive compression, oversized sheets, and workbook formatting are rejected or not preserved. The former SheetJS dependency is not part of this beta.
+
+See [SECURITY.md](SECURITY.md) for supported beta versions, source-processing limits, the paired-extension trust boundary, and safe vulnerability reporting.
 
 ## Quick start
 
@@ -110,6 +116,12 @@ npm run dev
 ```
 
 Vite prints the local URL, normally [http://127.0.0.1:5173](http://127.0.0.1:5173). `npm run dev` starts both the web app and the loopback companion; use `npm.cmd run dev` if PowerShell blocks `npm.ps1`.
+
+## Salary research
+
+Open a software or IT application, confirm the proposed official occupation, then choose **Refresh official sources** to download and validate current data for that market. Choose **Research salary** to calculate a range. Singapore and Hong Kong remain national-market estimates; U.S. lookup uses metro data when available, then state, then national data and states the fallback used.
+
+Official percentiles remain the anchor. Three or more confirmed, reusable local observations may influence the estimate within strict caps. Currencies are never converted. CPI output is labelled as a purchasing-power equivalent, not projected earnings; when CPI is missing the app keeps the nominal estimate. Display values round downward to grounded increments while the exact calculation, excluded evidence, reference release, source link, and confidence conditions remain available. The feature does not predict a particular company's offer.
 
 ## Install Browser Buddy in Chrome or Edge
 
@@ -166,6 +178,7 @@ npm run typecheck
 npm run build
 npm run build:extension
 npm run verify:client-secrets
+npm run verify:research-sources
 npm run test:e2e
 npm run test:e2e:extension
 ```
@@ -221,7 +234,7 @@ A shoutout to [JobSpy](https://github.com/speedyapply/JobSpy). We adopted severa
 ## GitHub checklist
 
 - [x] Local-first storage with no account required
-- [x] Singapore and Hong Kong launch coverage
+- [x] Singapore, Hong Kong, and U.S. launch coverage
 - [x] CSV/XLSX migration path with review before write
 - [x] Focused unit/component tests and a browser journey
 - [x] Demo Update Intelligence with local synthetic messages
@@ -229,7 +242,7 @@ A shoutout to [JobSpy](https://github.com/speedyapply/JobSpy). We adopted severa
 - [x] Encrypted local candidate profile and paired Chrome/Edge Buddy
 - [x] Approval/Automatic guarded autofill with a hard no-submit boundary
 - [x] Reviewed completed-application capture into the tracker
-- [ ] Salary/review research connectors
+- [x] Official salary research with confirmed local evidence
 - [ ] Optional encrypted sync
 
 ## License

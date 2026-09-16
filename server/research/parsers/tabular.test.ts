@@ -26,7 +26,21 @@ it("rejects encrypted, traversing, excessive, or suspiciously compressed archive
   expect(() => parseBoundedZip(createZipFixture({ "bomb.txt": new Uint8Array(200_000) }, 9))).toThrow("zip-compression-ratio-too-high");
 });
 
+it("rejects ZIP64 markers before decompression", () => {
+  const archive = createZipFixture({ "oes.txt": "safe" });
+  const eocd = findSignature(archive, [0x50, 0x4b, 0x05, 0x06]);
+  archive[eocd + 10] = 0xff; archive[eocd + 11] = 0xff;
+  expect(() => parseBoundedZip(archive)).toThrow("zip64-not-supported");
+});
+
 it("rejects tables beyond the row or column boundary", () => {
   expect(() => parseDelimitedText(Array.from({ length: 100_002 }, () => "a").join("\n"), "\t")).toThrow("table-too-large");
   expect(() => parseDelimitedText(`${Array.from({ length: 101 }, (_, index) => `h${index}`).join("\t")}\nrow`, "\t")).toThrow("table-too-large");
 });
+
+function findSignature(bytes: Uint8Array, signature: number[]): number {
+  for (let index = bytes.length - signature.length; index >= 0; index -= 1) {
+    if (signature.every((value, offset) => bytes[index + offset] === value)) return index;
+  }
+  throw new Error("signature-not-found");
+}
