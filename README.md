@@ -1,4 +1,4 @@
-# Job Buddy v1.0.0-beta.1
+# Job Buddy v1.0.0-beta.2
 
 > A local-first workspace for replacing the job-application spreadsheet.
 
@@ -28,7 +28,7 @@ Job Buddy v1 beta combines a local-first application tracker, optional read-only
 
 ## Project status
 
-The local tracker, demo inbox, Windows Gmail companion, encrypted candidate profile, and unpacked Chrome/Edge Buddy are usable today. Gmail is optional and must be configured by the person running the app. Buddy is also optional: it asks for each job site's permission, requests only matched profile fields from the loopback companion, and never clicks final Submit.
+The local tracker, company-board discovery, salary comparisons, demo inbox, Windows Gmail companion, encrypted candidate profile, and unpacked Chrome/Edge Buddy are available for private beta review. The shared Gmail connector still needs the maintainer's Google desktop client ID and Google's required production approval; this checkout does not pretend to have a live connection. Once configured, users connect through Google consent without creating their own Cloud project. Self-host configuration remains available. Buddy asks for each job site's permission, requests only matched profile fields from the loopback companion, and never clicks final Submit.
 
 Approval is the default: actionable messages become reviewable proposals, while marketing/no-op mail and duplicate provider IDs are ignored. **Auto-apply safe updates** may apply only confident, conflict-free forward updates; offers, terminal outcomes, unmatched/ambiguous mail, and conflicts still require explicit approval. Live failures never fall back to demo data.
 
@@ -36,6 +36,10 @@ The repository is structured as a reproducible local project: fixtures are ficti
 
 ## What is shipped
 
+- Discover roles from an employer's public Greenhouse or Lever board, filter by role/location/market, and keep a persistent local shortlist distinct from submitted applications.
+- Company-posted salary ranges with source, role and location context. Compare SGD/HKD/USD using dated ECB reference rates; originals remain unchanged and missing pay periods are never assumed to be annual.
+- Connect → Google consent → first scan for configured Gmail clients, followed by eligible daily scans across active app pages. Cancellation, reconnect and failed-scan retry remain explicit.
+- Reusable SG/HK/US sponsorship and work-authorization answers, annual salary expectations, notice period, availability and relocation, with answer previews and per-form approval. Ambiguous markets and salary periods stay unresolved.
 - Command Center with a visual six-stage application journey and an explicit rejected state.
 - Active stages progress from light to vivid green; rejected applications use a constant red rail while retaining the stage reached.
 - Spreadsheet-style Applications workspace with search, filters, sorting, saved views, column visibility, inline edits, bulk actions, archive handling, and manual creation.
@@ -55,16 +59,16 @@ The repository is structured as a reproducible local project: fixtures are ficti
 
 ## Information sources and provenance
 
-Job Buddy distinguishes information you enter from information a connector may generate later. In the current release, the `Source` field is user-entered or imported; the app does not log in to any platform or scrape the web.
+Job Buddy distinguishes information you enter from connector evidence. The application `Source` field is user-entered or imported. Public job discovery reads documented APIs; it does not log in to job boards or scrape arbitrary pages. Gmail connects only after explicit Google consent.
 
 | Source or platform | Current release | Planned use | Boundary |
 | --- | --- | --- | --- |
-| LinkedIn, company career sites, campus portals, referrals, job boards | Stored as a source label when you add/import an application | Keep the original application source and link | Not connected or scraped by v0.3 |
+| LinkedIn, campus portals, referrals and other job boards | Stored as a source label when you add/import an application | Keep the original application source and link | No authenticated discovery or scraping of these platforms |
 | Gmail / Gmail API | Optional read-only OAuth companion on Windows, plus a separate fictional demo inbox | Active-session scans for recruiter/HR replies, proposed stage changes, interview dates, approved HTTPS meeting links, deadlines, and follow-up tasks | Refresh token is Windows-DPAPI encrypted; normalized evidence is stored locally; no background service and no automatic live-to-demo fallback |
 | Greenhouse, Workday, Oracle Recruiting, Lever and semantic web forms | Guarded local Chrome/Edge autofill with stable-marker detection and Generic fallback | Expand fixture coverage as vendors change | Exact-site permission only; no files, credentials, EEO/legal fields, CAPTCHA, or final submission |
 | Singapore MOM/SingStat, Hong Kong C&SD, U.S. BLS OEWS/CPI-U | Local companion downloads and validates allowlisted official releases | Salary benchmarks and CPI purchasing-power equivalents for supported software/IT roles | No currency conversion; U.S. falls back metro → state → national; data older than three years is not used as a primary estimate |
 | Glassdoor, Levels.fyi, JobStreet, JobsDB | Not connected or scraped | Possible future links or user-entered evidence only | No commercial scraping or bundled commercial dataset in v1 beta; company-specific salary and review predictions are not claimed |
-| JobSpy and public job listings | Not connected | Optional job-discovery adapters and deduplication inputs | Discovery data is not application-status truth |
+| Greenhouse and Lever public Job Board APIs | User-selected company boards, role/location filters, local shortlist and employer-posted ranges | More providers after evaluating their documented access and terms | GET-only public APIs; no login, CAPTCHA bypass or arbitrary-page scraping; saved listings are not applications |
 | User-selected AI provider | Not connected | Lower-priority future interview-preparation assistance | v0.4 has no AI integration, API-key UI, or model dependency |
 
 Future generated facts are intended to carry their source, region, retrieval time, confidence, and user override. A connector may propose a change; the user remains the authority for the final application stage.
@@ -81,13 +85,13 @@ Everything in v0.4 plus official-data salary research for SG/HK/US software and 
 
 Local persistence, visual stage tracking, filters and saved views, manual updates with history/undo, reviewed spreadsheet migration, Singapore/Hong Kong coverage, demo mail, and optional read-only Gmail with approval and auto-apply-safe modes.
 
-### Next work — research and application assistance
+### Next work — connector release readiness
 
-Region-specific salary and workplace-review connectors, interview preparation resources, and a user-controlled AI provider. Source freshness, licensing, and regional provenance must remain visible.
+Register and verify the maintainer-owned Google app, run a real-account acceptance check, and complete owner review before public launch. See [the beta.2 review notes](docs/releases/v1-beta-2.md) and [Gmail maintainer setup](docs/gmail-maintainer-setup.md).
 
 ### V2.0 — Broader application assistance
 
-Document assistance, richer application checklists, broader finance role workflows, and additional ATS coverage after local guardrails are proven.
+Interview preparation (TBD), optional AI assistance, document assistance, richer application checklists, broader finance role workflows, and additional ATS coverage after local guardrails are proven. Interview preparation is removed from the main navigation until it is useful.
 
 ### V3.0 — Portable and collaborative
 
@@ -122,7 +126,15 @@ Vite prints the local URL, normally [http://127.0.0.1:5173](http://127.0.0.1:517
 
 Open a software or IT application, confirm the proposed official occupation, then choose **Refresh official sources** to download and validate current data for that market. Choose **Research salary** to calculate a range. Singapore and Hong Kong remain national-market estimates; U.S. lookup uses metro data when available, then state, then national data and states the fallback used.
 
-Official percentiles remain the anchor. Three or more confirmed, reusable local observations may influence the estimate within strict caps. Currencies are never converted. CPI output is labelled as a purchasing-power equivalent, not projected earnings; when CPI is missing the app keeps the nominal estimate. Display values round downward to grounded increments while the exact calculation, excluded evidence, reference release, source link, and confidence conditions remain available. The feature does not predict a particular company's offer.
+Official percentiles remain the anchor. Three or more confirmed, reusable local observations may influence the estimate within strict caps. Evidence is never blended across currencies. Optional **Compare currency** displays a separate, dated ECB-backed conversion through Frankfurter, rejects rates older than seven days, and preserves the original amount and pay period. It is not a cost-of-living, tax or fee comparison. CPI output is labelled as a purchasing-power equivalent, not projected earnings; when CPI is missing the app keeps the nominal estimate. Display values round downward while exact inputs remain inspectable. The feature does not predict a particular company's offer.
+
+For company-specific evidence, confirm that a Greenhouse or Lever board belongs to the employer, then filter its actual postings by role and location. Missing structured salary data stays unavailable; it is not replaced by a fabricated company estimate. Greenhouse sometimes publishes bounds without a pay period: those remain **Pay period not specified**. The company-board link is user-confirmed, not independently verified by Job Buddy.
+
+## Discover and shortlist
+
+Open **Discover**, paste a company's `job-boards.greenhouse.io`, `boards.greenhouse.io`, `jobs.lever.co` or `jobs.eu.lever.co` link, and choose **Find open roles**. The request goes through the local companion to that provider's public API. Search roles/locations and filter Singapore, Hong Kong, United States or other/unspecified locations. Ambiguous remote locations are not assumed to be in the US. This is company-board discovery, not a global job search engine. Up to 1,000 postings are loaded; narrow the filters to view more than the first 100 matches.
+
+**Save job** adds a local lead, not an application. Saved listings can go stale; open the employer posting before applying. After actually applying, use Browser Buddy capture or Add application. Shortlists are not included in standard application CSV/XLSX exports and have a 500-job limit.
 
 ## Install Browser Buddy in Chrome or Edge
 
@@ -146,17 +158,17 @@ Buddy supports semantic Generic forms and stable markers for Greenhouse, Workday
 
 ## Optional Gmail setup
 
-The demo inbox works without Google configuration. For live Gmail on Windows:
+The demo inbox works without Google configuration. The planned public distribution uses one maintainer-owned Job Buddy desktop OAuth client. Registration and verification are still pending; see [maintainer setup](docs/gmail-maintainer-setup.md). For an owner-controlled private test on Windows:
 
 1. In [Google Cloud Console](https://console.cloud.google.com/), create or select a project, then [enable the Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com).
 2. Configure the OAuth consent screen. For a personal prototype, keep the app in **Testing** and add the Gmail address you will connect as a test user.
-3. Create an OAuth 2.0 Client ID with application type **Web application**. Add this exact authorized redirect URI: `http://127.0.0.1:43117/api/gmail/oauth/callback`.
-4. Copy `.env.example` to `.env.local`. Put the client ID and client secret in the matching variables; keep the redirect URI unchanged. Never commit this file.
-5. Restart `npm run dev`, open **Settings**, choose **Connect Gmail**, complete Google's consent screen, then confirm **Scan last 90 days**.
+3. Create an OAuth 2.0 Client ID with application type **Desktop app**. The app uses a loopback callback and PKCE.
+4. Copy `.env.example` to `.env.local`, set `GOOGLE_OAUTH_CLIENT_TYPE=desktop` and the public client ID; keep the redirect URI unchanged. A desktop client does not rely on a confidential web-client secret. Never distribute a web-client secret.
+5. Restart `npm run dev`, open **Settings**, choose **Connect Gmail**, and complete Google's consent screen. This initiates the disclosed first 90-day scan; failures expose a retry button.
 
 ```dotenv
-GOOGLE_OAUTH_CLIENT_ID=your-web-client-id
-GOOGLE_OAUTH_CLIENT_SECRET=your-web-client-secret
+GOOGLE_OAUTH_CLIENT_TYPE=desktop
+GOOGLE_OAUTH_CLIENT_ID=your-desktop-client-id.apps.googleusercontent.com
 GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:43117/api/gmail/oauth/callback
 ```
 
@@ -164,7 +176,7 @@ Job Buddy requests `https://www.googleapis.com/auth/gmail.readonly`, which Googl
 
 ### Gmail troubleshooting
 
-- **Setup needed:** confirm both OAuth values exist in `.env.local`, then fully restart the dev command.
+- **Setup needed:** configure the desktop client ID (or both ID/secret with `GOOGLE_OAUTH_CLIENT_TYPE=web` for an existing self-hosted web client), then fully restart the dev command.
 - **Redirect URI mismatch:** the Google Cloud redirect and `.env.local` value must exactly match the loopback URI above, including `127.0.0.1`, port `43117`, path, and `http` scheme.
 - **Reconnect needed / revoked token:** open Settings and reconnect. Approved tracker changes and normalized evidence remain available.
 - **First scan stopped at 500:** this is the intentional privacy and performance bound. The UI reports truncation; later checks use incremental Gmail history.

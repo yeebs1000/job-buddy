@@ -45,7 +45,7 @@ describe("BuddyPanel", () => {
       autoFilled: 0,
       fields: [
         { id: "first-name", label: "First name", risk: "safe" },
-        { id: "salary", label: "Expected salary", risk: "review" },
+        { id: "salary", label: "Expected salary", risk: "review", preview: "80000" },
       ],
     });
     panel.expand();
@@ -55,6 +55,7 @@ describe("BuddyPanel", () => {
 
     expect(onFillApproved).toHaveBeenCalledWith(["first-name"]);
     expect(panel.shadowRoot.textContent).toContain("Buddy never submits applications");
+    expect(panel.shadowRoot.textContent).toContain("Review answer: 80000");
   });
 
   it("requires an explicit send action for a confirmed application capture", () => {

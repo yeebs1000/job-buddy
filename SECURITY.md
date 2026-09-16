@@ -27,4 +27,8 @@ Workbook import is values-only. Inputs are limited to 5 MB compressed and 25 MB 
 
 ## Data and limitations
 
+Company discovery constructs GET URLs only on fixed Greenhouse/Lever API origins from validated board tokens; arbitrary URLs, redirects, oversized responses and malformed records are rejected. Board lists are cached for five minutes with bounded concurrency/cache size. FX reads only the ECB provider through Frankfurter, with pair/date validation and a seven-day maximum data age. Neither integration receives candidate profiles or mail. Employer links are external and should be checked before applying. Shortlists are browser-local and are not included in standard application exports.
+
+The distributed Google desktop client ID is public configuration, not a confidential secret. Real Google registration, restricted-scope review and acceptance checks remain release gates. Web-client secrets and tokens must never be packaged with the app. Windows DPAPI storage remains required for persistent Gmail/profile access.
+
 Job Buddy is local-first, not a hardened multi-user vault. Anyone with access to the same Windows account or browser profile may be able to access local data. Standard CSV/XLSX exports intentionally omit lifecycle evidence and are not full backups. Never commit `.env.local`, local companion data, real exports, or personal fixtures.

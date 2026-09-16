@@ -175,7 +175,7 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
     });
     const reviewIds = new Set(decisions.filter((decision) => decision.action === "review" && !excluded.has(decision.fieldId)).map((decision) => decision.fieldId));
     const reviewFields = state.fields.filter((field) => reviewIds.has(field.id) && field.canonicalPath && state?.selections[field.canonicalPath] !== undefined)
-      .map((field) => ({ id: field.id, label: field.label, risk: field.risk === "review" ? "review" as const : "safe" as const }));
+      .map((field) => ({ id: field.id, label: field.label, risk: field.risk === "review" ? "review" as const : "safe" as const, preview: String(state!.selections[field.canonicalPath!]).slice(0, 300) }));
     panel.render({
       state: "review",
       mode: state.preferences.mode,

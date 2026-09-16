@@ -20,7 +20,7 @@ test("connects, scans, survives revoked Gmail, and returns to demo", async ({ pa
   await clearJobBuddyDatabase(page);
 
   await page.goto("/settings");
-  await expect(page.getByRole("heading", { name: "Google OAuth setup needed" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Gmail connector awaiting setup" })).toBeVisible();
 
   gmail.setStatus({ state: "connected", accountEmail: "user@example.com", platformSupported: true });
   gmail.queueScan(liveInterviewScan);
@@ -55,4 +55,19 @@ test("connects, scans, survives revoked Gmail, and returns to demo", async ({ pa
   await page.getByRole("button", { name: "Use demo inbox" }).click();
   await page.getByRole("link", { name: "Overview" }).click();
   await expect(page.getByText("Demo inbox", { exact: true })).toBeVisible();
+});
+
+test("returns from an initiated consent flow directly to a completed first scan", async ({ page }) => {
+  const gmail = new FakeGmailApi(page);
+  await gmail.install();
+  gmail.setStatus({ state: "disconnected", platformSupported: true });
+  await page.route("https://accounts.google.com/**", (route) => route.fulfill({ contentType: "text/html", body: "<p>Test-only consent screen</p>" }));
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Connect Gmail", exact: true }).click();
+  await expect(page).toHaveURL(/accounts.google.com/);
+  gmail.setStatus({ state: "connected", platformSupported: true, accountEmail: "user@example.com" });
+  gmail.queueScan(liveInterviewScan);
+  await page.goto("/settings?gmail=connected");
+  await expect(page.getByRole("status")).toContainText("New updates are ready in Updates");
+  await expect(page.getByRole("checkbox", { name: /Daily active-session scan/i })).toBeChecked();
 });

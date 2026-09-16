@@ -7,6 +7,16 @@ import {
 } from "./profile";
 
 describe("candidate profile", () => {
+  it("keeps sponsorship separate from authorization in all launch markets", () => {
+    const parsed = candidateProfileSchema.safeParse({ ...emptyCandidateProfile, preferences: {
+      usAuthorization: "Yes", usSponsorship: "Yes", sgSponsorship: "No", hkSponsorship: "Yes", salaryUSDAnnual: 80000,
+    } });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(selectProfilePaths(parsed.data, ["preferences.usSponsorship", "preferences.salaryUSDAnnual"])).toEqual({
+      "preferences.usSponsorship": "Yes", "preferences.salaryUSDAnnual": 80000,
+    });
+  });
   it("accepts partial factual data and rejects credential keys", () => {
     const profile = candidateProfileSchema.parse({
       ...emptyCandidateProfile,

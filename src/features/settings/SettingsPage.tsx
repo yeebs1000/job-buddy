@@ -27,6 +27,13 @@ interface SettingsPageProps {
 }
 
 const liveMail = new GmailMailAdapter();
+const connectIntentKey = "job-buddy-gmail-connect-intent";
+
+function clearConnectionCallback() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("gmail");
+  window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+}
 
 export function SettingsPage({
   client = gmailClient,
@@ -55,8 +62,14 @@ export function SettingsPage({
         setMessage({ tone: "error", text: "Could not load all Gmail settings. Start the local companion, then reload this page." });
       } else {
         const callback = new URLSearchParams(window.location.search).get("gmail");
-        if (callback === "connected") setMessage({ tone: "status", text: "Gmail connected. Confirm the first scan when you are ready." });
-        if (callback === "error") setMessage({ tone: "error", text: "Gmail connection could not be completed. Check the OAuth setup and try again." });
+        const intentAt = Number(sessionStorage.getItem(connectIntentKey) ?? 0);
+        if (callback) sessionStorage.removeItem(connectIntentKey);
+        if (callback === "connected" && statusResult.value.state === "connected") {
+          if (intentAt > 0 && Date.now() - intentAt >= 0 && Date.now() - intentAt < 10 * 60_000) {
+            void completeConnection(preferenceResult.value);
+          } else setMessage({ tone: "status", text: "Gmail connected. Confirm the first scan when you are ready." });
+        }
+        if (callback === "error") setMessage({ tone: "error", text: "Google sign-in was cancelled or could not finish. Your existing tracker is unchanged. Try connecting again." });
       }
     });
     return () => { mounted = false; };
@@ -69,8 +82,29 @@ export function SettingsPage({
 
   async function connect() {
     setBusy("connect"); setMessage(null);
-    try { navigateExternal((await client.start()).authorizationUrl); }
-    catch { setMessage({ tone: "error", text: "Gmail connection could not start. Check your local OAuth setup and try again." }); setBusy(null); }
+    try {
+      const { authorizationUrl } = await client.start();
+      const url = new URL(authorizationUrl);
+      if (url.origin !== "https://accounts.google.com" || url.pathname !== "/o/oauth2/v2/auth") throw new Error();
+      sessionStorage.setItem(connectIntentKey, String(Date.now()));
+      navigateExternal(url.toString());
+    }
+    catch { sessionStorage.removeItem(connectIntentKey); setMessage({ tone: "error", text: "Google sign-in could not start. Check that the companion is running and try again." }); setBusy(null); }
+  }
+
+  async function completeConnection(current: GmailPreferences) {
+    setBusy("scan"); setMessage({ tone: "status", text: "Gmail connected. Checking your recent recruiting email…" });
+    try {
+      // A new consent flow may select a different account. Never reuse its predecessor's history cursor.
+      await updateRepository.saveScanState("gmail", { cursor: null });
+      await save({ ...current, initialSyncCompleted: false, dailyActiveScanEnabled: false, selectedSource: "gmail" });
+      const result = await scan({ adapter: mailAdapter, mode: current.automationMode, initialSyncConfirmed: true });
+      if (result.error) throw new Error();
+      await save({ ...current, selectedSource: "gmail", initialSyncCompleted: true, dailyActiveScanEnabled: true });
+      clearConnectionCallback();
+      setMessage({ tone: "status", text: "Gmail connected and recent updates were checked. New updates are ready in Updates." });
+    } catch { setMessage({ tone: "error", text: "Gmail is connected, but the first scan did not finish. Retry Scan last 90 days below." }); }
+    finally { setBusy(null); }
   }
 
   async function disconnect() {
@@ -93,6 +127,7 @@ export function SettingsPage({
       const result = await scan({ adapter: mailAdapter, mode: preference.automationMode as MailScanMode, initialSyncConfirmed: true });
       if (result.error) throw new Error();
       await save({ ...preference, selectedSource: "gmail", initialSyncCompleted: true, dailyActiveScanEnabled: true });
+      clearConnectionCallback();
       setMessage({ tone: "status", text: result.diagnostics?.truncated ? "Gmail connected. The newest 500 messages were checked." : "Gmail connected and recent updates were checked." });
     } catch { setMessage({ tone: "error", text: "Gmail scan could not be completed. No live cursor was advanced." }); }
     finally { setBusy(null); }

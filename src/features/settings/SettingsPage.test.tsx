@@ -24,13 +24,39 @@ function preferenceStore(overrides = {}): GmailPreferencesStore {
   return { get: vi.fn(async () => value), save: vi.fn(async (next) => { value = next; }) };
 }
 
-afterEach(async () => { cleanup(); await jobBuddyDb.delete(); await jobBuddyDb.open(); vi.restoreAllMocks(); });
+afterEach(async () => { cleanup(); sessionStorage.clear(); window.history.replaceState({}, "", "/"); await jobBuddyDb.delete(); await jobBuddyDb.open(); vi.restoreAllMocks(); });
 
 it("shows setup guidance without exposing a secret input", async () => {
   render(<MemoryRouter><SettingsPage client={client({ state: "unconfigured", platformSupported: true, lastError: "missing-config" })} preferences={preferenceStore()} /></MemoryRouter>);
 
-  expect(await screen.findByText(/copy .env.example to .env.local/i)).toBeVisible();
+  expect(await screen.findByText("Gmail connector awaiting setup")).toBeVisible();
+  await userEvent.click(screen.getByText("Maintainer / self-host setup"));
+  expect(screen.getByText(/copy .env.example to .env.local/i)).toBeVisible();
   expect(screen.queryByLabelText(/client secret/i)).not.toBeInTheDocument();
+});
+
+it("automatically performs the first scan only after a recent Connect action", async () => {
+  sessionStorage.setItem("job-buddy-gmail-connect-intent", String(Date.now()));
+  window.history.replaceState({}, "", "/settings?gmail=connected");
+  const preferences = preferenceStore();
+  const scan = vi.fn().mockResolvedValue({ cursor: "new-account-cursor" });
+  render(<MemoryRouter><SettingsPage client={client({ state: "connected", platformSupported: true })} preferences={preferences} mailAdapter={adapter} scan={scan} /></MemoryRouter>);
+  await screen.findByText(/new updates are ready in Updates/i);
+  expect(scan).toHaveBeenCalledOnce();
+  expect(scan).toHaveBeenCalledWith({ adapter, mode: "approval", initialSyncConfirmed: true });
+  expect(await preferences.get()).toMatchObject({ selectedSource: "gmail", initialSyncCompleted: true, dailyActiveScanEnabled: true });
+  expect(sessionStorage.getItem("job-buddy-gmail-connect-intent")).toBeNull();
+  expect(window.location.search).toBe("");
+});
+
+it("leaves a failed post-consent scan retryable with automatic sync disabled", async () => {
+  sessionStorage.setItem("job-buddy-gmail-connect-intent", String(Date.now()));
+  window.history.replaceState({}, "", "/settings?gmail=connected");
+  const preferences = preferenceStore({ initialSyncCompleted: true, dailyActiveScanEnabled: true });
+  render(<MemoryRouter><SettingsPage client={client({ state: "connected", platformSupported: true })} preferences={preferences} mailAdapter={adapter} scan={async () => ({ cursor: null, error: "failed" })} /></MemoryRouter>);
+  await screen.findByText(/first scan did not finish/i);
+  expect(await preferences.get()).toMatchObject({ initialSyncCompleted: false, dailyActiveScanEnabled: false });
+  expect(screen.getByRole("button", { name: /scan last 90 days/i })).toBeEnabled();
 });
 
 it("requires an explicit 90-day scan after connecting", async () => {

@@ -13,6 +13,8 @@ import { RoleMatchForm } from "./RoleMatchForm";
 import { roundSalaryDown } from "./roundSalary";
 import { buddyClient } from "../buddy/buddyClient";
 import "./research.css";
+import { CompanyResearchPanel } from "./CompanyResearchPanel";
+import { CurrencyComparison } from "./CurrencyComparison";
 
 interface SalaryEvidenceClient {
   listSalaryEvidence(): Promise<PendingSalaryEvidence[]>;
@@ -139,6 +141,7 @@ export function ResearchPanel({ application, client = researchClient, salaryEvid
     maximum: roundSalaryDown(estimate.exactNominalRange.maximum, estimate.currency, estimate.period),
   };
   return <div className="research-panel">
+    <CompanyResearchPanel key={application.id} application={application} />
     {!estimate && !snapshots.length && legacy && <p className="research-legacy"><strong>{legacy.currency} {legacy.minimum.toLocaleString("en-US")}{legacy.maximum !== undefined ? `–${legacy.maximum.toLocaleString("en-US")}` : ""} / {legacy.period === "annual" ? "year" : "month"}</strong><span>Legacy saved salary — source unavailable</span></p>}
     <RoleMatchForm title={application.role} market={market} overrides={roleAliases} onConfirm={confirmRole} />
     {roleMatch && <div className="research-actions"><button disabled={busy} onClick={() => void researchSalary()}>Research salary</button><button disabled={busy} onClick={() => void refresh()}>Refresh official sources</button></div>}
@@ -154,6 +157,7 @@ export function ResearchPanel({ application, client = researchClient, salaryEvid
     </section>}
     {estimate && nominal && <section aria-label="Salary estimate" className="research-result">
       <p className="research-range">{estimate.currency} {nominal.minimum.toLocaleString("en-US")}–{nominal.maximum.toLocaleString("en-US")} / {estimate.period === "annual" ? "year" : "month"}</p>
+      <CurrencyComparison currency={estimate.currency} minimum={estimate.exactNominalRange.minimum} maximum={estimate.exactNominalRange.maximum} period={estimate.period} />
       {fallbackMessage && <p>{fallbackMessage}</p>}
       {estimate.exactAdjustedRange && <p>Equivalent in {estimate.assumptions.find((item) => item.startsWith("Equivalent in"))?.match(/Equivalent in ([0-9-]+) prices/)?.[1] ?? "current"} prices: {estimate.currency} {estimate.displayRange.minimum.toLocaleString("en-US")}–{estimate.displayRange.maximum.toLocaleString("en-US")} / {estimate.period === "annual" ? "year" : "month"}. Purchasing-power adjustment only.</p>}
       <dl className="research-facts"><div><dt>Confidence</dt><dd>{estimate.confidence}</dd></div><div><dt>Official occupation</dt><dd>{estimate.roleMatch.sourceOccupationCode}</dd></div><div><dt>Local evidence</dt><dd>{estimate.evidenceSummary.eligible} eligible · {estimate.evidenceSummary.excluded} excluded</dd></div></dl>

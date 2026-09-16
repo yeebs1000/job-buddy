@@ -172,12 +172,17 @@ export function ProfilePage({
     <ProfileSection title="Application preferences" description="Buddy always asks before using salary, availability, relocation, or authorization answers.">
       <Field label="Singapore work authorization" value={profile.preferences.sgAuthorization} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, sgAuthorization: value } })} />
       <Field label="Hong Kong work authorization" value={profile.preferences.hkAuthorization} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, hkAuthorization: value } })} />
+      <Field label="United States work authorization" value={profile.preferences.usAuthorization} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, usAuthorization: value } })} />
+      <Field label="Need sponsorship now or in future — Singapore" value={profile.preferences.sgSponsorship} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, sgSponsorship: value } })} />
+      <Field label="Need sponsorship now or in future — Hong Kong" value={profile.preferences.hkSponsorship} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, hkSponsorship: value } })} />
+      <Field label="Need sponsorship now or in future — United States" value={profile.preferences.usSponsorship} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, usSponsorship: value } })} />
       <Field label="Availability date" type="date" value={profile.preferences.availabilityDate} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, availabilityDate: value } })} />
       <Field label="Notice period" value={profile.preferences.noticePeriod} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, noticePeriod: value } })} />
       <Field label="Relocation preference" value={profile.preferences.relocation} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, relocation: value } })} />
       <label className="profile-field"><span>Work arrangement</span><select value={profile.preferences.workArrangement ?? ""} onChange={(event) => setProfile({ ...profile, preferences: { ...profile.preferences, workArrangement: event.currentTarget.value as CandidateProfile["preferences"]["workArrangement"] || undefined } })}><option value="">Not set</option><option value="onsite">On-site</option><option value="hybrid">Hybrid</option><option value="remote">Remote</option></select></label>
       <NumberField label="Singapore salary expectation (SGD annual)" value={profile.preferences.salarySGDAnnual} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, salarySGDAnnual: value } })} />
       <NumberField label="Hong Kong salary expectation (HKD annual)" value={profile.preferences.salaryHKDAnnual} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, salaryHKDAnnual: value } })} />
+      <NumberField label="United States salary expectation (USD annual)" value={profile.preferences.salaryUSDAnnual} onChange={(value) => setProfile({ ...profile, preferences: { ...profile.preferences, salaryUSDAnnual: value } })} />
     </ProfileSection>
 
     <CollectionSection title="Reusable factual answers" addLabel="Add reusable answer" canAdd={profile.standardAnswers.length < 50} onAdd={() => setProfile({ ...profile, standardAnswers: [...profile.standardAnswers, { question: "", answer: "" }] })}>

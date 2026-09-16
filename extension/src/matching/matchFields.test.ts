@@ -2,6 +2,30 @@ import { describe, expect, it } from "vitest";
 import { matchField } from "./matchFields";
 
 describe("matchField", () => {
+  it.each([
+    ["Are you legally authorized to work in the United States?", "preferences.usAuthorization"],
+    ["Will you now or in the future require sponsorship to work in the US?", "preferences.usSponsorship"],
+    ["Do you require visa sponsorship in Singapore?", "preferences.sgSponsorship"],
+    ["Do you require visa sponsorship in Hong Kong?", "preferences.hkSponsorship"],
+    ["Expected annual salary (USD)", "preferences.salaryUSDAnnual"],
+    ["Notice period", "preferences.noticePeriod"],
+    ["Available start date", "preferences.availabilityDate"],
+    ["Willing to relocate", "preferences.relocation"],
+  ])("requires review for the saved answer to %s", (label, canonicalPath) => {
+    expect(matchField(raw({ label }))).toMatchObject({ canonicalPath, risk: "review" });
+  });
+
+  it.each([
+    ["Expected monthly salary (SGD)", "salary_sgd"],
+    ["Expected hourly salary (USD)", "salary_usd"],
+    ["Expected salary (SGD)", "salary_sgd"],
+    ["Are you NOT authorized to work in Singapore?", "work_authorization_sg"],
+    ["Are you authorized to work in Singapore or Hong Kong?", ""],
+    ["Will you require sponsorship?", "work_authorization_sg"],
+    ["Are you authorized to work?", ""],
+  ])("does not guess an answer for %s", (label, name) => {
+    expect(matchField(raw({ label, name })).canonicalPath).toBeUndefined();
+  });
   it("uses exact autocomplete before a conflicting nearby label", () => {
     expect(matchField({
       id: "candidate-email",

@@ -3,7 +3,8 @@
 .research-panel legend { font-weight: 700; padding: 0 .35rem; }
 .research-panel label:not(.research-check) { display: grid; gap: .35rem; font-weight: 600; }
 .research-panel input, .research-panel select, .research-panel textarea { border: 1px solid var(--color-border, #c7c7cc); border-radius: 10px; font: inherit; padding: .65rem .75rem; }
-.research-check { align-items: center; display: flex; gap: .5rem; }
+.research-panel label.research-check { align-items: center; display: flex; flex-direction: row; gap: .5rem; min-height: 44px; }
+.research-panel .research-check input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0; flex: 0 0 18px; }
 .research-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
 .research-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
 .research-panel button { border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 650; padding: .65rem 1rem; }

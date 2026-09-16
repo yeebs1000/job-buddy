@@ -16,10 +16,10 @@ interface GmailSettingsPanelProps {
 
 function connectionCopy(status: GmailConnectionStatus): { title: string; detail: string } {
   if (!status.platformSupported) return { title: "Gmail unavailable on this device", detail: "Windows is required for persistent Gmail access in this version. The demo inbox remains available." };
-  if (status.state === "unconfigured") return { title: "Google OAuth setup needed", detail: "Copy .env.example to .env.local, add your Google OAuth client values, then restart Job Buddy." };
-  if (status.state === "reconnect-required") return { title: "Reconnect Gmail", detail: "Google no longer accepts the saved authorization. Reconnect to resume read-only scans." };
+  if (status.state === "unconfigured") return { title: "Gmail connector awaiting setup", detail: "This build does not yet include the Job Buddy Google connection. The maintainer must register and configure the connector before you can sign in." };
+  if (status.state === "reconnect-required") return { title: "Reconnect Gmail", detail: "Google no longer accepts the saved authorization. Reconnecting checks up to 500 inbox messages from the last 90 days and resumes daily read-only checks while the app is open." };
   if (status.state === "connected") return { title: "Gmail connected", detail: "Job Buddy can read recruiting email only when you start a scan or an eligible daily check runs while the app is open." };
-  return { title: "Gmail not connected", detail: "Connect a Gmail account to identify recruiter replies and interview details." };
+  return { title: "Gmail not connected", detail: "Sign in with Google to bring recruiter replies and interview details into your tracker. Connecting also checks up to 500 messages from the last 90 days, then enables daily checks while Job Buddy is open." };
 }
 
 const stateLabels: Record<GmailConnectionStatus["state"], string> = {
@@ -46,6 +46,8 @@ export function GmailSettingsPanel(props: GmailSettingsPanelProps) {
         {connected && <Button variant="secondary" disabled={Boolean(busy)} onClick={props.onDisconnect}>Disconnect</Button>}
       </div>
     </div>
+
+    {status.state === "unconfigured" && <details><summary>Maintainer / self-host setup</summary><p>Copy .env.example to .env.local and configure a Google OAuth client, or distribute a build with the maintainer-owned Desktop client ID. Public Gmail access requires Google verification. No end-user API key is needed in a configured build.</p></details>}
 
     {connected && !preferences.initialSyncCompleted && <div className="gmail-settings__row">
       <div><h3>Bring in recent updates</h3><p>Review up to 500 inbox messages from the last 90 days. Promotions and social mail are excluded.</p></div>

@@ -12,7 +12,7 @@ export type BuddyPanelModel =
   | { state: "salary-evidence-sent" }
   | { state: "error"; message: string };
 
-export interface BuddyReviewField { id: string; label: string; risk: "safe" | "review"; }
+export interface BuddyReviewField { id: string; label: string; risk: "safe" | "review"; preview?: string; }
 export interface BuddyPanelOptions {
   onPair?: (code: string) => Promise<void> | void;
   onFillApproved?: (fieldIds: string[]) => Promise<void> | void;
@@ -130,7 +130,7 @@ export class BuddyPanel {
         const text = doc.createElement("span");
         text.textContent = field.label;
         const badge = doc.createElement("small");
-        badge.textContent = field.risk === "review" ? "Check carefully" : "Profile match";
+        badge.textContent = field.preview !== undefined ? `Review answer: ${field.preview}` : field.risk === "review" ? "Check carefully" : "Profile match";
         label.append(checkbox, text, badge);
         list.append(label);
       }

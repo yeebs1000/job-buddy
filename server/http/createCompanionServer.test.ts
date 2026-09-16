@@ -64,6 +64,19 @@ afterEach(async () => {
 });
 
 describe("createCompanionServer", () => {
+  it("restricts discovery and FX to dashboard POSTs with validated identifiers", async () => {
+    const discovery = { list: vi.fn().mockResolvedValue({ jobs: [], truncated: false, retrievedAt: "2026-09-16T12:00:00Z" }), salary: vi.fn().mockResolvedValue([]) };
+    const fx = { quote: vi.fn().mockResolvedValue({ base: "USD", quote: "SGD", date: "2026-09-16", rate: 1.27, retrievedAt: "2026-09-16T12:00:00Z", sourceUrl: "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html" }) };
+    const base = await start(services({ discovery, fx }));
+    const post = (path: string, body: unknown, origin = "http://127.0.0.1:5173") => fetch(base + path, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
+    expect((await post("/api/discovery/jobs", { provider: "greenhouse", token: "example" }, "https://evil.example")).status).toBe(403);
+    expect((await post("/api/discovery/jobs", { provider: "greenhouse", token: "../secret" })).status).toBe(400);
+    expect((await post("/api/discovery/jobs", { provider: "greenhouse", token: "example" })).status).toBe(200);
+    expect(discovery.list).toHaveBeenCalledWith({ provider: "greenhouse", token: "example", region: "global" });
+    expect((await post("/api/research/fx", { base: "USD", quote: "XXX" })).status).toBe(400);
+    expect((await post("/api/research/fx", { base: "USD", quote: "SGD" })).status).toBe(200);
+    expect(fx.quote).toHaveBeenCalledWith("USD", "SGD");
+  });
   it("keeps salary evidence behind the paired-extension and dashboard boundaries", async () => {
     const testServices = services();
     const base = await start(testServices);

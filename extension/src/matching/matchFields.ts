@@ -46,6 +46,12 @@ const exactAliases: Record<string, ProfilePath> = {
   "portfolio url": "links.portfolio",
   portfolio: "links.portfolio",
   skills: "skills",
+  "notice period": "preferences.noticePeriod",
+  "available start date": "preferences.availabilityDate",
+  "availability date": "preferences.availabilityDate",
+  "willing to relocate": "preferences.relocation",
+  "relocation preference": "preferences.relocation",
+  "work arrangement": "preferences.workArrangement",
   "salary sgd": "preferences.salarySGDAnnual",
   "salary hkd": "preferences.salaryHKDAnnual",
   "work authorization sg": "preferences.sgAuthorization",
@@ -62,21 +68,33 @@ export function matchField(raw: RawField): DetectedField {
     return result(raw, undefined, 1, "manual", "manual-only-field");
   }
 
+  // These answers are not interchangeable. Resolve the visible question before aliases.
+  const question = normalize(raw.label);
+  const marketPaths = [
+    { test: /\b(singapore|sg|sgd)\b/, auth: "preferences.sgAuthorization", sponsor: "preferences.sgSponsorship", salary: "preferences.salarySGDAnnual" },
+    { test: /\b(hong kong|hk|hkd)\b/, auth: "preferences.hkAuthorization", sponsor: "preferences.hkSponsorship", salary: "preferences.salaryHKDAnnual" },
+    { test: /\b(united states|usa|us|usd)\b/, auth: "preferences.usAuthorization", sponsor: "preferences.usSponsorship", salary: "preferences.salaryUSDAnnual" },
+  ] as const;
+  const markets = marketPaths.filter((market) => market.test.test(question));
+  if (/sponsor|authori[sz]|right to work|salary|compensation|expected pay/.test(question)) {
+    if (markets.length !== 1 || /\b(not|without|never|no longer)\b/.test(question)) return result(raw, undefined, 0, "review", "ambiguous-preference");
+    const market = markets[0];
+    if (/sponsor/.test(question)) return result(raw, market.sponsor, 0.9, "review", "market-sponsorship-label");
+    if (/authori[sz]|right to work/.test(question)) return result(raw, market.auth, 0.9, "review", "market-authorization-label");
+    if (/\b(annual|annually|year|yearly)\b/.test(question) && !/\b(hour|hourly|month|monthly|week|weekly)\b/.test(question)) return result(raw, market.salary, 0.9, "review", "market-salary-label");
+    return result(raw, undefined, 0, "review", "unspecified-pay-period");
+  }
+
   const autocomplete = raw.autocomplete?.trim().toLowerCase().split(/\s+/).at(-1) ?? "";
   const autocompletePath = autocompletePaths[autocomplete];
   if (autocompletePath) return result(raw, autocompletePath, 1, riskForPath(autocompletePath), "standard-autocomplete");
 
   const normalizedName = normalize(raw.name ?? "");
   const namePath = exactAliases[normalizedName];
+  if (namePath && /salary|Authorization/.test(namePath)) return result(raw, undefined, 0, "review", "question-context-required");
   if (namePath) return result(raw, namePath, 0.95, riskForPath(namePath), "known-field-alias");
 
   const normalizedLabel = normalize(raw.label);
-  if (/salary|compensation|expected pay/.test(normalizedLabel)) {
-    if (/sgd|singapore/.test(normalizedLabel)) return result(raw, "preferences.salarySGDAnnual", 0.9, "review", "market-salary-label");
-    if (/hkd|hong kong/.test(normalizedLabel)) return result(raw, "preferences.salaryHKDAnnual", 0.9, "review", "market-salary-label");
-  }
-  if (/authori[sz](ed|ation).*singapore|right to work.*singapore/.test(normalizedLabel)) return result(raw, "preferences.sgAuthorization", 0.9, "review", "market-authorization-label");
-  if (/authori[sz](ed|ation).*hong kong|right to work.*hong kong/.test(normalizedLabel)) return result(raw, "preferences.hkAuthorization", 0.9, "review", "market-authorization-label");
 
   const labelPath = exactAliases[normalizedLabel];
   if (labelPath) return result(raw, labelPath, 0.9, riskForPath(labelPath), "normalized-label-alias");

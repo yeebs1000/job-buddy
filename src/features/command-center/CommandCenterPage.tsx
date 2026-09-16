@@ -16,7 +16,6 @@ import { GmailMailAdapter } from "../../integrations/mail/GmailMailAdapter";
 import type { GmailConnectionStatus } from "../../domain/mail";
 import type { MailScanMode } from "../updates/runMailScan";
 import { useMailScan } from "../updates/useMailScan";
-import { useDailyActiveScan } from "../updates/useDailyActiveScan";
 import { gmailClient } from "../settings/gmailClient";
 import { defaultGmailPreferences, gmailPreferences, type GmailPreferences } from "../settings/gmailPreferences";
 import { PendingCaptures } from "../buddy/PendingCaptures";
@@ -60,15 +59,6 @@ function MailScanStatus({ adapter, onScanned, mode, onModeChange, gmailStatus, p
     try { const result = await scan(); if (!result.error) await onScanned(); else setFailed(true); }
     catch { setFailed(true); }
   }
-  useDailyActiveScan({
-    connected: live && connected,
-    enabled: preferences.dailyActiveScanEnabled,
-    initialSyncCompleted: preferences.initialSyncCompleted,
-    lastSuccessfulScanAt: state?.lastSuccessfulScanAt,
-    now: new Date().toISOString(),
-    sessionKey: `gmail:${gmailStatus.accountEmail ?? "unknown"}`,
-    scan: async () => { const result = await scan(); if (!result.error) await onScanned(); },
-  });
   const sourceLabel = live ? "Live Gmail" : "Demo inbox";
   const scanLabel = live ? "Gmail" : "demo inbox";
   return <section aria-label={`${sourceLabel} scan`} className="command-center__scan" data-source={adapter.source}>
@@ -136,6 +126,12 @@ export function CommandCenterPage({ mailAdapter, gmailAdapter = liveMail, fixtur
   }
 
   useEffect(() => {
+    const refresh = () => { void loadApplications(); };
+    window.addEventListener("job-buddy-mail-updated", refresh);
+    return () => window.removeEventListener("job-buddy-mail-updated", refresh);
+  }, []);
+
+  useEffect(() => {
     let mounted = true;
     void readApplications().then(
       (next) => { if (mounted) setApplications(next); },
@@ -163,7 +159,7 @@ export function CommandCenterPage({ mailAdapter, gmailAdapter = liveMail, fixtur
   return (
     <div className="command-center">
       <header className="command-center__header">
-        <div><h1>Application command center</h1><p>See what needs your attention across Singapore and Hong Kong.</p></div>
+        <div><h1>Application command center</h1><p>See what needs your attention across Singapore, Hong Kong and the United States.</p></div>
         <div className="command-center__actions"><Link className="button button--secondary" to="/import">Import tracker</Link><Link className="button button--primary" to="/applications?new=1">Add application</Link></div>
       </header>
 

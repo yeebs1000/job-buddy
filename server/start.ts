@@ -16,6 +16,8 @@ import { ResearchService } from "./research/ResearchService";
 import { SingaporeMomAdapter } from "./research/adapters/SingaporeMomAdapter";
 import { HongKongCsdAdapter } from "./research/adapters/HongKongCsdAdapter";
 import { UnitedStatesBlsAdapter } from "./research/adapters/UnitedStatesBlsAdapter";
+import { DiscoveryService } from "./discovery/DiscoveryService";
+import { FxService } from "./research/FxService";
 
 const config = readCompanionConfig(process.env);
 const developmentOrigin = "http://127.0.0.1:5173";
@@ -33,7 +35,7 @@ const research = new ResearchService({
   sources: [new SingaporeMomAdapter(), new HongKongCsdAdapter(), new UnitedStatesBlsAdapter()],
 });
 const server = createCompanionServer({
-  services: { connection, sync, profile, buddy, research },
+  services: { connection, sync, profile, buddy, research, discovery: new DiscoveryService(), fx: new FxService() },
   allowedOrigins: config.uiOrigins,
   uiOrigin,
   ...(uiOrigin === productionOrigin ? { staticDir: resolve("dist") } : {}),

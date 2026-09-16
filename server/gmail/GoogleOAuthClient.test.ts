@@ -10,6 +10,19 @@ const google = {
 } satisfies NonNullable<CompanionConfig["google"]>;
 
 describe("GoogleOAuthClient", () => {
+  it("exchanges and refreshes desktop tokens using PKCE without a secret", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({ access_token: "access-token", refresh_token: "refresh-token", expires_in: 3600 })));
+    const oauth = new GoogleOAuthClient({ clientId: "desktop-id", redirectUri: google.redirectUri }, fetcher);
+    await oauth.exchangeCode({ code: "code", codeVerifier: "verifier" });
+    await oauth.refreshAccessToken("refresh-token");
+    const first = new URLSearchParams(String(fetcher.mock.calls[0][1]?.body));
+    expect(first.get("code_verifier")).toBe("verifier");
+    for (const [, request] of fetcher.mock.calls) {
+      const body = new URLSearchParams(String(request?.body));
+      expect(body.get("client_id")).toBe("desktop-id");
+      expect(body.has("client_secret")).toBe(false);
+    }
+  });
   it("creates an offline, read-only, PKCE authorization request", () => {
     const oauth = new GoogleOAuthClient(google, vi.fn());
     const attempt = new OAuthAttemptStore().create("2026-09-15T08:00:00.000Z");

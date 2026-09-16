@@ -71,12 +71,17 @@ const projectSchema = z.object({
 const preferencesSchema = z.object({
   sgAuthorization: optionalShortText,
   hkAuthorization: optionalShortText,
+  usAuthorization: optionalShortText,
+  sgSponsorship: optionalShortText,
+  hkSponsorship: optionalShortText,
+  usSponsorship: optionalShortText,
   availabilityDate: optionalShortText,
   noticePeriod: optionalShortText,
   relocation: optionalShortText,
   workArrangement: z.enum(["onsite", "hybrid", "remote"]).optional(),
   salarySGDAnnual: z.number().int().positive().max(10_000_000).optional(),
   salaryHKDAnnual: z.number().int().positive().max(100_000_000).optional(),
+  salaryUSDAnnual: z.number().int().positive().max(10_000_000).optional(),
 }).strict();
 
 const standardAnswerSchema = z.object({
@@ -121,8 +126,10 @@ const staticPaths = new Set([
   "contact.postalCode", "contact.country",
   "links.linkedin", "links.github", "links.portfolio", "skills",
   "preferences.sgAuthorization", "preferences.hkAuthorization",
+  "preferences.usAuthorization", "preferences.sgSponsorship", "preferences.hkSponsorship", "preferences.usSponsorship",
   "preferences.availabilityDate", "preferences.noticePeriod", "preferences.relocation",
   "preferences.workArrangement", "preferences.salarySGDAnnual", "preferences.salaryHKDAnnual",
+  "preferences.salaryUSDAnnual",
 ] as const);
 
 const collectionRules = {

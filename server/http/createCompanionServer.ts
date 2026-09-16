@@ -6,7 +6,9 @@ import type { BuddyActivityEntry, BuddyPreferences, PendingCapture, PendingSalar
 import type { CandidateProfile, ProfileSelection } from "../../src/domain/profile";
 import type { GmailScanResponse } from "../gmail/GmailSyncService";
 import { z } from "zod";
-import { marketSchema, type Market } from "../../src/domain/research";
+import { currencySchema, marketSchema, type Market, type Currency } from "../../src/domain/research";
+import { boardSchema, type JobBoard, type DiscoveryResult, type PostingPay } from "../../src/domain/discovery";
+import type { FxQuote } from "../../src/domain/fx";
 
 interface ConnectionServicePort {
   status(): Promise<GmailConnectionStatus>;
@@ -60,6 +62,8 @@ export interface CompanionServerServices {
   profile: ProfileServicePort;
   buddy: BuddyServicePort;
   research?: ResearchServicePort;
+  discovery?: { list(board: JobBoard): Promise<DiscoveryResult>; salary(input: { board: JobBoard; postingId: string }): Promise<PostingPay[]> };
+  fx?: { quote(base: Currency, quote: Currency): Promise<FxQuote> };
 }
 
 export interface CompanionServerOptions {
@@ -222,6 +226,34 @@ export function createCompanionServer(options: CompanionServerOptions) {
           ...(status.lastError ? { lastError: status.lastError } : {}),
         });
         return;
+      }
+      if (url.pathname.startsWith("/api/discovery/") || url.pathname === "/api/research/fx") {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        if (request.method !== "POST") throw new HttpInputError(405, "method-not-allowed");
+        if (url.pathname === "/api/research/fx") {
+          const parsed = z.object({ base: currencySchema, quote: currencySchema }).strict().safeParse(await readJson(request));
+          if (!parsed.success) throw new HttpInputError(400, "invalid-currency-pair");
+          if (!options.services.fx) throw new HttpInputError(503, "fx-unavailable");
+          try { json(response, 200, await options.services.fx.quote(parsed.data.base, parsed.data.quote)); }
+          catch { throw new HttpInputError(502, "fx-unavailable"); }
+          return;
+        }
+        if (!options.services.discovery) throw new HttpInputError(503, "discovery-unavailable");
+        if (url.pathname === "/api/discovery/jobs") {
+          const parsed = boardSchema.safeParse(await readJson(request));
+          if (!parsed.success) throw new HttpInputError(400, "invalid-job-board");
+          try { json(response, 200, await options.services.discovery.list(parsed.data)); }
+          catch { throw new HttpInputError(502, "board-unavailable"); }
+          return;
+        }
+        if (url.pathname === "/api/discovery/salary") {
+          const parsed = z.object({ board: boardSchema, postingId: z.string().regex(/^[a-zA-Z0-9-]{1,100}$/) }).strict().safeParse(await readJson(request));
+          if (!parsed.success) throw new HttpInputError(400, "invalid-job-posting");
+          try { json(response, 200, { salary: await options.services.discovery.salary(parsed.data) }); }
+          catch { throw new HttpInputError(502, "posting-unavailable"); }
+          return;
+        }
+        throw new HttpInputError(404, "not-found");
       }
       if (url.pathname.startsWith("/api/research/")) {
         if (!origin) throw new HttpInputError(403, "origin-not-allowed");

@@ -96,7 +96,7 @@ export class GoogleOAuthClient {
       body: new URLSearchParams({
         ...fields,
         client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
+        ...(this.config.clientSecret ? { client_secret: this.config.clientSecret } : {}),
       }).toString(),
     });
     const payload = record(await response.json().catch(() => null));
@@ -116,7 +116,7 @@ export class GoogleOAuthClient {
 
   private async safeFetch(input: string, init: RequestInit): Promise<Response> {
     try {
-      return await this.fetcher(input, init);
+      return await this.fetcher(input, { ...init, signal: AbortSignal.timeout(15_000) });
     } catch {
       throw new GoogleOAuthError("request-failed");
     }
