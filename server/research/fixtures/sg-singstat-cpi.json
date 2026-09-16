@@ -1,0 +1,18 @@
+{
+  "Data": {
+    "metadata": { "basePeriod": "2019=100" },
+    "row": [
+      {
+        "rowText": "All Items",
+        "columns": [
+          { "key": "2025 06", "value": "116.2" },
+          { "key": "2026 08", "value": "118.1" }
+        ]
+      },
+      {
+        "rowText": "Transport",
+        "columns": [{ "key": "2026 08", "value": "120.0" }]
+      }
+    ]
+  }
+}
