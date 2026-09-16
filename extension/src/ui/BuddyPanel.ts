@@ -1,4 +1,5 @@
 import { buddyStyles } from "./styles";
+import type { PendingSalaryEvidence } from "../../../src/domain/buddy";
 
 export type BuddyPanelModel =
   | { state: "unpaired" }
@@ -7,6 +8,8 @@ export type BuddyPanelModel =
   | { state: "review"; mode: "approval" | "automatic"; matched: number; manual: number; autoFilled: number; fields: readonly BuddyReviewField[] }
   | { state: "capture"; company: string; role: string; location: string }
   | { state: "capture-sent" }
+  | { state: "salary-evidence"; evidence: PendingSalaryEvidence }
+  | { state: "salary-evidence-sent" }
   | { state: "error"; message: string };
 
 export interface BuddyReviewField { id: string; label: string; risk: "safe" | "review"; }
@@ -14,6 +17,7 @@ export interface BuddyPanelOptions {
   onPair?: (code: string) => Promise<void> | void;
   onFillApproved?: (fieldIds: string[]) => Promise<void> | void;
   onSendCapture?: () => Promise<void> | void;
+  onSendSalaryEvidence?: (evidence: PendingSalaryEvidence) => Promise<void> | void;
 }
 
 export class BuddyPanel {
@@ -24,6 +28,7 @@ export class BuddyPanel {
   private readonly onPair: (code: string) => Promise<void> | void;
   private readonly onFillApproved: (fieldIds: string[]) => Promise<void> | void;
   private readonly onSendCapture: () => Promise<void> | void;
+  private readonly onSendSalaryEvidence: (evidence: PendingSalaryEvidence) => Promise<void> | void;
 
   constructor(parent: HTMLElement, options: BuddyPanelOptions = {}) {
     this.host = parent.ownerDocument.createElement("div");
@@ -33,6 +38,7 @@ export class BuddyPanel {
     this.onPair = options.onPair ?? (() => undefined);
     this.onFillApproved = options.onFillApproved ?? (() => undefined);
     this.onSendCapture = options.onSendCapture ?? (() => undefined);
+    this.onSendSalaryEvidence = options.onSendSalaryEvidence ?? (() => undefined);
     this.shadowRoot.addEventListener("keydown", (event) => { if ((event as KeyboardEvent).key === "Escape") this.collapse(); });
     parent.append(this.host);
     this.draw();
@@ -164,6 +170,37 @@ export class BuddyPanel {
     if (this.model.state === "capture-sent") {
       const heading = doc.createElement("h2"); heading.textContent = "Ready in your dashboard";
       const copy = doc.createElement("p"); copy.textContent = "Open Job Buddy to review the application before adding it to your tracker.";
+      body.append(heading, copy);
+      return;
+    }
+    if (this.model.state === "salary-evidence") {
+      const evidence = { ...this.model.evidence };
+      const heading = doc.createElement("h2"); heading.textContent = "Salary found";
+      const copy = doc.createElement("p"); copy.textContent = "Review and correct this range before adding it to your local dashboard.";
+      const form = doc.createElement("form"); form.className = "review-form";
+      const minimumLabel = doc.createElement("label"); minimumLabel.textContent = `Minimum (${evidence.currency})`;
+      const minimum = doc.createElement("input"); minimum.type = "number"; minimum.name = "salary-minimum"; minimum.min = "1"; minimum.value = String(evidence.minimum);
+      minimum.addEventListener("input", () => { evidence.minimum = Number(minimum.value); }); minimumLabel.append(minimum);
+      const maximumLabel = doc.createElement("label"); maximumLabel.textContent = `Maximum (${evidence.currency})`;
+      const maximum = doc.createElement("input"); maximum.type = "number"; maximum.name = "salary-maximum"; maximum.min = "1"; maximum.value = String(evidence.maximum);
+      maximum.addEventListener("input", () => { evidence.maximum = Number(maximum.value); }); maximumLabel.append(maximum);
+      const periodLabel = doc.createElement("label"); periodLabel.textContent = "Pay period";
+      const period = doc.createElement("select"); period.name = "salary-period";
+      for (const value of ["monthly", "annual"] as const) { const option = doc.createElement("option"); option.value = value; option.textContent = value; option.selected = value === evidence.period; period.append(option); }
+      period.addEventListener("change", () => { evidence.period = period.value as PendingSalaryEvidence["period"]; }); periodLabel.append(period);
+      const send = doc.createElement("button"); send.type = "submit"; send.className = "primary"; send.dataset.action = "add-salary-evidence"; send.textContent = "Add salary evidence";
+      form.append(minimumLabel, maximumLabel, periodLabel, send);
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (Number.isFinite(evidence.minimum) && Number.isFinite(evidence.maximum) && evidence.minimum > 0 && evidence.maximum >= evidence.minimum) void this.onSendSalaryEvidence(evidence);
+      });
+      const guarantee = doc.createElement("small"); guarantee.textContent = "Nothing is sent until you click Add salary evidence. Form answers and page content stay on this page.";
+      body.append(heading, copy, form, guarantee);
+      return;
+    }
+    if (this.model.state === "salary-evidence-sent") {
+      const heading = doc.createElement("h2"); heading.textContent = "Salary evidence queued";
+      const copy = doc.createElement("p"); copy.textContent = "Open the matching application in Job Buddy to import it.";
       body.append(heading, copy);
       return;
     }

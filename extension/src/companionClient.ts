@@ -2,9 +2,11 @@ import {
   buddyActivityEntrySchema,
   buddyPreferencesSchema,
   parsePendingCapture,
+  parsePendingSalaryEvidence,
   type BuddyActivityEntry,
   type BuddyPreferences,
   type PendingCapture,
+  type PendingSalaryEvidence,
 } from "../../src/domain/buddy";
 import { parseProfilePath, type ProfileSelection } from "../../src/domain/profile";
 
@@ -91,6 +93,10 @@ export class CompanionClient {
 
   async queueCapture(capture: PendingCapture): Promise<void> {
     await this.sendJson("/api/buddy/captures", { method: "POST", body: { capture: parsePendingCapture(capture) } });
+  }
+
+  async queueSalaryEvidence(evidence: PendingSalaryEvidence): Promise<void> {
+    await this.sendJson("/api/buddy/salary-evidence", { method: "POST", body: { evidence: parsePendingSalaryEvidence(evidence) } });
   }
 
   private async sendJson(path: string, options: { method: "GET" | "POST" | "PUT"; body?: unknown; authenticated?: boolean; expectJson?: boolean }): Promise<unknown> {

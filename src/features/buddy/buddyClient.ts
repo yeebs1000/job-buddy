@@ -3,9 +3,11 @@ import {
   buddyActivityEntrySchema,
   buddyPreferencesSchema,
   pendingCaptureSchema,
+  pendingSalaryEvidenceSchema,
   type BuddyActivityEntry,
   type BuddyPreferences,
   type PendingCapture,
+  type PendingSalaryEvidence,
 } from "../../domain/buddy";
 
 const buddyStatusSchema = z.discriminatedUnion("paired", [
@@ -16,6 +18,7 @@ const pairingStartSchema = z.object({ code: z.string(), expiresAt: z.string().da
 const preferencesResponseSchema = z.object({ preferences: buddyPreferencesSchema }).strict();
 const activityResponseSchema = z.object({ activity: z.array(buddyActivityEntrySchema) }).strict();
 const capturesResponseSchema = z.object({ captures: z.array(pendingCaptureSchema) }).strict();
+const salaryEvidenceResponseSchema = z.object({ evidence: z.array(pendingSalaryEvidenceSchema) }).strict();
 
 export type BuddyStatus = z.infer<typeof buddyStatusSchema>;
 
@@ -29,6 +32,8 @@ export interface BuddyClient {
   clearActivity(): Promise<void>;
   listCaptures(): Promise<PendingCapture[]>;
   deleteCapture(id: string): Promise<void>;
+  listSalaryEvidence(): Promise<PendingSalaryEvidence[]>;
+  deleteSalaryEvidence(id: string): Promise<void>;
 }
 
 async function request(path: string, init?: RequestInit): Promise<Response> {
@@ -70,5 +75,11 @@ export const buddyClient: BuddyClient = {
   },
   async deleteCapture(id) {
     await request(`/api/buddy/captures/${encodeURIComponent(id)}`, { method: "DELETE", headers: jsonHeaders, body: "{}" });
+  },
+  async listSalaryEvidence() {
+    return salaryEvidenceResponseSchema.parse(await requestJson("/api/buddy/salary-evidence", { headers: { accept: "application/json" } })).evidence;
+  },
+  async deleteSalaryEvidence(id) {
+    await request(`/api/buddy/salary-evidence/${encodeURIComponent(id)}`, { method: "DELETE", headers: jsonHeaders, body: "{}" });
   },
 };

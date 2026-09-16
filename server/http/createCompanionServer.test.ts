@@ -51,6 +51,9 @@ function services(overrides: Partial<CompanionServerServices> = {}): CompanionSe
       updateExtensionPreference: vi.fn().mockResolvedValue(defaultBuddyPreferences),
       appendActivity: vi.fn().mockResolvedValue(undefined),
       addCapture: vi.fn().mockResolvedValue({}),
+      listSalaryEvidence: vi.fn().mockResolvedValue([]),
+      deleteSalaryEvidence: vi.fn().mockResolvedValue(undefined),
+      addSalaryEvidence: vi.fn().mockImplementation(async (_auth, evidence) => evidence),
     },
     ...overrides,
   };
@@ -61,6 +64,25 @@ afterEach(async () => {
 });
 
 describe("createCompanionServer", () => {
+  it("keeps salary evidence behind the paired-extension and dashboard boundaries", async () => {
+    const testServices = services();
+    const base = await start(testServices);
+    const extensionOrigin = `chrome-extension://${"a".repeat(32)}`;
+    const evidence = { id: "salary-1", market: "US", currency: "USD", period: "annual", minimum: 120_000, maximum: 165_000,
+      sourceUrl: "https://jobs.example/role", detectedAt: "2026-09-16T01:00:00.000Z" };
+
+    const queued = await fetch(`${base}/api/buddy/salary-evidence`, {
+      method: "POST", headers: { origin: extensionOrigin, authorization: `Bearer ${pairedToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ evidence }),
+    });
+    const listed = await fetch(`${base}/api/buddy/salary-evidence`, { headers: { origin: "http://127.0.0.1:5173" } });
+    const denied = await fetch(`${base}/api/buddy/salary-evidence`, { headers: { origin: "https://evil.example" } });
+
+    expect(queued.status).toBe(201);
+    expect(testServices.buddy.addSalaryEvidence).toHaveBeenCalledWith({ token: pairedToken, origin: extensionOrigin }, evidence);
+    expect(listed.status).toBe(200);
+    expect(denied.status).toBe(403);
+  });
   it("keeps research endpoints dashboard-only and validates lookup requests", async () => {
     const research = {
       status: vi.fn().mockResolvedValue([{ market: "US", activeReleaseId: "us-2025", quarantineCount: 0, latestQuarantinePath: "C:/private/cache.json" }]),

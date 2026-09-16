@@ -68,4 +68,22 @@ describe("BuddyPanel", () => {
 
     expect(onSendCapture).toHaveBeenCalledOnce();
   });
+
+  it("allows correction and explicitly sends normalized salary evidence", () => {
+    const onSendSalaryEvidence = vi.fn();
+    const panel = new BuddyPanel(document.body, { onSendSalaryEvidence });
+    panel.render({ state: "salary-evidence", evidence: {
+      id: "salary-1", market: "US", currency: "USD", period: "annual", minimum: 120_000, maximum: 165_000,
+      sourceUrl: "https://jobs.example/role", evidenceExcerpt: "$120,000 to $165,000 a year", detectedAt: "2026-09-16T01:00:00.000Z",
+    } });
+    panel.expand();
+
+    expect(onSendSalaryEvidence).not.toHaveBeenCalled();
+    const minimum = panel.shadowRoot.querySelector<HTMLInputElement>('input[name="salary-minimum"]')!;
+    minimum.value = "125000";
+    minimum.dispatchEvent(new Event("input", { bubbles: true }));
+    panel.shadowRoot.querySelector<HTMLButtonElement>('button[data-action="add-salary-evidence"]')!.click();
+
+    expect(onSendSalaryEvidence).toHaveBeenCalledWith(expect.objectContaining({ minimum: 125_000, maximum: 165_000 }));
+  });
 });

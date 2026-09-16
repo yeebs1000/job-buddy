@@ -4,6 +4,7 @@ import {
   type BuddyPreferences,
   type ExtensionResponse,
   type PendingCapture,
+  type PendingSalaryEvidence,
 } from "../../src/domain/buddy";
 import type { ProfileSelection } from "../../src/domain/profile";
 import { companionClient } from "./companionClient";
@@ -16,6 +17,7 @@ export interface ExtensionWorkerClient {
   updatePreferences(patch: unknown): Promise<BuddyPreferences>;
   recordActivity(activity: BuddyActivityEntry): Promise<void>;
   queueCapture(capture: PendingCapture): Promise<void>;
+  queueSalaryEvidence(evidence: PendingSalaryEvidence): Promise<void>;
 }
 
 export function createMessageHandler(client: ExtensionWorkerClient, extensionId: string) {
@@ -32,6 +34,7 @@ export function createMessageHandler(client: ExtensionWorkerClient, extensionId:
         case "update-preferences": return { ok: true, type: "preferences", preferences: await client.updatePreferences(parsed.data.patch) };
         case "record-activity": await client.recordActivity(parsed.data.activity); return { ok: true, type: "recorded" };
         case "queue-capture": await client.queueCapture(parsed.data.capture); return { ok: true, type: "captured" };
+        case "queue-salary-evidence": await client.queueSalaryEvidence(parsed.data.evidence); return { ok: true, type: "salary-evidence-captured" };
       }
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? error.code : "request-failed";

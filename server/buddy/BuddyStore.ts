@@ -8,10 +8,13 @@ import {
   buddyPreferencesSchema,
   defaultBuddyPreferences,
   parsePendingCapture,
+  parsePendingSalaryEvidence,
   pendingCaptureSchema,
+  pendingSalaryEvidenceSchema,
   type BuddyActivityEntry,
   type BuddyPreferences,
   type PendingCapture,
+  type PendingSalaryEvidence,
 } from "../../src/domain/buddy";
 
 const pairingMetadataSchema = z.object({
@@ -42,6 +45,7 @@ export class BuddyStore implements PairingMetadataStore {
   readonly preferencesPath: string;
   readonly activityPath: string;
   readonly capturesPath: string;
+  readonly salaryEvidencePath: string;
   readonly pairingPath: string;
   private readonly now: () => number;
   private mutationTail: Promise<void> = Promise.resolve();
@@ -51,6 +55,7 @@ export class BuddyStore implements PairingMetadataStore {
     this.preferencesPath = join(directory, "preferences.json");
     this.activityPath = join(directory, "activity.json");
     this.capturesPath = join(directory, "captures.json");
+    this.salaryEvidencePath = join(directory, "salary-evidence.json");
     this.pairingPath = join(directory, "pairing.json");
     this.now = options.now ?? Date.now;
   }
@@ -111,6 +116,32 @@ export class BuddyStore implements PairingMetadataStore {
     });
   }
 
+  async listSalaryEvidence(): Promise<PendingSalaryEvidence[]> {
+    await this.mutationTail;
+    const evidence = await this.readParsed(this.salaryEvidencePath, z.array(pendingSalaryEvidenceSchema), []);
+    return evidence.filter((item) => !this.salaryEvidenceExpired(item));
+  }
+
+  addSalaryEvidence(input: unknown): Promise<PendingSalaryEvidence> {
+    return this.mutate(async () => {
+      const evidence = parsePendingSalaryEvidence(input);
+      const stored = await this.readParsed(this.salaryEvidencePath, z.array(pendingSalaryEvidenceSchema), []);
+      const current = stored.filter((item) => !this.salaryEvidenceExpired(item));
+      const duplicate = current.find((item) => item.id === evidence.id || item.sourceUrl === evidence.sourceUrl);
+      if (duplicate) return duplicate;
+      if (!this.salaryEvidenceExpired(evidence)) await this.writeJson(this.salaryEvidencePath, [...current, evidence].slice(-100));
+      else if (current.length !== stored.length) await this.writeJson(this.salaryEvidencePath, current);
+      return evidence;
+    });
+  }
+
+  deleteSalaryEvidence(id: string): Promise<void> {
+    return this.mutate(async () => {
+      const evidence = await this.readParsed(this.salaryEvidencePath, z.array(pendingSalaryEvidenceSchema), []);
+      await this.writeJson(this.salaryEvidencePath, evidence.filter((item) => item.id !== id));
+    });
+  }
+
   async getPairing(): Promise<PairingMetadata | null> {
     await this.mutationTail;
     return this.readParsed(this.pairingPath, pairingMetadataSchema.nullable(), null);
@@ -128,6 +159,11 @@ export class BuddyStore implements PairingMetadataStore {
 
   private captureExpired(capture: PendingCapture): boolean {
     const detectedAt = Date.parse(capture.detectedAt);
+    return !Number.isFinite(detectedAt) || this.now() - detectedAt > 30 * 24 * 60 * 60 * 1_000;
+  }
+
+  private salaryEvidenceExpired(evidence: PendingSalaryEvidence): boolean {
+    const detectedAt = Date.parse(evidence.detectedAt);
     return !Number.isFinite(detectedAt) || this.now() - detectedAt > 30 * 24 * 60 * 60 * 1_000;
   }
 

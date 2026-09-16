@@ -41,6 +41,13 @@ describe("BuddyService", () => {
       enabledDomains: ["jobs.example"],
     });
   });
+
+  it("requires pairing before salary evidence enters the local queue", async () => {
+    const evidence = { id: "salary-1", market: "US", currency: "USD", period: "annual", minimum: 120_000, maximum: 165_000,
+      sourceUrl: "https://jobs.example/role", detectedAt: "2026-09-16T01:00:00.000Z" };
+    await expect(buddyService({ authorized: false }).addSalaryEvidence(AUTH, evidence)).rejects.toMatchObject({ code: "unauthorized" });
+    await expect(buddyService({ authorized: true }).addSalaryEvidence(AUTH, evidence)).resolves.toMatchObject({ id: "salary-1" });
+  });
 });
 
 function buddyService({ authorized, onSelect = () => undefined }: { authorized: boolean; onSelect?: () => void }) {
@@ -71,6 +78,9 @@ function buddyService({ authorized, onSelect = () => undefined }: { authorized: 
       addCapture: async (input) => parsePendingCapture(input),
       listCaptures: async () => [],
       deleteCapture: async () => undefined,
+      addSalaryEvidence: async (input) => input as never,
+      listSalaryEvidence: async () => [],
+      deleteSalaryEvidence: async () => undefined,
     },
   });
 }

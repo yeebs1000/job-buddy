@@ -42,6 +42,16 @@ describe("extension service worker", () => {
       requestPermission: vi.fn(), register: vi.fn(), execute: vi.fn(),
     })).rejects.toMatchObject({ code: "https-required" });
   });
+
+  it("forwards explicitly confirmed salary evidence", async () => {
+    const client = workerClient();
+    const handler = createMessageHandler(client, "extension-id");
+    const evidence = { id: "salary-1", market: "US", currency: "USD", period: "annual", minimum: 120_000, maximum: 165_000,
+      sourceUrl: "https://jobs.example/role", detectedAt: "2026-09-16T01:00:00.000Z" };
+
+    await expect(handler({ version: 1, type: "queue-salary-evidence", evidence }, sender)).resolves.toEqual({ ok: true, type: "salary-evidence-captured" });
+    expect(client.queueSalaryEvidence).toHaveBeenCalledWith(evidence);
+  });
 });
 
 function workerClient(): ExtensionWorkerClient {
@@ -53,5 +63,6 @@ function workerClient(): ExtensionWorkerClient {
     updatePreferences: async () => ({ mode: "approval", paused: false, enabledDomains: [] }),
     recordActivity: async () => undefined,
     queueCapture: async () => undefined,
+    queueSalaryEvidence: vi.fn().mockResolvedValue(undefined),
   };
 }

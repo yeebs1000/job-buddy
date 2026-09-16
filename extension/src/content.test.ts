@@ -72,6 +72,21 @@ describe("content runtime", () => {
     expect(JSON.stringify(queued)).not.toContain("alex@example.com");
     runtime.destroy();
   });
+
+  it("detects salary but never sends it until an explicit panel confirmation", async () => {
+    const page = document.implementation.createHTMLDocument("Software Engineer");
+    page.body.innerHTML = `<main data-location="United States"><h1>Software Engineer</h1><p>Salary: $120,000 to $165,000 a year</p><form></form></main>`;
+    const sendMessage = worker({ mode: "automatic", paused: false, enabledDomains: ["jobs.example"] });
+    const runtime = await mountContentRuntime({ document: page, url: new URL("https://jobs.example/role"), sendMessage, observeMutations: false });
+
+    expect(sendMessage.mock.calls.some(([message]) => message.type === "queue-salary-evidence")).toBe(false);
+    runtime.panel.expand();
+    expect(runtime.panel.shadowRoot.textContent).toContain("Salary found");
+    runtime.panel.shadowRoot.querySelector<HTMLButtonElement>('button[data-action="add-salary-evidence"]')!.click();
+
+    await vi.waitFor(() => expect(sendMessage.mock.calls.some(([message]) => message.type === "queue-salary-evidence")).toBe(true));
+    runtime.destroy();
+  });
 });
 
 function applicationDocument(): Document {
@@ -95,6 +110,7 @@ function worker(preferences: { mode: "approval" | "automatic"; paused: boolean; 
     } };
     if (message.type === "record-activity") return { ok: true, type: "recorded" };
     if (message.type === "queue-capture") return { ok: true, type: "captured" };
+    if (message.type === "queue-salary-evidence") return { ok: true, type: "salary-evidence-captured" };
     return { ok: false, error: "invalid-request" };
   });
 }

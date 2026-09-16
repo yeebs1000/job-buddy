@@ -1,9 +1,11 @@
-import { fieldCategory, type AdapterId, type BuddyPreferences, type ExtensionRequest, type ExtensionResponse, type PendingCapture } from "../../src/domain/buddy";
+import { fieldCategory, type AdapterId, type BuddyPreferences, type ExtensionRequest, type ExtensionResponse, type PendingCapture, type PendingSalaryEvidence } from "../../src/domain/buddy";
+import type { Market } from "../../src/domain/research";
 import type { ProfileSelection } from "../../src/domain/profile";
 import { selectAdapter, type AdapterField, type FormAdapter } from "./adapters/types";
 import { snapshotFields } from "./adapters/dom";
 import { planFill, type FieldSnapshot } from "./matching/planFill";
 import { BuddyPanel } from "./ui/BuddyPanel";
+import { detectSalary } from "./research/detectSalary";
 
 export interface ContentRuntimeDependencies {
   document: Document;
@@ -57,6 +59,7 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
   let rescanTimer: ReturnType<typeof setTimeout> | undefined;
   let lastScanAt = 0;
   let pendingCapture: PendingCapture | undefined;
+  let pendingSalaryEvidence: PendingSalaryEvidence | undefined;
   const panel = new BuddyPanel(pageDocument.body, {
     onPair: async (code) => {
       const result = await sendMessage({ version: 1, type: "pair", code });
@@ -65,6 +68,7 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
     },
     onFillApproved: async (fieldIds) => fillApproved(fieldIds),
     onSendCapture: async () => sendCapture(),
+    onSendSalaryEvidence: async (evidence) => sendSalaryEvidence(evidence),
   });
   const submitListener = (event: Event) => {
     if (!(event.target instanceof HTMLFormElement) || !event.isTrusted && !allowUntrustedSubmitForTest || !state) return;
@@ -118,6 +122,7 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
       for (const decision of decisions) if (decision.action === "fill") await fillOne(decision.fieldId, "safe-high-confidence");
     }
     renderState();
+    detectSalaryEvidence();
     detectCapture(adapter);
   }
 
@@ -212,6 +217,30 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
     panel.render({ state: "capture-sent" });
   }
 
+  function detectSalaryEvidence(): void {
+    const text = (pageDocument.body.textContent ?? "").slice(0, 200_000);
+    const market = inferMarket(pageDocument, text);
+    if (!market) return;
+    const detected = detectSalary(text, { market });
+    if (!detected) return;
+    pendingSalaryEvidence = {
+      id: `salary-${stableFingerprint(`${sanitizedUrl(pageUrl)}|${detected.currency}|${detected.minimum}|${detected.maximum}|${detected.period}`)}`,
+      market,
+      ...detected,
+      sourceUrl: sanitizedUrl(pageUrl),
+      detectedAt: new Date().toISOString(),
+    };
+    panel.render({ state: "salary-evidence", evidence: pendingSalaryEvidence });
+  }
+
+  async function sendSalaryEvidence(evidence: PendingSalaryEvidence): Promise<void> {
+    if (!pendingSalaryEvidence || evidence.id !== pendingSalaryEvidence.id) return;
+    const response = await sendMessage({ version: 1, type: "queue-salary-evidence", evidence });
+    if (!response.ok || response.type !== "salary-evidence-captured") return showError("Salary evidence could not be sent to your dashboard.");
+    pendingSalaryEvidence = undefined;
+    panel.render({ state: "salary-evidence-sent" });
+  }
+
   function readIntent(): SubmitIntent | undefined {
     try {
       const value = intentStore.get(intentKey);
@@ -261,6 +290,15 @@ function stableFingerprint(value: string): string {
   let hash = 0x811c9dc5;
   for (let index = 0; index < value.length; index += 1) { hash ^= value.charCodeAt(index); hash = Math.imul(hash, 0x01000193); }
   return (hash >>> 0).toString(36);
+}
+
+function inferMarket(document: Document, text: string): Market | undefined {
+  if (/\b(?:SGD|S\$)/iu.test(text)) return "SG";
+  if (/\b(?:HKD|HK\$)/iu.test(text)) return "HK";
+  if (/\b(?:USD|US\$)/iu.test(text)) return "US";
+  const location = [...document.querySelectorAll<HTMLElement>("[data-location]")]
+    .map((element) => element.dataset.location ?? element.textContent ?? "").join(" ");
+  return /\b(?:United States|USA|U\.S\.)\b/iu.test(location) ? "US" : undefined;
 }
 
 if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage && typeof document !== "undefined") {

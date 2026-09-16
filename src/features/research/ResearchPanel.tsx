@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Application } from "../../domain/application";
+import type { PendingSalaryEvidence } from "../../domain/buddy";
 import type { RoleAliasOverride, RoleMatch, SalaryEstimateSnapshot, SalaryObservation } from "../../domain/research";
 import { applicationMarket } from "../../domain/filters";
 import { isSafeExternalHttpsUrl } from "../../domain/jobUrl";
@@ -10,11 +11,18 @@ import { researchClient, type ResearchClient } from "./researchClient";
 import { researchRepository } from "./researchRepository";
 import { RoleMatchForm } from "./RoleMatchForm";
 import { roundSalaryDown } from "./roundSalary";
+import { buddyClient } from "../buddy/buddyClient";
 import "./research.css";
 
-export function ResearchPanel({ application, client = researchClient, now = Date.now }: {
+interface SalaryEvidenceClient {
+  listSalaryEvidence(): Promise<PendingSalaryEvidence[]>;
+  deleteSalaryEvidence(id: string): Promise<void>;
+}
+
+export function ResearchPanel({ application, client = researchClient, salaryEvidenceClient = buddyClient, now = Date.now }: {
   application: Application;
   client?: ResearchClient;
+  salaryEvidenceClient?: SalaryEvidenceClient;
   now?: () => number;
 }) {
   const market = applicationMarket(application);
@@ -27,6 +35,7 @@ export function ResearchPanel({ application, client = researchClient, now = Date
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [fallbackMessage, setFallbackMessage] = useState("");
+  const [pendingEvidence, setPendingEvidence] = useState<PendingSalaryEvidence[]>([]);
 
   useEffect(() => {
     let active = true;
@@ -40,6 +49,14 @@ export function ResearchPanel({ application, client = researchClient, now = Date
     }).catch(() => { if (active) setError("Could not load saved salary research."); });
     return () => { active = false; };
   }, [application.id]);
+
+  useEffect(() => {
+    let active = true;
+    salaryEvidenceClient.listSalaryEvidence()
+      .then((items) => { if (active) setPendingEvidence(items.filter((item) => item.market === market)); })
+      .catch(() => { /* The companion is optional; manual evidence remains available offline. */ });
+    return () => { active = false; };
+  }, [market, salaryEvidenceClient]);
 
   async function confirmRole(match: RoleMatch, reuse: boolean) {
     setRoleMatch(match); setError(""); setMessage("Role mapping confirmed.");
@@ -85,6 +102,30 @@ export function ResearchPanel({ application, client = researchClient, now = Date
     setMessage("Salary evidence saved locally. Research again to include it.");
   }
 
+  async function importSalaryEvidence(evidence: PendingSalaryEvidence) {
+    if (!roleMatch || evidence.market !== market) return;
+    await researchRepository.addObservation({
+      id: evidence.id,
+      applicationId: application.id,
+      provenance: "job_posting",
+      market: evidence.market,
+      currency: evidence.currency,
+      period: evidence.period,
+      minimum: evidence.minimum,
+      maximum: evidence.maximum,
+      canonicalRole: roleMatch.canonicalRole,
+      geographyLabel: [application.location.city, application.location.state].filter(Boolean).join(", "),
+      observedAt: evidence.detectedAt,
+      sourceUrl: evidence.sourceUrl,
+      ...(evidence.evidenceExcerpt ? { evidenceExcerpt: evidence.evidenceExcerpt } : {}),
+      reusable: true,
+    });
+    await salaryEvidenceClient.deleteSalaryEvidence(evidence.id);
+    setPendingEvidence((items) => items.filter((item) => item.id !== evidence.id));
+    setObservations(await researchRepository.listObservations(application.id));
+    setMessage("Browser salary evidence imported. Research again to include it.");
+  }
+
   async function saveSnapshot() {
     if (!estimate) return;
     await researchRepository.saveSnapshot(estimate);
@@ -103,6 +144,14 @@ export function ResearchPanel({ application, client = researchClient, now = Date
     {roleMatch && <div className="research-actions"><button disabled={busy} onClick={() => void researchSalary()}>Research salary</button><button disabled={busy} onClick={() => void refresh()}>Refresh official sources</button></div>}
     <p role="status" className="research-status">{busy ? "Researching official salary data…" : message}</p>
     {error && <p role="alert" className="research-error">{error}</p>}
+    {roleMatch && pendingEvidence.length > 0 && <section aria-label="Pending browser salary evidence" className="research-result">
+      <h3>Salary evidence from Buddy</h3>
+      <p className="research-help">These ranges were reviewed in the browser. Import only evidence that belongs to this application.</p>
+      <ul>{pendingEvidence.map((evidence) => <li key={evidence.id}>
+        <span>{evidence.currency} {evidence.minimum.toLocaleString("en-US")}–{evidence.maximum.toLocaleString("en-US")} / {evidence.period === "annual" ? "year" : "month"}</span>{" "}
+        <button type="button" onClick={() => void importSalaryEvidence(evidence)}>Import salary evidence</button>
+      </li>)}</ul>
+    </section>}
     {estimate && nominal && <section aria-label="Salary estimate" className="research-result">
       <p className="research-range">{estimate.currency} {nominal.minimum.toLocaleString("en-US")}–{nominal.maximum.toLocaleString("en-US")} / {estimate.period === "annual" ? "year" : "month"}</p>
       {fallbackMessage && <p>{fallbackMessage}</p>}

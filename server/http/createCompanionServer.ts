@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import type { GmailConnectionStatus } from "../../src/domain/mail";
-import type { BuddyActivityEntry, BuddyPreferences, PendingCapture } from "../../src/domain/buddy";
+import type { BuddyActivityEntry, BuddyPreferences, PendingCapture, PendingSalaryEvidence } from "../../src/domain/buddy";
 import type { CandidateProfile, ProfileSelection } from "../../src/domain/profile";
 import type { GmailScanResponse } from "../gmail/GmailSyncService";
 import { z } from "zod";
@@ -43,6 +43,9 @@ interface BuddyServicePort {
   updateExtensionPreference(auth: { token: string; origin: string }, input: unknown): Promise<BuddyPreferences>;
   appendActivity(auth: { token: string; origin: string }, input: unknown): Promise<void>;
   addCapture(auth: { token: string; origin: string }, input: unknown): Promise<PendingCapture>;
+  listSalaryEvidence(): Promise<PendingSalaryEvidence[]>;
+  deleteSalaryEvidence(id: string): Promise<void>;
+  addSalaryEvidence(auth: { token: string; origin: string }, input: unknown): Promise<PendingSalaryEvidence>;
 }
 
 interface ResearchServicePort {
@@ -394,6 +397,26 @@ export function createCompanionServer(options: CompanionServerOptions) {
         const id = decodeURIComponent(url.pathname.slice("/api/buddy/captures/".length));
         if (!id || id.length > 200 || id.includes("/")) throw new HttpInputError(400, "invalid-capture-id");
         await options.services.buddy.deleteCapture(id);
+        noContent(response);
+        return;
+      }
+      if (url.pathname === "/api/buddy/salary-evidence" && request.method === "GET") {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        json(response, 200, { evidence: await options.services.buddy.listSalaryEvidence() });
+        return;
+      }
+      if (url.pathname === "/api/buddy/salary-evidence" && request.method === "POST") {
+        if (!pairedOrigin) throw new HttpInputError(403, "origin-not-allowed");
+        const body = await readJson(request);
+        json(response, 201, { evidence: await options.services.buddy.addSalaryEvidence({ token: bearerToken(request), origin: pairedOrigin }, body.evidence) });
+        return;
+      }
+      if (request.method === "DELETE" && url.pathname.startsWith("/api/buddy/salary-evidence/")) {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        await readJson(request);
+        const id = decodeURIComponent(url.pathname.slice("/api/buddy/salary-evidence/".length));
+        if (!id || id.length > 200 || id.includes("/")) throw new HttpInputError(400, "invalid-salary-evidence-id");
+        await options.services.buddy.deleteSalaryEvidence(id);
         noContent(response);
         return;
       }

@@ -67,3 +67,22 @@ it("shows insufficient evidence without inventing a range and keeps the prior sn
   await user.click(screen.getByRole("button", { name: "Refresh official sources" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(/could not refresh/i);
 });
+
+it("imports explicitly confirmed browser salary evidence into the current application", async () => {
+  const evidence = { id: "salary-browser", market: "US" as const, currency: "USD" as const, period: "annual" as const,
+    minimum: 125_000, maximum: 160_000, sourceUrl: "https://jobs.example/role", evidenceExcerpt: "$125,000-$160,000 annual",
+    detectedAt: "2026-09-16T01:00:00.000Z" };
+  const salaryEvidenceClient = { listSalaryEvidence: vi.fn().mockResolvedValue([evidence]), deleteSalaryEvidence: vi.fn().mockResolvedValue(undefined) };
+  const client = { lookup: vi.fn(), refresh: vi.fn(), status: vi.fn() };
+  const user = userEvent.setup();
+  render(<ResearchPanel application={application} client={client} salaryEvidenceClient={salaryEvidenceClient} now={() => Date.parse("2026-09-16T02:00:00.000Z")} />);
+
+  await user.click(screen.getByLabelText("I confirm this role mapping"));
+  await user.click(screen.getByRole("button", { name: "Confirm role mapping" }));
+  await user.click(await screen.findByRole("button", { name: "Import salary evidence" }));
+
+  await waitFor(async () => expect(await researchRepository.listObservations(application.id)).toEqual([
+    expect.objectContaining({ id: "salary-browser", applicationId: application.id, provenance: "job_posting", reusable: true, canonicalRole: "software-engineer" }),
+  ]));
+  expect(salaryEvidenceClient.deleteSalaryEvidence).toHaveBeenCalledWith("salary-browser");
+});

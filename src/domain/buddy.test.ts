@@ -4,6 +4,7 @@ import {
   defaultBuddyPreferences,
   extensionRequestSchema,
   parsePendingCapture,
+  parsePendingSalaryEvidence,
 } from "./buddy";
 
 const capture = {
@@ -46,6 +47,16 @@ describe("Buddy contracts", () => {
 
   it("keeps approval mode and pause as safe defaults", () => {
     expect(defaultBuddyPreferences).toEqual({ mode: "approval", paused: false, enabledDomains: [] });
+  });
+
+  it("sanitizes salary evidence URLs and rejects unexpected private fields", () => {
+    const evidence = {
+      id: "salary-1", market: "US", currency: "USD", period: "annual", minimum: 120_000, maximum: 165_000,
+      sourceUrl: "https://jobs.example/role?token=private#salary", detectedAt: "2026-09-16T01:00:00.000Z",
+    };
+    expect(parsePendingSalaryEvidence(evidence).sourceUrl).toBe("https://jobs.example/role");
+    expect(() => parsePendingSalaryEvidence({ ...evidence, recruiterMessage: "secret" })).toThrow("invalid-salary-evidence");
+    expect(() => parsePendingSalaryEvidence({ ...evidence, sourceUrl: "http://jobs.example/role" })).toThrow("invalid-salary-evidence");
   });
 
   it("rejects activity entries that contain values or arbitrary keys", () => {

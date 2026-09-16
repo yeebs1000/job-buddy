@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import type { BuddyActivityEntry, PendingCapture } from "../../src/domain/buddy";
+import type { BuddyActivityEntry, PendingCapture, PendingSalaryEvidence } from "../../src/domain/buddy";
 import { BuddyStore } from "./BuddyStore";
 
 const NOW = Date.parse("2026-09-16T02:00:00.000Z");
@@ -40,6 +40,17 @@ describe("BuddyStore", () => {
     await writeFile(store.preferencesPath, "not-json", "utf8");
 
     expect(await store.getPreferences()).toEqual({ mode: "approval", paused: false, enabledDomains: [] });
+  });
+
+  it("bounds, expires, and deduplicates salary evidence by id and normalized source URL", async () => {
+    const store = new BuddyStore({ root, now: () => NOW });
+    await store.addSalaryEvidence(salaryEvidence("salary-1", "https://jobs.example/role?tracking=1", "2026-09-15T02:00:00.000Z"));
+    await store.addSalaryEvidence(salaryEvidence("salary-2", "https://jobs.example/role?tracking=2", "2026-09-15T02:00:00.000Z"));
+    await store.addSalaryEvidence(salaryEvidence("expired", "https://jobs.example/old", "2026-08-01T00:00:00.000Z"));
+
+    expect((await store.listSalaryEvidence()).map((item) => item.id)).toEqual(["salary-1"]);
+    await store.deleteSalaryEvidence("salary-1");
+    expect(await store.listSalaryEvidence()).toEqual([]);
   });
 
   it("clears activity without changing captures or preferences", async () => {
@@ -80,4 +91,8 @@ function capture(completionId: string, detectedAt: string): PendingCapture {
     detectedAt,
     completionId,
   };
+}
+
+function salaryEvidence(id: string, sourceUrl: string, detectedAt: string): PendingSalaryEvidence {
+  return { id, market: "US", currency: "USD", period: "annual", minimum: 120_000, maximum: 165_000, sourceUrl, detectedAt };
 }

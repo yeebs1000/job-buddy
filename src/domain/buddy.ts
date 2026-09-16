@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseProfilePath, type ProfilePath, type ProfileSelection } from "./profile";
+import { currencySchema, marketSchema, payPeriodSchema } from "./research";
 
 export const buddyModeSchema = z.enum(["approval", "automatic"]);
 export type BuddyMode = z.infer<typeof buddyModeSchema>;
@@ -72,6 +73,23 @@ export const pendingCaptureSchema = z.object({
 }).strict();
 export type PendingCapture = z.infer<typeof pendingCaptureSchema>;
 
+export const pendingSalaryEvidenceSchema = z.object({
+  id: z.string().trim().min(1).max(200),
+  market: marketSchema,
+  currency: currencySchema,
+  period: payPeriodSchema,
+  minimum: z.number().finite().positive(),
+  maximum: z.number().finite().positive(),
+  sourceUrl: z.string().url().max(2_048),
+  evidenceExcerpt: z.string().trim().min(1).max(300).optional(),
+  detectedAt: z.string().datetime(),
+}).strict().superRefine((value, context) => {
+  if (value.maximum < value.minimum) context.addIssue({ code: "custom", message: "inverted-range" });
+  const expected = value.market === "SG" ? "SGD" : value.market === "HK" ? "HKD" : "USD";
+  if (value.currency !== expected) context.addIssue({ code: "custom", message: "currency-market-mismatch" });
+});
+export type PendingSalaryEvidence = z.infer<typeof pendingSalaryEvidenceSchema>;
+
 export function parsePendingCapture(input: unknown): PendingCapture {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error();
@@ -82,6 +100,19 @@ export function parsePendingCapture(input: unknown): PendingCapture {
     return pendingCaptureSchema.parse({ ...raw, sourceUrl: `${url.origin}${url.pathname}` });
   } catch {
     throw new Error("invalid-capture");
+  }
+}
+
+export function parsePendingSalaryEvidence(input: unknown): PendingSalaryEvidence {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error();
+    const raw = input as Record<string, unknown>;
+    if (typeof raw.sourceUrl !== "string") throw new Error();
+    const url = new URL(raw.sourceUrl);
+    if (url.protocol !== "https:" || url.username || url.password) throw new Error();
+    return pendingSalaryEvidenceSchema.parse({ ...raw, sourceUrl: `${url.origin}${url.pathname}` });
+  } catch {
+    throw new Error("invalid-salary-evidence");
   }
 }
 
@@ -106,6 +137,7 @@ export const extensionRequestSchema = z.discriminatedUnion("type", [
   z.object({ version: z.literal(1), type: z.literal("update-preferences"), patch: extensionPreferencePatchSchema }).strict(),
   z.object({ version: z.literal(1), type: z.literal("record-activity"), activity: buddyActivityEntrySchema }).strict(),
   z.object({ version: z.literal(1), type: z.literal("queue-capture"), capture: pendingCaptureSchema }).strict(),
+  z.object({ version: z.literal(1), type: z.literal("queue-salary-evidence"), evidence: pendingSalaryEvidenceSchema }).strict(),
 ]);
 export type ExtensionRequest = z.infer<typeof extensionRequestSchema>;
 
@@ -114,7 +146,7 @@ export type ExtensionResponse =
   | { ok: true; type: "paired" }
   | { ok: true; type: "profile-selection"; selection: ProfileSelection }
   | { ok: true; type: "preferences"; preferences: BuddyPreferences }
-  | { ok: true; type: "recorded" | "captured" }
+  | { ok: true; type: "recorded" | "captured" | "salary-evidence-captured" }
   | { ok: false; error: "invalid-request" | "unpaired" | "companion-offline" | "request-failed" };
 
 export function fieldCategory(path: ProfilePath | undefined): BuddyActivityEntry["fieldCategory"] {

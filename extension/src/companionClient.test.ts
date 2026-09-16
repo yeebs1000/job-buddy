@@ -33,6 +33,21 @@ describe("CompanionClient", () => {
     await expect(client.getPreferences()).rejects.toMatchObject({ code: "unpaired" });
     expect(await storage.getToken()).toBeNull();
   });
+
+  it("queues only validated salary evidence through the authenticated endpoint", async () => {
+    const storage = memoryTokenStorage("private-paired-token-abcdefghijklmnopqrstuvwxyz");
+    const fetcher = vi.fn().mockResolvedValue(response({ evidence: {} }, 201));
+    const client = new CompanionClient({ fetcher, storage });
+    const evidence = { id: "salary-1", market: "US" as const, currency: "USD" as const, period: "annual" as const,
+      minimum: 120_000, maximum: 165_000, sourceUrl: "https://jobs.example/role", detectedAt: "2026-09-16T01:00:00.000Z" };
+
+    await client.queueSalaryEvidence(evidence);
+
+    expect(fetcher).toHaveBeenCalledWith("http://127.0.0.1:43117/api/buddy/salary-evidence", expect.objectContaining({
+      method: "POST", body: JSON.stringify({ evidence }),
+      headers: expect.objectContaining({ authorization: "Bearer private-paired-token-abcdefghijklmnopqrstuvwxyz" }),
+    }));
+  });
 });
 
 function memoryTokenStorage(initial: string | null = null): TokenStorage {

@@ -49,5 +49,7 @@ function fakeBuddyClient(status: Awaited<ReturnType<BuddyClient["status"]>> = { 
     clearActivity: vi.fn().mockResolvedValue(undefined),
     listCaptures: vi.fn().mockResolvedValue([]),
     deleteCapture: vi.fn().mockResolvedValue(undefined),
+    listSalaryEvidence: vi.fn().mockResolvedValue([]),
+    deleteSalaryEvidence: vi.fn().mockResolvedValue(undefined),
   };
 }

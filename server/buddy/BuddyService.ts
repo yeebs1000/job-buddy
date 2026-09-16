@@ -3,9 +3,11 @@ import {
   buddyActivityEntrySchema,
   buddyPreferencesSchema,
   parsePendingCapture,
+  parsePendingSalaryEvidence,
   type BuddyActivityEntry,
   type BuddyPreferences,
   type PendingCapture,
+  type PendingSalaryEvidence,
 } from "../../src/domain/buddy";
 import type { CandidateProfile, ProfileSelection } from "../../src/domain/profile";
 
@@ -39,6 +41,9 @@ interface BuddyStorePort {
   addCapture(input: unknown): Promise<PendingCapture>;
   listCaptures(): Promise<PendingCapture[]>;
   deleteCapture(id: string): Promise<void>;
+  addSalaryEvidence(input: unknown): Promise<PendingSalaryEvidence>;
+  listSalaryEvidence(): Promise<PendingSalaryEvidence[]>;
+  deleteSalaryEvidence(id: string): Promise<void>;
 }
 
 export interface BuddyServiceOptions {
@@ -82,6 +87,8 @@ export class BuddyService {
   clearActivity() { return this.store.clearActivity(); }
   listCaptures() { return this.store.listCaptures(); }
   deleteCapture(id: string) { return this.store.deleteCapture(id); }
+  listSalaryEvidence() { return this.store.listSalaryEvidence(); }
+  deleteSalaryEvidence(id: string) { return this.store.deleteSalaryEvidence(id); }
 
   async selectProfile(auth: ExtensionAuth, paths: readonly string[]): Promise<ProfileSelection> {
     await this.requireAuthorization(auth);
@@ -123,6 +130,11 @@ export class BuddyService {
   async addCapture(auth: ExtensionAuth, input: unknown): Promise<PendingCapture> {
     await this.requireAuthorization(auth);
     return this.store.addCapture(parsePendingCapture(input));
+  }
+
+  async addSalaryEvidence(auth: ExtensionAuth, input: unknown): Promise<PendingSalaryEvidence> {
+    await this.requireAuthorization(auth);
+    return this.store.addSalaryEvidence(parsePendingSalaryEvidence(input));
   }
 
   private async requireAuthorization(auth: ExtensionAuth): Promise<void> {
