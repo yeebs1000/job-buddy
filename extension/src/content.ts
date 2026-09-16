@@ -241,9 +241,11 @@ async function start({ document: pageDocument, sendMessage, url, observeMutation
 }
 
 function browserIntentStore(document: Document): IntentStore {
-  const storage = document.defaultView?.sessionStorage;
-  if (!storage) return { get: () => null, set: () => undefined, remove: () => undefined };
-  return { get: (key) => storage.getItem(key), set: (key, value) => storage.setItem(key, value), remove: (key) => storage.removeItem(key) };
+  try {
+    const storage = document.defaultView?.sessionStorage;
+    if (storage) return { get: (key) => storage.getItem(key), set: (key, value) => storage.setItem(key, value), remove: (key) => storage.removeItem(key) };
+  } catch { /* Some application pages block storage; capture stays disabled without weakening autofill. */ }
+  return { get: () => null, set: () => undefined, remove: () => undefined };
 }
 
 function metadataValue(form: HTMLFormElement, document: Document, name: "company" | "location"): string {

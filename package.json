@@ -1,7 +1,7 @@
 {
   "name": "job-buddy",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
@@ -14,12 +14,13 @@
     "preview": "vite preview",
     "build": "tsc -b && vite build",
     "build:extension": "node scripts/build-extension.mjs",
-    "verify:client-secrets": "node --env-file-if-exists=.env.local scripts/verify-client-secrets.mjs dist",
-    "check": "npm test && npm run typecheck && npm run build && npm run verify:client-secrets && npm run test:e2e",
+    "verify:client-secrets": "node --env-file-if-exists=.env.local scripts/verify-client-secrets.mjs dist dist-extension",
+    "check": "npm test && npm run typecheck && npm run build && npm run build:extension && npm run verify:client-secrets && npm run test:e2e && npm run test:e2e:extension",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:extension": "playwright test --config playwright.extension.config.ts"
   },
   "dependencies": {
     "@tanstack/react-table": "^9.2.4",

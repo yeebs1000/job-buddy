@@ -1,4 +1,4 @@
-# Job Buddy v0.3
+# Job Buddy v0.4
 
 > A local-first workspace for replacing the job-application spreadsheet.
 
@@ -10,7 +10,7 @@
 
 [中文文档](README.zh-CN.md)
 
-Job Buddy v0.3 combines a local-first application tracker with optional, read-only Gmail Update Intelligence. It helps anyone looking for work keep applications, stage changes, deadlines, interviews, follow-ups, and notes in one place. The release is designed for Singapore and Hong Kong, with software roles first and finance, data, cybersecurity, cloud, and general IT records supported by the tracker.
+Job Buddy v0.4 combines a local-first application tracker, optional read-only Gmail Update Intelligence, and a guarded Chrome/Edge autofill companion. It helps anyone looking for work keep applications, stage changes, deadlines, interviews, follow-ups, and notes in one place. The release is designed for Singapore and Hong Kong, with software roles first and finance, data, cybersecurity, cloud, and general IT records supported by the tracker.
 
 > [!TIP]
 > **Tiny promise:** Job Buddy may be opinionated about stage history, but it will never silently rewrite your past.
@@ -27,11 +27,11 @@ Job Buddy v0.3 combines a local-first application tracker with optional, read-on
 
 ## Project status
 
-The local tracker, demo inbox, and Windows Gmail companion are usable today. Gmail is optional and must be configured by the person running the app. It requests the read-only Gmail scope, performs an explicitly confirmed first scan of at most 500 inbox messages from the last 90 days, then uses Gmail history IDs for incremental checks. It scans only when Job Buddy is open: manually, or once per eligible active session after 24 hours. There is no background service.
+The local tracker, demo inbox, Windows Gmail companion, encrypted candidate profile, and unpacked Chrome/Edge Buddy are usable today. Gmail is optional and must be configured by the person running the app. Buddy is also optional: it asks for each job site's permission, requests only matched profile fields from the loopback companion, and never clicks final Submit.
 
 Approval is the default: actionable messages become reviewable proposals, while marketing/no-op mail and duplicate provider IDs are ignored. **Auto-apply safe updates** may apply only confident, conflict-free forward updates; offers, terminal outcomes, unmatched/ambiguous mail, and conflicts still require explicit approval. Live failures never fall back to demo data.
 
-The repository is intentionally private while the product and data model are being shaped. The core branch is structured so it can be opened to contributors later without rewriting the local data boundary.
+The repository is structured as a reproducible local project: fixtures are fictional, setup is documented, integrations have explicit boundaries, and changes are protected by unit, browser, and client-artifact checks.
 
 ## What is shipped
 
@@ -44,6 +44,10 @@ The repository is intentionally private while the product and data model are bei
 - Fictional Singapore/Hong Kong demo records for finance, software, data, and general IT roles, covering lifecycle states. The app also supports cybersecurity and cloud roles when you add or import them.
 - Simulated Update Intelligence with synthetic recruiter messages, evidence-backed match/classification confidence, reviewable interview/deadline extraction, and deterministic local fixture scans.
 - Optional read-only Gmail OAuth on Windows with encrypted refresh-token storage, bounded initial sync, incremental history sync, explicit Gmail/Demo provenance, reconnect handling, and retained reviewed evidence after disconnect.
+- Windows-DPAPI encrypted candidate profile with contact details, links, education, experience, projects, skills, work preferences, and reusable factual answers.
+- Paired Manifest V3 Chrome/Edge Buddy with per-site permission, Approval and Automatic modes, emergency pause, revocation, and metadata-only activity history.
+- Deterministic guarded autofill for semantic forms plus Greenhouse, Workday, Oracle Recruiting, and Lever markers. Existing values require approval; salary and work authorization always require review; uploads, credentials, demographic/legal fields, CAPTCHA, and final Submit stay manual.
+- User-confirmed completed-application capture into the tracker, with editable Singapore/Hong Kong metadata and canonical duplicate protection.
 
 ## Information sources and provenance
 
@@ -53,10 +57,10 @@ Job Buddy distinguishes information you enter from information a connector may g
 | --- | --- | --- | --- |
 | LinkedIn, company career sites, campus portals, referrals, job boards | Stored as a source label when you add/import an application | Keep the original application source and link | Not connected or scraped by v0.3 |
 | Gmail / Gmail API | Optional read-only OAuth companion on Windows, plus a separate fictional demo inbox | Active-session scans for recruiter/HR replies, proposed stage changes, interview dates, approved HTTPS meeting links, deadlines, and follow-up tasks | Refresh token is Windows-DPAPI encrypted; normalized evidence is stored locally; no background service and no automatic live-to-demo fallback |
-| Greenhouse, Workday, Oracle Recruiting, Lever and similar ATSs | Not connected | User-approved autofill and application-link capture where the platform and browser context allow it | No unattended submission or bypass of platform controls is promised |
+| Greenhouse, Workday, Oracle Recruiting, Lever and semantic web forms | Guarded local Chrome/Edge autofill with stable-marker detection and Generic fallback | Expand fixture coverage as vendors change | Exact-site permission only; no files, credentials, EEO/legal fields, CAPTCHA, or final submission |
 | Glassdoor, Levels.fyi, official salary postings, and regional salary datasets | Not connected | Region-specific salary ranges and company-review context for Singapore/Hong Kong | Availability, licensing, freshness, and regional coverage must be verified per source |
 | JobSpy and public job listings | Not connected | Optional job-discovery adapters and deduplication inputs | Discovery data is not application-status truth |
-| User-selected AI provider | Not connected | Interview question generation, email classification proposals, and preparation plans | Future versions may support user-supplied API keys and selectable models; v0.3 stores no AI credentials |
+| User-selected AI provider | Not connected | Lower-priority future interview-preparation assistance | v0.4 has no AI integration, API-key UI, or model dependency |
 
 Future generated facts are intended to carry their source, region, retrieval time, confidence, and user override. A connector may propose a change; the user remains the authority for the final application stage.
 
@@ -64,7 +68,11 @@ Future generated facts are intended to carry their source, region, retrieval tim
 
 Roadmap items are planned, not promises of current functionality.
 
-### V0.3 — Local tracker and live Gmail Update Intelligence (current)
+### V0.4 — Browser Buddy (current)
+
+Everything in v0.3 plus an encrypted candidate profile, paired browser extension, guarded autofill for five adapter paths, and reviewed tracker capture after a confirmed application.
+
+### V0.3 — Local tracker and live Gmail Update Intelligence
 
 Local persistence, visual stage tracking, filters and saved views, manual updates with history/undo, reviewed spreadsheet migration, Singapore/Hong Kong coverage, demo mail, and optional read-only Gmail with approval and auto-apply-safe modes.
 
@@ -72,9 +80,9 @@ Local persistence, visual stage tracking, filters and saved views, manual update
 
 Region-specific salary and workplace-review connectors, interview preparation resources, and a user-controlled AI provider. Source freshness, licensing, and regional provenance must remain visible.
 
-### V2.0 — Application assistant
+### V2.0 — Broader application assistance
 
-Profile and document vault, configurable approval versus unrestricted automation modes, user-confirmed autofill assistance for Greenhouse/Workday/Oracle and other supported ATS flows, application checklists, and broader finance, engineering, and IT role coverage.
+Document assistance, richer application checklists, broader finance role workflows, and additional ATS coverage after local guardrails are proven.
 
 ### V3.0 — Portable and collaborative
 
@@ -82,7 +90,7 @@ More regions, optional encrypted sync, backup/restore across devices, provider a
 
 ## Privacy and security
 
-V0.3 is single-user and local-first. Applications, imported records, events, saved views, normalized message evidence, and scan preferences live in the browser's IndexedDB. The local companion binds only to `127.0.0.1`; on Windows its Gmail refresh token is encrypted for the current Windows user with DPAPI under `%LOCALAPPDATA%\JobBuddy`. Access tokens stay in memory. The browser bundle never receives the OAuth client secret or refresh token. There is no hosted database, background email service, AI credential, salary/review scraper, browser autofill, unattended submission, or remote job scraper in this release.
+V0.4 is single-user and local-first. Applications, imported records, events, saved views, normalized message evidence, and scan preferences live in the browser's IndexedDB. The local companion binds only to `127.0.0.1`; on Windows the Gmail refresh token and candidate profile are encrypted for the current Windows user with DPAPI under `%LOCALAPPDATA%\JobBuddy`. Access tokens and decrypted profile values stay in memory. The extension bearer token stays in extension-local storage, and profile responses contain only canonical paths requested for the current form. The browser bundle never receives the OAuth client secret or refresh token. There is no hosted database, background email service, AI credential, salary/review scraper, unattended submission, or remote job scraper in this release.
 
 Disconnect attempts Google token revocation and removes the local protected token and connection metadata. Existing applications, approved changes, and already-normalized evidence remain so the tracker does not lose its audit trail. Clearing browser storage is a separate destructive action.
 
@@ -102,6 +110,26 @@ npm run dev
 ```
 
 Vite prints the local URL, normally [http://127.0.0.1:5173](http://127.0.0.1:5173). `npm run dev` starts both the web app and the loopback companion; use `npm.cmd run dev` if PowerShell blocks `npm.ps1`.
+
+## Install Browser Buddy in Chrome or Edge
+
+1. Keep `npm run dev` running, open **Profile**, and save the factual fields you want Buddy to use.
+2. Build the unpacked extension with `npm run build:extension`.
+3. In Chrome open `chrome://extensions`; in Edge open `edge://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select this repository's `dist-extension` folder.
+4. Open **Settings → Browser Buddy** in Job Buddy and choose **Pair browser extension**. Open Buddy on a job page and enter the one-time code.
+5. On an HTTPS application page, click the Job Buddy toolbar icon. The browser asks for access to that exact site; Job Buddy never asks for all-site access in one prompt.
+6. Use **Approval mode** to choose every field, or **Automatic fill** for empty, safe, high-confidence matches. Salary, availability, relocation, sponsorship/work authorization, custom prose, existing values, and uncertain matches still wait for approval.
+
+Buddy supports semantic Generic forms and stable markers for Greenhouse, Workday, Oracle Recruiting, and Lever. Vendor redesigns deliberately fall back to conservative Generic matching. Buddy never selects files, enters passwords or one-time codes, fills demographic/legal/signature fields, solves CAPTCHA, or clicks final Submit. After you submit yourself and the site shows a strong confirmation, choose **Send to Job Buddy**, then review the pending record on the dashboard before adding it.
+
+### Browser Buddy troubleshooting
+
+- **Companion offline:** confirm `npm run dev` is still running and [http://127.0.0.1:5173](http://127.0.0.1:5173) loads, then reopen Buddy.
+- **Permission denied:** click the toolbar icon again and allow only the current HTTPS job site. HTTP application pages are intentionally refused.
+- **Unsupported form:** use the site's form manually. Unknown labels stay unresolved; they are never guessed into a profile field.
+- **Pairing expired:** create a new code in Settings. Codes expire after five minutes and work once.
+- **Stop all filling:** enable **Pause Buddy everywhere** or revoke the extension from Settings. Chrome/Edge site permission can also be removed in the browser.
+- **Clear local Buddy data:** delete the candidate profile on the Profile page, clear metadata-only activity in Settings, process or delete pending captures, and revoke pairing. Browser IndexedDB tracker data is cleared separately.
 
 ## Optional Gmail setup
 
@@ -128,7 +156,7 @@ Job Buddy requests `https://www.googleapis.com/auth/gmail.readonly`, which Googl
 - **Reconnect needed / revoked token:** open Settings and reconnect. Approved tracker changes and normalized evidence remain available.
 - **First scan stopped at 500:** this is the intentional privacy and performance bound. The UI reports truncation; later checks use incremental Gmail history.
 - **No automatic daily check:** finish the first scan, enable **Daily active-session scan**, leave Gmail selected, and reopen Job Buddy after the last successful scan is at least 24 hours old.
-- **Unsupported device:** persistent live Gmail is Windows-only in v0.3 because credential storage requires current-user DPAPI. Use the demo inbox elsewhere.
+- **Unsupported device:** persistent live Gmail and profile storage are Windows-only in v0.4 because credential storage requires current-user DPAPI. Use the demo inbox and tracker elsewhere.
 
 To run the finite quality gates:
 
@@ -136,8 +164,10 @@ To run the finite quality gates:
 npm test
 npm run typecheck
 npm run build
+npm run build:extension
 npm run verify:client-secrets
 npm run test:e2e
+npm run test:e2e:extension
 ```
 
 `npm run check` runs the complete sequence. The client-artifact verifier reports only rule names and file paths; it never prints matched secret values.
@@ -159,11 +189,12 @@ When the local database is empty, Job Buddy seeds deterministic, fictional appli
 ```text
 src/domain/                  lifecycle, filters, import contracts
 src/db/                      Dexie schema, migrations, repositories
-src/features/                Command Center, Applications, detail, import/export
+src/features/                Command Center, Applications, profile, Buddy, detail, import/export
 src/components/              shared shell, controls, stage rail
-server/                      loopback OAuth, Gmail API, normalization, DPAPI
+server/                      loopback OAuth, Gmail API, pairing, profile, normalization, DPAPI
+extension/                   Manifest V3 worker, guarded content runtime, ATS adapters
 scripts/                     paired dev launcher and client-secret verification
-e2e/                         tracker, demo inbox, and fake-Gmail browser journeys
+e2e/ and e2e-extension/      dashboard, fake-Gmail, profile, pairing, and built-Buddy journeys
 docs/superpowers/specs/      approved product specification
 docs/superpowers/plans/      implementation plans and review checkpoints
 ```
@@ -195,8 +226,10 @@ A shoutout to [JobSpy](https://github.com/speedyapply/JobSpy). We adopted severa
 - [x] Focused unit/component tests and a browser journey
 - [x] Demo Update Intelligence with local synthetic messages
 - [x] Read-only Gmail OAuth and daily active-session scans on Windows
+- [x] Encrypted local candidate profile and paired Chrome/Edge Buddy
+- [x] Approval/Automatic guarded autofill with a hard no-submit boundary
+- [x] Reviewed completed-application capture into the tracker
 - [ ] Salary/review research connectors
-- [ ] User-approved autofill assistant
 - [ ] Optional encrypted sync
 
 ## License

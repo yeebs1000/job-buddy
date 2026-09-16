@@ -3,7 +3,7 @@ import { extname, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const textExtensions = new Set([".css", ".html", ".js", ".json", ".map", ".svg", ".txt"]);
-const builtInCanaries = ["refresh-token-canary", "access-token-canary"];
+const builtInCanaries = ["refresh-token-canary", "access-token-canary", "paired-token-abcdefghijklmnopqrstuvwxyz", "ABCDE-FGHJK", "alex@example.com"];
 
 async function textFiles(root, directory = root) {
   const files = [];
@@ -33,18 +33,27 @@ export async function verifyClientArtifacts(directory, canaries = []) {
   if (!(await stat(root)).isDirectory()) throw new Error("Client artifact directory is not a directory.");
   const findings = [];
   for (const file of await textFiles(root)) {
+    if (extname(file).toLowerCase() === ".map") findings.push(`${relative(root, file)} (source map)`);
     const contents = await readFile(file, "utf8");
     for (const [rule, value] of rules(canaries)) {
       if (contents.includes(value)) findings.push(`${relative(root, file)} (${rule})`);
     }
   }
+  const manifestPath = resolve(root, "manifest.json");
+  try {
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    if (manifest.manifest_version === 3) {
+      if (JSON.stringify(manifest.host_permissions) !== JSON.stringify(["http://127.0.0.1:43117/*"])) findings.push("manifest.json (required host permissions exceed localhost)");
+      if ((manifest.content_scripts ?? []).some((script) => (script.matches ?? []).includes("https://*/*"))) findings.push("manifest.json (global HTTPS content script)");
+    }
+  } catch { /* Web app artifacts do not contain an extension manifest. */ }
   if (findings.length) {
     throw new Error(`Secret material was found in client artifacts:\n${[...new Set(findings)].join("\n")}`);
   }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  verifyClientArtifacts(process.argv[2] ?? "dist").then(
+  Promise.all((process.argv.slice(2).length ? process.argv.slice(2) : ["dist"]).map((directory) => verifyClientArtifacts(directory))).then(
     () => process.stdout.write("Client artifact secret check passed.\n"),
     (error) => { process.stderr.write(`${error instanceof Error ? error.message : "Client artifact secret check failed."}\n`); process.exitCode = 1; },
   );

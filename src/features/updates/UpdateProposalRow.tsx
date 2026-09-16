@@ -52,7 +52,7 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
   } as Pick<UpdateProposal, "classification" | "source">) : [];
   const requiresConfirmation = Boolean(outcome || stage === "offer" || currentConflicts.length);
 
-  useEffect(() => { if (result) resultRef.current?.focus(); }, [result]);
+  useEffect(() => { if (result) resultRef.current?.focus(); }, [result, proposal.status]);
 
   function editDeadline(index: number, patch: Partial<Deadline>) {
     setDeadlines(deadlines.map((deadline, position) => position === index ? { ...deadline, ...patch } : deadline));

@@ -38,3 +38,17 @@ it("ignores binary artifacts and accepts a clean client build", async () => {
 
   await expect(verifyClientArtifacts(directory, ["client-secret-canary"])).resolves.toBeUndefined();
 });
+
+it("rejects source maps and extension-wide required HTTPS access", async () => {
+  const sourceMapDirectory = await fixture();
+  await writeFile(join(sourceMapDirectory, "assets", "app.js.map"), "{}", "utf8");
+  await expect(verifyClientArtifacts(sourceMapDirectory)).rejects.toThrow(/source map/i);
+
+  const manifestDirectory = await fixture();
+  await writeFile(join(manifestDirectory, "manifest.json"), JSON.stringify({
+    manifest_version: 3,
+    host_permissions: ["https://*/*"],
+    content_scripts: [{ matches: ["https://*/*"], js: ["content.js"] }],
+  }), "utf8");
+  await expect(verifyClientArtifacts(manifestDirectory)).rejects.toThrow(/host permissions|global HTTPS/i);
+});
