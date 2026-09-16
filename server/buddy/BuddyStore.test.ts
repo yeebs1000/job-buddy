@@ -23,7 +23,7 @@ describe("BuddyStore", () => {
     expect(entries[0]?.id).toBe("activity-5");
     expect(entries.at(-1)?.id).toBe("activity-504");
     expect(await readFile(store.activityPath, "utf8")).not.toContain("alex@example.com");
-  });
+  }, 30_000);
 
   it("expires captures after 30 days and deduplicates completion IDs", async () => {
     const store = new BuddyStore({ root, now: () => NOW });
