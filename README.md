@@ -1,4 +1,4 @@
-# Job Buddy v1.0.0-beta.3
+# Job Buddy v1.0.0-beta.4
 
 > A local-first workspace for replacing the job-application spreadsheet.
 
@@ -87,7 +87,7 @@ Local persistence, visual stage tracking, filters and saved views, manual update
 
 ### Next work — connector release readiness
 
-Register and verify the maintainer-owned Google app, run a real-account acceptance check, and complete owner review before public launch. See [the beta.3 review notes](docs/releases/v1-beta-3.md), [beta.2 features](docs/releases/v1-beta-2.md), and [Gmail maintainer setup](docs/gmail-maintainer-setup.md).
+Register and verify the maintainer-owned Google app, run a real-account acceptance check, and complete owner review before public launch. See [the beta.4 setup fixes](docs/releases/v1-beta-4.md), [beta.3 popup notes](docs/releases/v1-beta-3.md), [beta.2 features](docs/releases/v1-beta-2.md), and [Gmail maintainer setup](docs/gmail-maintainer-setup.md).
 
 ### V2.0 — Broader application assistance
 
@@ -163,8 +163,8 @@ The demo inbox works without Google configuration. The planned public distributi
 1. In [Google Cloud Console](https://console.cloud.google.com/), create or select a project, then [enable the Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com).
 2. Configure the OAuth consent screen. For a personal prototype, keep the app in **Testing** and add the Gmail address you will connect as a test user.
 3. Create an OAuth 2.0 Client ID with application type **Desktop app**. The app uses a loopback callback and PKCE.
-4. Copy `.env.example` to `.env.local`, set `GOOGLE_OAUTH_CLIENT_TYPE=desktop` and the public client ID; keep the redirect URI unchanged. A desktop client does not rely on a confidential web-client secret. Never distribute a web-client secret.
-5. Restart `npm run dev`, open **Settings**, choose **Connect Gmail**, and complete Google's consent popup. The dashboard stays open and starts the disclosed first 90-day scan after confirmation; failures expose a retry button.
+4. Open **Settings → Set up Gmail**, paste the public Desktop client ID, and select **Save client ID**. It is saved outside the repository under `%LOCALAPPDATA%\JobBuddy\gmail-desktop-client.json` and takes effect without a restart. No client secret is accepted. Existing environment/build configuration takes precedence; the setup form does not overwrite it.
+5. Choose **Connect Gmail** and complete Google's consent popup. The dashboard stays open and starts the disclosed first 90-day scan after confirmation; failures expose a retry button. Developers can still configure `.env.local` as described in the maintainer guide.
 
 ```dotenv
 GOOGLE_OAUTH_CLIENT_TYPE=desktop
@@ -175,6 +175,8 @@ GOOGLE_OAUTH_REDIRECT_URI=http://127.0.0.1:43117/api/gmail/oauth/callback
 Job Buddy requests `https://www.googleapis.com/auth/gmail.readonly`, which Google classifies as a restricted scope. A Testing-mode app is suitable for named test users but may require periodic reconnection; broader public distribution can require Google verification and an appropriate security assessment. See Google's [OAuth web-server guide](https://developers.google.com/identity/protocols/oauth2/web-server) and [Gmail scope reference](https://developers.google.com/workspace/gmail/api/auth/scopes).
 
 ### Gmail troubleshooting
+
+- **Browser Buddy unavailable:** select **Retry connection** in Settings. Run the complete app with `npm.cmd run dev`, not only the web preview. Both `localhost` and `127.0.0.1` work on ports 5173 (development) and 43117 (built app). Browser storage remains separate for each address; use your usual address to keep your tracker data visible. The **Installation guide** explains how to load and pair the extension.
 
 - **Popup blocked:** allow popups for Job Buddy and click Connect Gmail again. **Stop waiting** closes the popup when browser isolation permits and stops dashboard polling; it does not revoke permission already granted to Google. If you already approved, reload Settings to check the connection. Automatic scans remain paused until a successful first scan.
 

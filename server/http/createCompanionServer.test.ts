@@ -1,4 +1,5 @@
 import type { AddressInfo } from "node:net";
+import { request as httpRequest } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { emptyCandidateProfile } from "../../src/domain/profile";
 import { defaultBuddyPreferences } from "../../src/domain/buddy";
@@ -64,6 +65,36 @@ afterEach(async () => {
 });
 
 describe("createCompanionServer", () => {
+  it("accepts browser same-origin reads without Origin, but rejects cross-site and rebinding hosts", async () => {
+    const base = await start(services());
+    // Node fetch rewrites Host; use HTTP directly to exercise browser headers.
+    const status = (path: string, headers: Record<string, string>, method = "GET") => new Promise<number>((resolve, reject) => {
+      const request = httpRequest(base + path, { headers, method }, (response) => { response.resume(); resolve(response.statusCode!); });
+      request.on("error", reject); request.end(method === "POST" ? "{}" : undefined);
+    });
+    const browserHeaders = { host: "127.0.0.1:5173", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty" };
+    expect(await status("/api/buddy/status", browserHeaders)).toBe(200);
+    expect(await status("/api/buddy/preferences", browserHeaders)).toBe(200);
+    for (const headers of [{}, { ...browserHeaders, "sec-fetch-site": "cross-site" }, { ...browserHeaders, host: "evil.example" }, { ...browserHeaders, origin: "https://evil.example" }, { ...browserHeaders, "sec-fetch-mode": "navigate" }]) {
+      expect(await status("/api/buddy/status", headers)).toBe(403);
+    }
+    expect(await status("/api/buddy/pairing/start", { ...browserHeaders, "content-type": "application/json" }, "POST")).toBe(403);
+  });
+
+  it("validates desktop setup and requires an explicit allowed Origin", async () => {
+    let saved = "";
+    const testServices = services();
+    testServices.connection.configureDesktopClient = async (id: string) => { saved = id; };
+    const base = await start(testServices);
+    const send = (body: unknown, origin = "http://127.0.0.1:5173") => fetch(`${base}/api/gmail/setup`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
+    expect((await send({ clientId: "123-test.apps.googleusercontent.com" }, "https://evil.example")).status).toBe(403);
+    expect((await send({ clientId: "invalid\nSETTING=bad" })).status).toBe(400);
+    expect((await send({ clientId: "123-test.apps.googleusercontent.com", clientSecret: "not-accepted" })).status).toBe(400);
+    expect(saved).toBe("");
+    expect((await send({ clientId: "123-test.apps.googleusercontent.com" })).status).toBe(204);
+    expect(saved).toBe("123-test.apps.googleusercontent.com");
+  });
+
   it("does not process duplicate popup callbacks while the first exchange is pending", async () => {
     const testServices = services();
     testServices.connection.start = async () => ({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=one-use" });

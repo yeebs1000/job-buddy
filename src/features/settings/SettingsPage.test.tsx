@@ -14,6 +14,7 @@ const adapter: MailAdapter = { source: "gmail", scan: vi.fn() };
 function client(status: GmailConnectionStatus): GmailSettingsClient {
   return {
     status: vi.fn().mockResolvedValue(status),
+    configureDesktopClient: vi.fn().mockResolvedValue(undefined),
     start: vi.fn().mockResolvedValue({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth" }),
     startPopup: vi.fn().mockResolvedValue({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth", popupId: "a".repeat(48) }),
     popupResult: vi.fn().mockResolvedValue("connected"),
@@ -28,12 +29,18 @@ function preferenceStore(overrides = {}): GmailPreferencesStore {
 
 afterEach(async () => { cleanup(); sessionStorage.clear(); window.history.replaceState({}, "", "/"); await jobBuddyDb.delete(); await jobBuddyDb.open(); vi.restoreAllMocks(); });
 
-it("shows setup guidance without exposing a secret input", async () => {
-  render(<MemoryRouter><SettingsPage client={client({ state: "unconfigured", platformSupported: true, lastError: "missing-config" })} preferences={preferenceStore()} /></MemoryRouter>);
+it("offers in-app desktop setup and then enables Google sign-in without a secret input", async () => {
+  const gmail = client({ state: "unconfigured", platformSupported: true, lastError: "missing-config" });
+  vi.mocked(gmail.status).mockResolvedValueOnce({ state: "unconfigured", platformSupported: true }).mockResolvedValue({ state: "disconnected", platformSupported: true });
+  render(<MemoryRouter><SettingsPage client={gmail} preferences={preferenceStore()} /></MemoryRouter>);
 
   expect(await screen.findByText("Gmail connector awaiting setup")).toBeVisible();
-  await userEvent.click(screen.getByText("Maintainer / self-host setup"));
-  expect(screen.getByText(/copy .env.example to .env.local/i)).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Set up Gmail" }));
+  expect(screen.getByRole("link", { name: /Open Google Cloud/i })).toHaveAttribute("href", "https://console.cloud.google.com/auth/clients");
+  await userEvent.type(screen.getByLabelText("Desktop client ID"), "123-test.apps.googleusercontent.com");
+  await userEvent.click(screen.getByRole("button", { name: "Save client ID" }));
+  expect(await screen.findByRole("button", { name: /^Connect Gmail$/ })).toBeEnabled();
+  expect(gmail.configureDesktopClient).toHaveBeenCalledWith("123-test.apps.googleusercontent.com");
   expect(screen.queryByLabelText(/client secret/i)).not.toBeInTheDocument();
 });
 

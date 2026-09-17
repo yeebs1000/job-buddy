@@ -11,7 +11,7 @@ describe("readCompanionConfig", () => {
       host: "127.0.0.1",
       port: 43117,
       google: null,
-      uiOrigins: ["http://127.0.0.1:5173", "http://127.0.0.1:43117"],
+      uiOrigins: ["http://127.0.0.1:5173", "http://127.0.0.1:43117", "http://localhost:5173", "http://localhost:43117"],
     });
   });
 

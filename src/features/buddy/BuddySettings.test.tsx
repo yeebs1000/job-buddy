@@ -6,6 +6,16 @@ import { BuddySettings } from "./BuddySettings";
 import type { BuddyClient } from "./buddyClient";
 
 describe("BuddySettings", () => {
+  it("retries an unavailable companion before enabling pairing", async () => {
+    const client = fakeBuddyClient();
+    vi.mocked(client.status).mockRejectedValueOnce(new Error("offline"));
+    render(<BuddySettings client={client} />);
+    expect(await screen.findByText(/Buddy settings are unavailable/i)).toBeVisible();
+    expect(screen.getByRole("button", { name: "Pair browser extension" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Retry connection" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Pair browser extension" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Installation guide" })).toBeEnabled();
+  });
   it("shows an expiring code and requires confirmation for automatic fill", async () => {
     const user = userEvent.setup();
     const client = fakeBuddyClient();

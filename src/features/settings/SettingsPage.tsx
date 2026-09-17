@@ -180,6 +180,11 @@ export function SettingsPage({
       ? <section className="gmail-settings gmail-settings--loading" aria-busy="true" aria-label="Loading Gmail settings"><div /><div /><div /></section>
       : <GmailSettingsPanel
           status={status} preferences={preference} busy={busy}
+          onSetup={async (clientId) => {
+            await client.configureDesktopClient(clientId);
+            setStatus(await client.status());
+            setMessage({ tone: "status", text: "Gmail setup saved locally. Click Connect Gmail to sign in with Google." });
+          }}
           onConnect={() => void connect()} onDisconnect={() => void disconnect()} onInitialScan={() => void initialScan()}
           onDailyChange={(enabled) => void changePreference({ dailyActiveScanEnabled: enabled })}
           onModeChange={changeMode}

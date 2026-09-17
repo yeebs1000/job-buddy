@@ -1,6 +1,7 @@
 import type { GmailConnectionStatus } from "../../domain/mail";
 
 export interface GmailSettingsClient {
+  configureDesktopClient(clientId: string): Promise<void>;
   status(): Promise<GmailConnectionStatus>;
   start(): Promise<{ authorizationUrl: string }>;
   startPopup(signal?: AbortSignal): Promise<{ authorizationUrl: string; popupId: string }>;
@@ -16,7 +17,7 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
     throw new Error("The local Gmail companion is not running");
   }
   if (!response.ok) throw new Error("The local Gmail companion could not complete this request");
-  return response.json().catch(() => { throw new Error("The local Gmail companion returned an invalid response"); });
+  return response.status === 204 ? undefined : response.json().catch(() => { throw new Error("The local Gmail companion returned an invalid response"); });
 }
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -42,6 +43,9 @@ function parseStatus(value: unknown): GmailConnectionStatus {
 }
 
 export const gmailClient: GmailSettingsClient = {
+  async configureDesktopClient(clientId) {
+    await request("/api/gmail/setup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clientId }) });
+  },
   async startPopup(signal) {
     const payload = object(await request("/api/gmail/oauth/start", { method: "POST", headers: { "content-type": "application/json" }, body: '{"popup":true}', signal }));
     if (!payload || typeof payload.authorizationUrl !== "string" || typeof payload.popupId !== "string" || !/^[a-f0-9]{48}$/.test(payload.popupId)) throw new Error("Invalid popup response");

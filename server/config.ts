@@ -15,8 +15,8 @@ export interface CompanionConfig {
   uiOrigins: readonly string[];
 }
 
-export function readCompanionConfig(env: NodeJS.ProcessEnv): CompanionConfig {
-  const clientId = env.GOOGLE_OAUTH_CLIENT_ID?.trim() || jobBuddyDesktopClientId;
+export function readCompanionConfig(env: NodeJS.ProcessEnv, savedDesktopClientId?: string | null): CompanionConfig {
+  const clientId = env.GOOGLE_OAUTH_CLIENT_ID?.trim() || jobBuddyDesktopClientId || savedDesktopClientId || "";
   const clientSecret = env.GOOGLE_OAUTH_CLIENT_SECRET?.trim() ?? "";
   const clientType = env.GOOGLE_OAUTH_CLIENT_TYPE?.trim() || (env.GOOGLE_OAUTH_CLIENT_ID ? "web" : "desktop");
   const configuredRedirectUri = env.GOOGLE_OAUTH_REDIRECT_URI?.trim() || redirectUri;
@@ -33,6 +33,6 @@ export function readCompanionConfig(env: NodeJS.ProcessEnv): CompanionConfig {
     host,
     port,
     google: clientId ? { clientId, ...(clientSecret ? { clientSecret } : {}), redirectUri } : null,
-    uiOrigins: ["http://127.0.0.1:5173", "http://127.0.0.1:43117"],
+    uiOrigins: ["http://127.0.0.1:5173", "http://127.0.0.1:43117", "http://localhost:5173", "http://localhost:43117"],
   };
 }

@@ -26,6 +26,24 @@ class MemoryMetadata {
 }
 
 describe("GmailConnectionService", () => {
+  it("saves first-time desktop setup before enabling OAuth without restarting", async () => {
+    let saved = "";
+    const service = new GmailConnectionService({ config: { ...config, google: null }, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), saveDesktopClientId: async (id) => { saved = id; } });
+    await service.configureDesktopClient("123-test.apps.googleusercontent.com");
+    expect(saved).toBe("123-test.apps.googleusercontent.com");
+    expect(await service.status()).toMatchObject({ state: "disconnected" });
+    const url = new URL((await service.start()).authorizationUrl);
+    expect(url.searchParams.get("client_id")).toBe(saved);
+    expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:43117/api/gmail/oauth/callback");
+    await expect(service.configureDesktopClient("456-other.apps.googleusercontent.com")).rejects.toMatchObject({ code: "already-configured" });
+    expect(saved).toBe("123-test.apps.googleusercontent.com");
+  });
+
+  it("does not enable OAuth when saving the client ID fails", async () => {
+    const service = new GmailConnectionService({ config: { ...config, google: null }, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), saveDesktopClientId: async () => { throw new Error("disk unavailable"); } });
+    await expect(service.configureDesktopClient("123-test.apps.googleusercontent.com")).rejects.toThrow();
+    expect(await service.status()).toMatchObject({ state: "unconfigured" });
+  });
   it("reports missing configuration without attempting a provider request", async () => {
     const unconfigured = { ...config, google: null };
     const service = new GmailConnectionService({

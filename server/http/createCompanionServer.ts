@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
 import { OAuthPopupStore } from "../gmail/OAuthPopupStore";
+import { desktopClientIdSchema } from "../gmail/DesktopClientStore";
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import type { GmailConnectionStatus } from "../../src/domain/mail";
@@ -13,6 +14,7 @@ import { boardSchema, type JobBoard, type DiscoveryResult, type PostingPay } fro
 import type { FxQuote } from "../../src/domain/fx";
 
 interface ConnectionServicePort {
+  configureDesktopClient?(clientId: string): Promise<void>;
   status(): Promise<GmailConnectionStatus>;
   start(): Promise<{ authorizationUrl: string }>;
   complete(input: { code: string; state: string }): Promise<void>;
@@ -108,7 +110,16 @@ function popupComplete(response: ServerResponse, result: "pending" | "connected"
 
 function allowedOrigin(request: IncomingMessage, options: CompanionServerOptions): string | null {
   const origin = request.headers.origin;
-  return typeof origin === "string" && options.allowedOrigins.includes(origin) ? origin : null;
+  if (origin !== undefined) return typeof origin === "string" && options.allowedOrigins.includes(origin) ? origin : null;
+  // Same-origin browser GETs omit Origin. Browser-controlled fetch metadata plus
+  // an exact loopback Host permits reads, never writes or cross-site navigation.
+  // Vite's proxy preserves the original Host (changeOrigin must remain false).
+  const localOrigin = `http://${request.headers.host ?? ""}`;
+  return request.method === "GET"
+    && request.headers["sec-fetch-site"] === "same-origin"
+    && ["cors", "same-origin"].includes(String(request.headers["sec-fetch-mode"]))
+    && request.headers["sec-fetch-dest"] === "empty"
+    && options.allowedOrigins.includes(localOrigin) ? localOrigin : null;
 }
 
 function noContent(response: ServerResponse): void {
@@ -156,6 +167,7 @@ function safeError(error: unknown): { status: number; code: string } {
   const statuses: Record<string, number> = {
     "initial-consent-required": 409,
     "missing-config": 409,
+    "already-configured": 409,
     "platform-unsupported": 501,
     "invalid-state": 400,
     "offline-access-required": 409,
@@ -299,6 +311,14 @@ export function createCompanionServer(options: CompanionServerOptions) {
           json(response, 200, result);
           return;
         }
+      }
+      if (request.method === "POST" && url.pathname === "/api/gmail/setup") {
+        const body = z.object({ clientId: desktopClientIdSchema }).strict().safeParse(await readJson(request));
+        if (!body.success) throw new HttpInputError(400, "invalid-client-id");
+        if (!options.services.connection.configureDesktopClient) throw new HttpInputError(503, "setup-unavailable");
+        await options.services.connection.configureDesktopClient(body.data.clientId);
+        noContent(response);
+        return;
       }
       if (request.method === "POST" && url.pathname === "/api/gmail/oauth/start") {
         const body = z.object({ popup: z.boolean().optional() }).strict().safeParse(await readJson(request));

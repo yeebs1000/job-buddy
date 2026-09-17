@@ -4,6 +4,7 @@ import type { SecretStore } from "../secrets/SecretStore";
 import type { GmailConnectionStatus } from "../../src/domain/mail";
 import { GoogleOAuthClient, GoogleOAuthError, type GoogleTokens } from "./GoogleOAuthClient";
 import { OAuthAttemptStore } from "./OAuthAttemptStore";
+import { desktopClientIdSchema } from "./DesktopClientStore";
 
 interface ConnectionMetadataPort {
   get(): Promise<GmailConnectionMetadata | null>;
@@ -18,10 +19,11 @@ interface GmailConnectionServiceOptions {
   fetcher?: typeof fetch;
   nowMs?: () => number;
   attempts?: OAuthAttemptStore;
+  saveDesktopClientId?: (clientId: string) => Promise<void>;
 }
 
 export class GmailConnectionError extends Error {
-  constructor(readonly code: "missing-config" | "platform-unsupported" | "invalid-state" | "offline-access-required" | "reconnect-required" | "request-failed") {
+  constructor(readonly code: "missing-config" | "platform-unsupported" | "invalid-state" | "offline-access-required" | "reconnect-required" | "request-failed" | "already-configured") {
     const messages = {
       "missing-config": "Google OAuth is not configured",
       "platform-unsupported": "Persistent Gmail connection requires Windows",
@@ -29,6 +31,7 @@ export class GmailConnectionError extends Error {
       "offline-access-required": "Google did not grant offline access; reconnect and approve access again",
       "reconnect-required": "Gmail authorization must be renewed",
       "request-failed": "Gmail connection could not be completed",
+      "already-configured": "Gmail client setup is already configured or in progress",
     } as const;
     super(messages[code]);
     this.name = "GmailConnectionError";
@@ -36,7 +39,8 @@ export class GmailConnectionError extends Error {
 }
 
 export class GmailConnectionService {
-  private readonly oauth: GoogleOAuthClient | null;
+  private oauth: GoogleOAuthClient | null;
+  private configuring = false;
   private readonly attempts: OAuthAttemptStore;
   private readonly nowMs: () => number;
   private access: GoogleTokens | null = null;
@@ -59,6 +63,19 @@ export class GmailConnectionService {
     const refreshToken = await this.options.secrets.get("gmail-refresh-token").catch(() => null);
     if (!refreshToken) return { state: "disconnected", platformSupported };
     return { state: "connected", accountEmail: metadata.accountEmail, platformSupported };
+  }
+
+  async configureDesktopClient(input: string): Promise<void> {
+    const clientId = desktopClientIdSchema.parse(input);
+    if (this.oauth || this.configuring) throw new GmailConnectionError("already-configured");
+    if (!this.options.secrets.isSupported()) throw new GmailConnectionError("platform-unsupported");
+    if (!this.options.saveDesktopClientId) throw new GmailConnectionError("missing-config");
+    this.configuring = true;
+    try {
+      await this.options.saveDesktopClientId(clientId);
+      this.options.config.google = { clientId, redirectUri: "http://127.0.0.1:43117/api/gmail/oauth/callback" };
+      this.oauth = new GoogleOAuthClient(this.options.config.google, this.options.fetcher, this.nowMs);
+    } finally { this.configuring = false; }
   }
 
   async start(now = new Date(this.nowMs()).toISOString()): Promise<{ authorizationUrl: string }> {
