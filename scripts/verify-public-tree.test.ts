@@ -75,3 +75,27 @@ it("accepts normal tracked and untracked public files", async () => {
 
   await expect(verifyPublicTree(directory)).resolves.toMatchObject({ findings: [] });
 });
+
+it("rejects private-key material staged in the index after the worktree is cleaned", async () => {
+  const directory = await repository();
+  const marker = ["-----BEGIN", "PRIVATE KEY-----"].join(" ");
+  await writeFile(join(directory, "staged.txt"), `${marker}\nindex-canary`, "utf8");
+  await exec("git", ["add", "staged.txt"], { cwd: directory });
+  await writeFile(join(directory, "staged.txt"), "clean worktree content", "utf8");
+
+  let error: Error | undefined;
+  try { await verifyPublicTree(directory); } catch (caught) { error = caught as Error; }
+
+  expect(error?.message).toMatch(/staged\.txt/);
+  expect(error?.message).toMatch(/index/i);
+  expect(error?.message).not.toContain("index-canary");
+});
+
+it("handles an unstaged deletion of a tracked file without failing", async () => {
+  const directory = await repository();
+  await writeFile(join(directory, "removed.md"), "ordinary public content", "utf8");
+  await commitAll(directory, "add removable file");
+  await rm(join(directory, "removed.md"));
+
+  await expect(verifyPublicTree(directory)).resolves.toMatchObject({ findings: [] });
+});

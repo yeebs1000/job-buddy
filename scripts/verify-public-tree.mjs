@@ -21,7 +21,12 @@ function reasonFor(path, content) {
 
 async function inspectWorktree(repository, path) {
   const absolutePath = resolve(repository, path);
-  const metadata = await stat(absolutePath);
+  let metadata;
+  try { metadata = await stat(absolutePath); }
+  catch (error) {
+    if (error?.code === "ENOENT") return undefined;
+    throw error;
+  }
   const pathReason = reasonFor(path);
   if (pathReason || metadata.size > MAX_TEXT_BYTES) return pathReason;
   const content = await readFile(absolutePath);
@@ -29,8 +34,27 @@ async function inspectWorktree(repository, path) {
   return reasonFor(path, content.toString("utf8"));
 }
 
+async function indexedMarkerPaths(repository) {
+  const markerPattern = "-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----";
+  try {
+    const { stdout } = await git(repository, ["grep", "--cached", "-I", "-l", "-E", "-e", markerPattern, "--"]);
+    return stdout.split(/\r?\n/).filter(Boolean);
+  } catch (error) {
+    if (error?.code === 1) return [];
+    throw error;
+  }
+}
+
 export async function verifyPublicTree(repository = resolve(import.meta.dirname, "..")) {
   const findings = [];
+  const { stdout: indexed } = await git(repository, ["ls-files", "--cached", "-z"]);
+  for (const path of indexed.split("\0").filter(Boolean)) {
+    const reason = reasonFor(path);
+    if (reason) findings.push({ scope: "Git index", path, reason });
+  }
+  for (const path of await indexedMarkerPaths(repository)) {
+    findings.push({ scope: "Git index", path, reason: "private key marker" });
+  }
   const { stdout: candidates } = await git(repository, ["ls-files", "--cached", "--others", "--exclude-standard", "-z"]);
   for (const path of candidates.split("\0").filter(Boolean)) {
     const reason = await inspectWorktree(repository, path);

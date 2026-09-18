@@ -41,6 +41,9 @@ export async function packageExtension(projectRoot = resolve(import.meta.dirname
     archiveEntries[archivePath] = new Uint8Array(await readFile(absolutePath));
   }
   if (!archiveEntries["manifest.json"]) throw new Error("Built extension is missing manifest.json");
+  for (const requiredFile of allowedFiles) {
+    if (!archiveEntries[requiredFile]) throw new Error(`Built extension is missing required runtime file: ${requiredFile}`);
+  }
 
   const archive = Buffer.from(zipSync(archiveEntries, { level: 9 }));
   const releaseRoot = join(projectRoot, "release-artifacts");

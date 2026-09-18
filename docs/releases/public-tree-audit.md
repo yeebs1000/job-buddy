@@ -10,7 +10,7 @@ Local `dist-extension.pem` and `dist-extension.crx` files were preserved and are
 
 ## Scanner coverage and limitations
 
-The scanner checks Git tracked files plus untracked files not excluded by `.gitignore`. It rejects `.pem`, `.key`, `.p12`, `.pfx`, and `.crx` paths and conventional RSA, EC, DSA, OpenSSH, or generic PEM private-key headers. Reachable history is checked across all local refs for those paths and markers. Diagnostics contain scope, path, and reason only—not matched content.
+The scanner checks Git index blobs, existing tracked worktree files, and untracked files not excluded by `.gitignore`. This catches both staged content and unstaged edits while tolerating tracked files deleted from the worktree. It rejects `.pem`, `.key`, `.p12`, `.pfx`, and `.crx` paths and conventional RSA, EC, DSA, OpenSSH, or generic PEM private-key headers. Reachable history is checked across all local refs for those paths and markers. Diagnostics contain scope, path, and reason only—not matched content.
 
 This is a narrow release guard, not proof that the repository contains no secrets. It does not perform entropy analysis, recognize arbitrary API-token formats, inspect ignored files, inspect binary or NUL-containing current files, scan current text files larger than 2 MiB for markers, or inspect unreachable/dangling Git objects. CI uses `fetch-depth: 0`, but server-side refs not fetched into the runner remain outside its view.
 

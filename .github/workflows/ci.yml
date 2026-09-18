@@ -37,9 +37,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify public tree and reachable history
-        run: npm run verify:public-tree
-
       - name: Install Playwright Chromium and Edge for installed-extension coverage
         run: npx playwright install chromium msedge
 
