@@ -1,0 +1,37 @@
+name: Feature request
+description: Propose a focused improvement within Job Buddy's safety boundaries
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include resumes, private emails, real tracker rows, tokens, cookies, candidate profiles, or job-site form answers. AI-generated answers, remote profile processing, cloud sync, and automatic final submission are deferred and require separate product/privacy review.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the user problem with fictional examples.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Explain the outcome without prescribing a large implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Privacy and safety impact
+      description: What data would move, where would it be stored, and what must remain user-approved?
+    validations:
+      required: true
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy check
+      options:
+        - label: I used only fictional examples and did not attach resumes, private mail, personal data, secrets, tokens, cookies, pairing codes, or real form answers.
+          required: true

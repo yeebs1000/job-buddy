@@ -1,6 +1,6 @@
-# Job Buddy v1.0.0-beta.15
+# Job Buddy v1.0.0-beta.16
 
-Latest: [beta.15 Oracle address compatibility](docs/releases/v1-beta-15.md): separate address components, corrected phone-field recognition and explicit manual dropdown guidance. [Beta.14 pairing fixes](docs/releases/v1-beta-14.md), [beta.13 autofill improvements](docs/releases/v1-beta-13.md) and [beta.12 mail improvements](docs/releases/v1-beta-12.md) remain included.
+Latest: [beta.16 public-beta readiness](docs/releases/v1-beta-16.md) documents verified local checks, installation, privacy boundaries, and the external gates that remain. [Beta.15 Oracle address compatibility](docs/releases/v1-beta-15.md) remains included.
 
 > A local-first workspace for replacing the job-application spreadsheet.
 
@@ -69,7 +69,7 @@ Job Buddy distinguishes information you enter from connector evidence. The appli
 | LinkedIn, campus portals, referrals and other job boards | Stored as a source label when you add/import an application | Keep the original application source and link | No authenticated discovery or scraping of these platforms |
 | Gmail / Gmail API | Optional read-only OAuth companion on Windows, plus a separate fictional demo inbox | Active-session scans for recruiter/HR replies, proposed stage changes, interview dates, approved HTTPS meeting links, deadlines, and follow-up tasks | Refresh token is Windows-DPAPI encrypted; normalized evidence is stored locally; no background service and no automatic live-to-demo fallback |
 | Greenhouse, Workday, Oracle Recruiting, Lever and semantic web forms | Guarded local Chrome/Edge autofill with stable-marker detection and Generic fallback | Expand fixture coverage as vendors change | Exact-site permission only; no files, credentials, EEO/legal fields, CAPTCHA, or final submission |
-| Singapore MOM/SingStat, Hong Kong C&SD, U.S. BLS OEWS/CPI-U | Local companion downloads and validates allowlisted official releases | Salary benchmarks and CPI purchasing-power equivalents for supported software/IT roles | No currency conversion; U.S. falls back metro → state → national; data older than three years is not used as a primary estimate |
+| Singapore MOM/SingStat, Hong Kong C&SD, U.S. BLS OEWS/CPI-U, ECB-backed Frankfurter FX | Local companion downloads and validates allowlisted official releases; optional dated FX comparison is kept separate | Salary benchmarks and CPI purchasing-power equivalents for supported software/IT roles | No cross-currency evidence blending; FX is not a cost-of-living, tax, or fee comparison; U.S. falls back metro → state → national |
 | Glassdoor, Levels.fyi, JobStreet, JobsDB | Not connected or scraped | Possible future links or user-entered evidence only | No commercial scraping or bundled commercial dataset in v1 beta; company-specific salary and review predictions are not claimed |
 | Greenhouse and Lever public Job Board APIs | User-selected company boards, role/location filters, local shortlist and employer-posted ranges | More providers after evaluating their documented access and terms | GET-only public APIs; no login, CAPTCHA bypass or arbitrary-page scraping; saved listings are not applications |
 | User-selected AI provider | Not connected | Lower-priority future interview-preparation assistance | v0.4 has no AI integration, API-key UI, or model dependency |
@@ -112,18 +112,18 @@ CSV and XLSX files are parsed locally. XLSX import uses an on-demand ExcelJS val
 
 See [SECURITY.md](SECURITY.md) for supported beta versions, source-processing limits, the paired-extension trust boundary, and safe vulnerability reporting.
 
-## Quick start
+## Windows quick start
 
 Prerequisites: Node.js 22.22.2+ on Node 22, 24.15.0+ on Node 24, or Node 26+ and npm. Playwright's browser journey also needs Chromium.
 
 ```bash
 git clone https://github.com/yeebs1000/job-buddy.git
 cd job-buddy
-npm install
-npm run dev
+npm.cmd ci
+npm.cmd run dev
 ```
 
-Vite prints the local URL, normally [http://127.0.0.1:5173](http://127.0.0.1:5173). `npm run dev` starts both the web app and the loopback companion; use `npm.cmd run dev` if PowerShell blocks `npm.ps1`.
+Vite prints the local URL, normally [http://127.0.0.1:5173](http://127.0.0.1:5173). `npm.cmd run dev` starts both the web app and the loopback companion. Keep that terminal open. If port 5173 or 43117 is occupied, stop the old Job Buddy process or the other local service and retry; the launcher reports the affected port and does not replace an existing listener. A browser journey also requires Chromium: `npx.cmd playwright install chromium`.
 
 ## Salary research
 
@@ -142,8 +142,8 @@ Open **Discover**, paste a company's `job-boards.greenhouse.io`, `boards.greenho
 ## Install Browser Buddy in Chrome or Edge
 
 1. Keep `npm run dev` running, open **Profile**, and save the factual fields you want Buddy to use.
-2. Build the unpacked extension with `npm run build:extension`.
-3. In Chrome open `chrome://extensions`; in Edge open `edge://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select this repository's `dist-extension` folder.
+2. For development, build the unpacked extension with `npm.cmd run build:extension`. For a release candidate, run `npm.cmd run package:extension`, locate the ignored ZIP under `release-artifacts`, extract it to a new folder, and load that extracted folder. Chrome and Edge cannot load the ZIP itself.
+3. In Chrome open `chrome://extensions`; in Edge open `edge://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select either this repository's `dist-extension` folder or the extracted release folder from step 2.
 4. On an HTTPS application page, click the Job Buddy toolbar icon and allow access to that site. Open the floating **Buddy** button. The toolbar cannot activate on the local dashboard or browser settings pages.
 5. Open **Settings → Browser Buddy** in Job Buddy and choose **Pair browser extension**. Enter the one-time code in the floating Buddy on the application page.
 6. In **Approval mode**, choose individual answers or **Select safe, empty fields**, then **Fill approved fields**. In **Automatic fill**, safe empty matches fill without this step. Sensitive answers and existing values still require individual approval. Buddy never clicks Next or Submit for you.
@@ -159,6 +159,7 @@ Buddy supports semantic Generic forms and stable markers for Greenhouse, Workday
 - **Permission denied:** click the toolbar icon again and allow only the current HTTPS job site. HTTP application pages are intentionally refused.
 - **Unsupported form:** use the site's form manually. Unknown labels stay unresolved; they are never guessed into a profile field.
 - **Pairing expired:** create a new code in Settings. Codes expire after five minutes and work once.
+- **Reconnect after revoking:** choose **Revoke extension** in Settings, remove the site's extension permission if desired, then create and enter a fresh one-time pairing code. A revoked token is not reusable.
 - **Stop all filling:** enable **Pause Buddy everywhere** or revoke the extension from Settings. Chrome/Edge site permission can also be removed in the browser.
 - **Clear local Buddy data:** delete the candidate profile on the Profile page, clear metadata-only activity in Settings, process or delete pending captures, and revoke pairing. Browser IndexedDB tracker data is cleared separately.
 
@@ -249,6 +250,8 @@ npm run test:e2e
 ```
 
 The product direction is documented in the [design specification](docs/superpowers/specs/2026-09-12-job-buddy-design.md), and the core implementation sequence is in the [core tracker plan](docs/superpowers/plans/2026-09-12-job-buddy-core-tracker.md).
+
+See [PRIVACY.md](PRIVACY.md) for the concise data-flow map and deletion limits. Release reviewers should use the [v1 launch checklist](docs/releases/v1-launch-checklist.md); a passing local gate is not Google approval, a separate Windows-machine result, or publication authorization.
 
 ## Acknowledgements
 

@@ -19,3 +19,11 @@ This is a narrow release guard, not proof that the repository contains no secret
 `fflate` was upgraded from 0.8.2 to 0.8.3, addressing GHSA-px8p-9vwx-vf98. Resume-text, Excel-workbook, and research-tabular regression tests passed after the upgrade.
 
 `npm.cmd audit --omit=dev --audit-level=high` exited successfully but still reports two moderate findings through `exceljs@4.4.0 -> uuid@8.3.2`. The advisory concerns UUID v3/v5/v6 calls with caller-provided buffers; the installed ExcelJS code imports and calls UUID v4 for conditional-formatting IDs. A forced audit fix would downgrade ExcelJS to 3.4.0 and was intentionally not applied. This is a documented transitive risk, not a zero-finding audit.
+
+## Release-candidate environment evidence
+
+An isolated `npm.cmd ci --no-audit --no-fund` completed with Node 24.19.0/npm 11.17.0, followed by successful typecheck, application build, extension build, and extension packaging against the isolated dependency tree. The install reported upstream deprecations and a pending esbuild postinstall; no global npm permission was changed. Vite emitted its chunk-size warning.
+
+The production entrypoint was also invoked with isolated local application data and blank Google configuration while port 43117 was occupied. It exited with actionable port-in-use guidance and did not replace the existing listener. Actual serving is covered by a synthetic end-to-end server on an ephemeral port; this does not prove a clean start on a separate Windows machine.
+
+The independent checksum-verified Gitleaks 8.30.1 run scanned 88 reachable commits (about 1.98 MB) without findings at that checkpoint. A fresh scan remains mandatory after the final release-candidate commits. The GitHub repository was confirmed private with default branch `feature/job-buddy-core`; no visibility, publication, or other remote state was changed.

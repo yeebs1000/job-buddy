@@ -6,7 +6,7 @@ Job Buddy is currently a public-beta candidate. Security fixes target `1.0.0-bet
 
 ## Reporting a vulnerability
 
-Use GitHub's private security-advisory flow when it is available for this repository. Otherwise contact the maintainer privately before opening a public issue. Include the affected version, impact, and minimal reproduction, but never include real Gmail messages, OAuth credentials, pairing tokens, candidate-profile data, trackers, cookies, or job-site form answers. Please allow time for triage before public disclosure.
+Use the repository's **Security → Report a vulnerability** private-advisory flow when it is available. If that option is unavailable, contact the maintainer through a previously established private channel and ask for a secure reporting route; do not open a public issue containing vulnerability details. Include the affected version, impact, and a minimal synthetic reproduction, but never include real Gmail messages, resumes, OAuth credentials, pairing tokens, candidate-profile data, trackers, cookies, or job-site form answers. Please allow time for triage before public disclosure.
 
 ## Local trust boundary
 
@@ -32,3 +32,5 @@ Company discovery constructs GET URLs only on fixed Greenhouse/Lever API origins
 The distributed Google desktop client ID is public configuration, not a confidential secret. Real Google registration, restricted-scope review and acceptance checks remain release gates. Web-client secrets and tokens must never be packaged with the app. Windows DPAPI storage remains required for persistent Gmail/profile access.
 
 Job Buddy is local-first, not a hardened multi-user vault. Anyone with access to the same Windows account or browser profile may be able to access local data. Standard CSV/XLSX exports intentionally omit lifecycle evidence and are not full backups. Never commit `.env.local`, local companion data, real exports, or personal fixtures.
+
+See [PRIVACY.md](PRIVACY.md) for the complete local data-flow and deletion map. Deleting Job Buddy data cannot erase values already filled into or submitted to a third-party job site.

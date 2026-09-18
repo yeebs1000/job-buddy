@@ -13,9 +13,9 @@ Thank you for helping make job-application tracking calmer, safer, and easier to
 Job Buddy currently supports Node.js 22.22.2+ on Node 22, 24.15.0+ on Node 24, or Node 26+.
 
 ```powershell
-npm install
-npx playwright install chromium
-npm run dev
+npm.cmd ci
+npx.cmd playwright install chromium
+npm.cmd run dev
 ```
 
 Copy `.env.example` to `.env.local` only when testing an optional local integration. Keep `.env.local` private.
@@ -35,6 +35,8 @@ Copy `.env.example` to `.env.local` only when testing an optional local integrat
 5. Explain the user-facing result, verification, and any privacy or security impact in the pull request.
 
 For interface work, verify readable contrast, keyboard access, narrow-screen behavior, and clear separation between applications. Include screenshots when the visual result changes.
+
+Use only synthetic, anonymized fixtures and screenshots. Before attaching diagnostics, remove names, email bodies, resumes, tracker rows, OAuth values, extension pairing codes, cookies, local paths that reveal identity, and third-party form answers. GitHub issues are public unless the repository owner says otherwise; vulnerabilities belong in the private channel described in [SECURITY.md](SECURITY.md).
 
 ## Product boundaries
 
