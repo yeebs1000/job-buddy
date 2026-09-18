@@ -2,6 +2,20 @@
 import { expect, it } from "vitest";
 import { createZipFixture, parseBoundedZip, parseDelimitedText } from "./tabular";
 
+it.each(["counts", "directory-size", "local-size", "forged-sizes", "multi-disk", "truncated", "method"])("rejects %s archive metadata before extraction", (kind) => {
+  const archive = createZipFixture({ "one.txt": "hello".repeat(100), "two.txt": "world" });
+  const view = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
+  const end = archive.length - 22;
+  const central = view.getUint32(end + 16, true);
+  if (kind === "counts") view.setUint16(end + 10, 1, true);
+  if (kind === "directory-size") view.setUint32(end + 12, 1, true);
+  if (kind === "local-size") view.setUint32(22, 1, true);
+  if (kind === "forged-sizes") { view.setUint32(22, 1, true); view.setUint32(central + 24, 1, true); }
+  if (kind === "multi-disk") view.setUint16(end + 4, 1, true);
+  if (kind === "method") view.setUint16(8, 99, true);
+  expect(() => parseBoundedZip(kind === "truncated" ? archive.subarray(0, archive.length - 1) : archive)).toThrow();
+});
+
 it("parses a bounded tab-delimited table", () => {
   expect(parseDelimitedText("A\tB\n1\t2\n3\t4", "\t")).toEqual([
     { A: "1", B: "2" },

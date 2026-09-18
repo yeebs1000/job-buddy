@@ -8,12 +8,14 @@
 - Corrected salary-source documentation: the optional dated ECB-backed FX comparison exists, remains separate from source amounts, and is not a cost-of-living or company-offer prediction.
 - Documented narrow Browser Buddy behavior: semantic Generic plus Greenhouse, Workday, Oracle Recruiting and Lever markers; custom widgets, repeated sections, uploads, legal/demographic answers, CAPTCHA, navigation and final submission remain manual.
 - Version metadata is now `1.0.0-beta.16`; the Chrome manifest's required numeric version remains `1.0.0` and `version_name` carries the beta label.
+- Disconnect invalidates pending Gmail callbacks and popup receipts, serializes credential removal after in-flight persistence, and prevents older token refreshes from restoring access.
+- Tracker and research ZIP/XLSX readers now validate consistent single-disk archive metadata and decode into bounded output buffers before workbook loading. Development-launcher tests retain partial startup PIDs for cleanup.
 
 ## Acceptance coverage map
 
 Existing synthetic tests cover direct and forwarded confirmations/rejections, recruiter outreach, newsletter exclusions, duplicate provider IDs, reconnect state, bounded/partial Gmail scans, cursor rollback protection, reviewed resume parse/save/reload, real isolated Windows DPAPI profile save/reload, profile deletion, Dexie v1-to-v2 application preservation, tracker CSV/XLSX import/export, Gmail disconnect, and Browser Buddy pairing revocation. The migration test creates a real version-1 IndexedDB before opening the current schema. No duplicate regression was added solely to increase a count.
 
-Browser Buddy fixtures exercise supported ATS structures without live applications. The installed-extension suite currently exercises real Chrome loading/pairing only; Edge behavior and every live vendor variation are not proven by fixtures.
+Browser Buddy fixtures exercise supported ATS structures without live applications. The installed-extension suite uses Edge on Windows and Chromium elsewhere for real loading/pairing; it does not establish Chrome-specific behavior or every live vendor variation.
 
 ## Verified locally on 2026-09-18
 
@@ -29,7 +31,7 @@ The dependency audit is not zero-finding: two moderate findings remain through E
 ## Not yet verified
 
 - No artifact has been published and the repository has not been made public.
-- Google restricted-scope verification, maintainer OAuth registration, and a consented live-mail acceptance run remain external gates.
+- Shared-distribution OAuth configuration and required Google production approval, plus a consented live-mail acceptance run, remain unverified external gates. This does not imply that an existing local client configuration is absent.
 - A clean acceptance run on a separate supported Windows machine, including Chrome and Edge packaged-ZIP loading, remains open.
 - The controller must run the final full check, dependency audit, clean install/package, post-commit history scan, and owner publication review. Follow [v1-launch-checklist.md](v1-launch-checklist.md).
 

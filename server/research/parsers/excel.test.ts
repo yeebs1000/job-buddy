@@ -1,6 +1,17 @@
 import ExcelJS from "exceljs";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { readValuesOnlyWorkbook } from "./excel";
+
+it("rejects inconsistent archive counts before ExcelJS loads", async () => {
+  const workbook = new ExcelJS.Workbook(); workbook.addWorksheet("Wages").addRow(["safe"]);
+  const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
+  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint16(bytes.length - 12, 1, true);
+  const load = vi.spyOn(workbook.xlsx.constructor.prototype, "load");
+  try {
+    await expect(readValuesOnlyWorkbook(bytes)).rejects.toThrow();
+    expect(load).not.toHaveBeenCalled();
+  } finally { load.mockRestore(); }
+});
 
 it("reads bounded values-only workbooks", async () => {
   const workbook = new ExcelJS.Workbook();

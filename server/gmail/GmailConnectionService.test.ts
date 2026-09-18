@@ -26,6 +26,81 @@ class MemoryMetadata {
 }
 
 describe("GmailConnectionService", () => {
+  it.each(["exchange", "persistence", "metadata", "refresh"])("disconnect wins against held %s and permits later reconnection", async (stage) => {
+    let release!: () => void;
+    let entered!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const secrets = new MemorySecrets();
+    const metadata = new MemoryMetadata();
+    let hold = true;
+    if (stage === "refresh") secrets.value = "old-refresh";
+    const originalSet = secrets.set.bind(secrets);
+    secrets.set = async (key, value) => {
+      if (stage === "persistence" && hold) { entered(); await held; }
+      await originalSet(key, value);
+    };
+    const originalMetadataSet = metadata.set.bind(metadata);
+    metadata.set = async (value) => {
+      if (stage === "metadata" && hold) { entered(); await held; }
+      await originalMetadataSet(value);
+    };
+    const service = new GmailConnectionService({ config, secrets, metadata, fetcher: async (url) => {
+      if (String(url).includes("/token")) {
+        if ((stage === "exchange" || stage === "refresh") && hold) { entered(); await held; }
+        return new Response(JSON.stringify({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }));
+      }
+      if (String(url).includes("/profile")) return new Response(JSON.stringify({ emailAddress: "test@example.com" }));
+      return new Response(null, { status: 200 });
+    } });
+    const state = new URL((await service.start()).authorizationUrl).searchParams.get("state")!;
+    const operation = stage === "refresh" ? service.getAccessToken() : service.complete({ code: "code", state });
+    const outcome = operation.then(() => "succeeded", () => "cancelled");
+    await started;
+    const disconnect = service.disconnect();
+    hold = false; release();
+    await disconnect;
+    expect(await outcome).toBe("cancelled");
+    expect(secrets.value).toBeNull();
+    expect(metadata.value).toBeNull();
+    await expect(service.getAccessToken()).rejects.toThrow();
+    await expect(service.complete({ code: "old", state })).rejects.toMatchObject({ code: "invalid-state" });
+    const next = new URL((await service.start()).authorizationUrl).searchParams.get("state")!;
+    await service.complete({ code: "new", state: next });
+    expect((await service.status()).state).toBe("connected");
+  });
+
+  it("invalidates callbacks that have not started when disconnect occurs", async () => {
+    const service = new GmailConnectionService({ config, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), fetcher: async () => new Response("{}", { status: 400 }) });
+    const state = new URL((await service.start()).authorizationUrl).searchParams.get("state")!;
+    await service.disconnect();
+    await expect(service.complete({ code: "old", state })).rejects.toMatchObject({ code: "invalid-state" });
+  });
+
+  it.each([false, true])("an old refresh settling after reconnection cannot replace or delete new credentials (revoked=%s)", async (revoked) => {
+    let release!: (response: Response) => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const held = new Promise<Response>((resolve) => { release = resolve; });
+    const secrets = new MemorySecrets(); secrets.value = "old-refresh";
+    const metadata = new MemoryMetadata();
+    const service = new GmailConnectionService({ config, secrets, metadata, fetcher: async (url, init) => {
+      if (String(init?.body).includes("grant_type=refresh_token")) { entered(); return held; }
+      if (String(url).includes("/token")) return new Response(JSON.stringify({ access_token: "new-access", refresh_token: "new-refresh", expires_in: 3600 }));
+      if (String(url).includes("/profile")) return new Response(JSON.stringify({ emailAddress: "new@example.com" }));
+      return new Response(null, { status: 200 });
+    } });
+    const stale = service.getAccessToken().catch(() => "cancelled");
+    await started;
+    await service.disconnect();
+    const state = new URL((await service.start()).authorizationUrl).searchParams.get("state")!;
+    await service.complete({ code: "new", state });
+    release(new Response(JSON.stringify(revoked ? { error: "invalid_grant" } : { access_token: "old-access", expires_in: 3600 }), { status: revoked ? 400 : 200 }));
+    expect(await stale).toBe("cancelled");
+    expect(secrets.value).toBe("new-refresh");
+    expect((await service.status()).state).toBe("connected");
+    expect(await service.getAccessToken()).toBe("new-access");
+  });
   it("persists matching client credentials and uses the secret only for the token request", async () => {
     const save = vi.fn(async () => undefined);
     const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ error: "invalid_request", error_description: "client_secret is missing." }), { status: 400 }));

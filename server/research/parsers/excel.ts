@@ -1,9 +1,11 @@
 import ExcelJS from "exceljs";
+import { readBoundedZip } from "../../../src/lib/boundedZip";
 
 export interface ValuesWorksheet { name: string; rows: unknown[][] }
 
 export async function readValuesOnlyWorkbook(bytes: Uint8Array): Promise<ValuesWorksheet[]> {
   if (bytes.byteLength > 25 * 1024 * 1024) throw new Error("workbook-too-large");
+  readBoundedZip(bytes, { compressed: 25 * 1024 * 1024, uncompressed: 100 * 1024 * 1024, entries: 1000, ratio: 100, ratioMinimum: 1_000_000 });
   const workbook = new ExcelJS.Workbook();
   const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   try { await workbook.xlsx.load(arrayBuffer); }

@@ -181,6 +181,17 @@ describe("createCompanionServer", () => {
     expect(testServices.connection.complete).toHaveBeenCalledOnce();
   });
 
+  it("invalidates pending popup receipts on disconnect", async () => {
+    const testServices = services();
+    testServices.connection.start = async () => ({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=disconnected" });
+    const base = await start(testServices);
+    const post = (path: string, body: unknown) => fetch(base + path, { method: "POST", headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" }, body: JSON.stringify(body) });
+    const { popupId } = await (await post("/api/gmail/oauth/start", { popup: true })).json() as { popupId: string };
+    await post("/api/gmail/disconnect", {});
+    expect(await (await post("/api/gmail/oauth/popup-result", { popupId })).json()).toEqual({ state: "error" });
+    expect(await (await fetch(`${base}/api/gmail/oauth/callback?state=disconnected&code=old`)).text()).toContain("Sign-in did not finish");
+  });
+
   it("completes a popup without redirecting the dashboard or exposing OAuth values", async () => {
     const testServices = services();
     testServices.connection.start = async () => ({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=popup-state" });

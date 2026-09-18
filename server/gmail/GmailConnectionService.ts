@@ -50,6 +50,19 @@ export class GmailConnectionService {
   private readonly attempts: OAuthAttemptStore;
   private readonly nowMs: () => number;
   private access: GoogleTokens | null = null;
+  private generation = 0;
+  private disconnecting = 0;
+  private mutations: Promise<unknown> = Promise.resolve();
+
+  private mutate<T>(action: () => Promise<T>): Promise<T> {
+    const result = this.mutations.then(action);
+    this.mutations = result.catch(() => undefined);
+    return result;
+  }
+
+  private assertCurrent(generation: number): void {
+    if (generation !== this.generation) throw new GmailConnectionError("invalid-state");
+  }
 
   constructor(private readonly options: GmailConnectionServiceOptions) {
     this.nowMs = options.nowMs ?? Date.now;
@@ -76,7 +89,7 @@ export class GmailConnectionService {
     const clientId = desktopClientIdSchema.parse(input);
     const clientSecret = desktopClientSecretSchema.optional().parse(secretInput);
     if (!this.editable) throw new GmailConnectionError("setup-managed");
-    if (this.configuring || this.completing) throw new GmailConnectionError("connection-busy");
+    if (this.configuring || this.completing || this.disconnecting) throw new GmailConnectionError("connection-busy");
     if (!this.options.secrets.isSupported()) throw new GmailConnectionError("platform-unsupported");
     if (!this.options.saveDesktopClientId) throw new GmailConnectionError("missing-config");
     this.configuring = true;
@@ -108,6 +121,7 @@ export class GmailConnectionService {
 
   private async completeAttempt(input: { code: string; state: string; now?: string }): Promise<void> {
     const oauth = this.requireOAuth();
+    const generation = this.generation;
     if (!this.options.secrets.isSupported()) throw new GmailConnectionError("platform-unsupported");
     const now = input.now ?? new Date(this.nowMs()).toISOString();
     const attempt = this.attempts.consume(input.state, now);
@@ -126,30 +140,42 @@ export class GmailConnectionService {
     } catch {
       throw new GmailConnectionError("request-failed");
     }
-    await this.options.secrets.set("gmail-refresh-token", tokens.refreshToken);
-    try {
-      await this.options.metadata.set({ accountEmail: profile.emailAddress, connectedAt: now, state: "connected" });
-    } catch (error) {
-      await this.options.secrets.delete("gmail-refresh-token");
-      throw error;
-    }
-    this.access = tokens;
+    await this.mutate(async () => {
+      this.assertCurrent(generation);
+      await this.options.secrets.set("gmail-refresh-token", tokens.refreshToken!);
+      try {
+        this.assertCurrent(generation);
+        await this.options.metadata.set({ accountEmail: profile.emailAddress, connectedAt: now, state: "connected" });
+        this.assertCurrent(generation);
+      } catch (error) {
+        await this.options.secrets.delete("gmail-refresh-token");
+        throw error;
+      }
+      this.access = tokens;
+    });
   }
 
   async getAccessToken(): Promise<string> {
     const oauth = this.requireOAuth();
+    const generation = this.generation;
     if (this.access && this.access.expiresAt > this.nowMs() + 30_000) return this.access.accessToken;
     const refreshToken = await this.options.secrets.get("gmail-refresh-token");
     if (!refreshToken) throw new GmailConnectionError("reconnect-required");
     try {
-      this.access = await oauth.refreshAccessToken(refreshToken);
+      const tokens = await oauth.refreshAccessToken(refreshToken);
+      this.assertCurrent(generation);
+      this.access = tokens;
       return this.access.accessToken;
     } catch (error) {
       if (error instanceof GoogleOAuthError && error.code === "invalid-grant") {
-        const metadata = await this.options.metadata.get();
-        if (metadata) await this.options.metadata.set({ ...metadata, state: "reconnect-required" });
-        await this.options.secrets.delete("gmail-refresh-token");
-        this.access = null;
+        await this.mutate(async () => {
+          this.assertCurrent(generation);
+          const metadata = await this.options.metadata.get();
+          this.assertCurrent(generation);
+          if (metadata) await this.options.metadata.set({ ...metadata, state: "reconnect-required" });
+          await this.options.secrets.delete("gmail-refresh-token");
+          this.access = null;
+        });
         throw new GmailConnectionError("reconnect-required");
       }
       throw new GmailConnectionError("request-failed");
@@ -157,19 +183,25 @@ export class GmailConnectionService {
   }
 
   async disconnect(): Promise<{ revocationConfirmed: boolean }> {
-    const oauth = this.oauth;
-    const refreshToken = this.options.secrets.isSupported()
-      ? await this.options.secrets.get("gmail-refresh-token").catch(() => null)
-      : null;
-    const revocationConfirmed = Boolean(oauth && refreshToken && await oauth.revoke(refreshToken));
-    if (this.options.secrets.isSupported()) await this.options.secrets.delete("gmail-refresh-token");
-    await this.options.metadata.delete();
+    this.generation += 1;
+    this.attempts.clear();
     this.access = null;
-    return { revocationConfirmed };
+    this.disconnecting += 1;
+    const oauth = this.oauth;
+    try {
+      const refreshToken = await this.mutate(async () => {
+        const token = this.options.secrets.isSupported() ? await this.options.secrets.get("gmail-refresh-token").catch(() => null) : null;
+        if (this.options.secrets.isSupported()) await this.options.secrets.delete("gmail-refresh-token");
+        await this.options.metadata.delete();
+        return token;
+      });
+      const revocationConfirmed = Boolean(oauth && refreshToken && await oauth.revoke(refreshToken));
+      return { revocationConfirmed };
+    } finally { this.disconnecting -= 1; }
   }
 
   private requireOAuth(): GoogleOAuthClient {
-    if (this.configuring) throw new GmailConnectionError("connection-busy");
+    if (this.configuring || this.disconnecting) throw new GmailConnectionError("connection-busy");
     if (!this.oauth) throw new GmailConnectionError("missing-config");
     return this.oauth;
   }

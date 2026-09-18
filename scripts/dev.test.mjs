@@ -44,6 +44,8 @@ describe.runIf(process.platform === "win32")("development launcher lifecycle", (
       });
       await expect.poll(() => pids.filter(isRunning), { timeout: 5000 }).toEqual([]);
     } finally {
+      // Recover even partial startup records before removing the temporary file.
+      await recordPids(pidsPath);
       if (launcher.exitCode === null) launcher.kill();
       await rm(root, { recursive: true, force: true });
     }
@@ -53,11 +55,18 @@ describe.runIf(process.platform === "win32")("development launcher lifecycle", (
 async function waitForPids(path, count) {
   let pids = [];
   await expect.poll(async () => {
-    try { pids = (await readFile(path, "utf8")).trim().split(/\s+/).filter(Boolean).map(Number); }
-    catch { pids = []; }
+    pids = await recordPids(path);
     return pids.length;
   }, { timeout: 5000 }).toBe(count);
   return pids;
+}
+
+async function recordPids(path) {
+  try {
+    const pids = (await readFile(path, "utf8")).trim().split(/\s+/).map(Number).filter((pid) => Number.isInteger(pid) && pid > 0);
+    for (const pid of pids) spawnedPids.add(pid);
+    return pids;
+  } catch { return []; }
 }
 
 function isRunning(pid) {

@@ -14,7 +14,7 @@ Job Buddy currently supports Node.js 22.22.2+ on Node 22, 24.15.0+ on Node 24, o
 
 ```powershell
 npm.cmd ci
-npx.cmd playwright install chromium
+npx.cmd playwright install chromium msedge
 npm.cmd run dev
 ```
 
@@ -28,8 +28,8 @@ Copy `.env.example` to `.env.local` only when testing an optional local integrat
 4. Run the release gate:
 
    ```powershell
-   npm run check
-   npm audit --omit=dev --audit-level=high
+   npm.cmd run check
+   npm.cmd audit --omit=dev --audit-level=high
    ```
 
 5. Explain the user-facing result, verification, and any privacy or security impact in the pull request.

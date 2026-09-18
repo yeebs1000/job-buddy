@@ -393,6 +393,7 @@ export function createCompanionServer(options: CompanionServerOptions) {
       }
       if (request.method === "POST" && url.pathname === "/api/gmail/disconnect") {
         await readJson(request);
+        popups.invalidatePending();
         options.services.sync.reset?.();
         json(response, 200, await options.services.connection.disconnect());
         return;

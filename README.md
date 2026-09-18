@@ -141,7 +141,7 @@ Open **Discover**, paste a company's `job-boards.greenhouse.io`, `boards.greenho
 
 ## Install Browser Buddy in Chrome or Edge
 
-1. Keep `npm run dev` running, open **Profile**, and save the factual fields you want Buddy to use.
+1. Keep `npm.cmd run dev` running, open **Profile**, and save the factual fields you want Buddy to use.
 2. For development, build the unpacked extension with `npm.cmd run build:extension`. For a release candidate, run `npm.cmd run package:extension`, locate the ignored ZIP under `release-artifacts`, extract it to a new folder, and load that extracted folder. Chrome and Edge cannot load the ZIP itself.
 3. In Chrome open `chrome://extensions`; in Edge open `edge://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select either this repository's `dist-extension` folder or the extracted release folder from step 2.
 4. On an HTTPS application page, click the Job Buddy toolbar icon and allow access to that site. Open the floating **Buddy** button. The toolbar cannot activate on the local dashboard or browser settings pages.
@@ -155,7 +155,7 @@ Buddy supports semantic Generic forms and stable markers for Greenhouse, Workday
 
 ### Browser Buddy troubleshooting
 
-- **Companion offline:** confirm `npm run dev` is still running and [http://127.0.0.1:5173](http://127.0.0.1:5173) loads, then reopen Buddy.
+- **Companion offline:** confirm `npm.cmd run dev` is still running and [http://127.0.0.1:5173](http://127.0.0.1:5173) loads, then reopen Buddy.
 - **Permission denied:** click the toolbar icon again and allow only the current HTTPS job site. HTTP application pages are intentionally refused.
 - **Unsupported form:** use the site's form manually. Unknown labels stay unresolved; they are never guessed into a profile field.
 - **Pairing expired:** create a new code in Settings. Codes expire after five minutes and work once.
@@ -192,7 +192,7 @@ Job Buddy requests `https://www.googleapis.com/auth/gmail.readonly`, which Googl
 - **Reconnect needed / revoked token:** open Settings and reconnect. Approved tracker changes and normalized evidence remain available.
 - **First scan stopped at 500:** this is the intentional privacy and performance bound. The UI reports truncation; later checks use incremental Gmail history.
 - **No automatic daily check:** finish the first scan, enable **Daily active-session scan**, leave Gmail selected, and reopen Job Buddy after the last successful scan is at least 24 hours old.
-- **Unsupported device:** persistent live Gmail and profile storage are Windows-only in v0.4 because credential storage requires current-user DPAPI. Use the demo inbox and tracker elsewhere.
+- **Unsupported device:** persistent live Gmail and profile storage are Windows-only because credential storage requires current-user DPAPI. Use the demo inbox and tracker elsewhere.
 
 To run the finite quality gates:
 

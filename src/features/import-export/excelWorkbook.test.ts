@@ -1,8 +1,19 @@
 // @vitest-environment node
 import ExcelJS from "exceljs";
 import { strToU8, unzipSync, zipSync } from "fflate";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { readTrackerWorkbook, writeTrackerWorkbook } from "./excelWorkbook";
+
+it("rejects inconsistent directory counts before ExcelJS sees the archive", async () => {
+  const bytes = new Uint8Array(await writeTrackerWorkbook([["Company"]]));
+  const view = new DataView(bytes.buffer);
+  view.setUint16(bytes.length - 22 + 10, 1, true);
+  const load = vi.spyOn(new ExcelJS.Workbook().xlsx.constructor.prototype, "load");
+  try {
+    await expect(readTrackerWorkbook(bytes)).rejects.toThrow();
+    expect(load).not.toHaveBeenCalled();
+  } finally { load.mockRestore(); }
+});
 
 it("round-trips values without formulas", async () => {
   const bytes = await writeTrackerWorkbook([["Company", "Role"], ["Example", "Engineer"]]);
