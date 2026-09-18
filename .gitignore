@@ -39,3 +39,11 @@ AppData/Local/JobBuddy/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local extension signing material and release packages
+*.pem
+*.key
+*.p12
+*.pfx
+*.crx
+release-artifacts/

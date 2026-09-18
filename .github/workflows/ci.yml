@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -35,8 +37,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Chromium
-        run: npx playwright install chromium
+      - name: Verify public tree and reachable history
+        run: npm run verify:public-tree
+
+      - name: Install Playwright Chromium and Edge for installed-extension coverage
+        run: npx playwright install chromium msedge
 
       - name: Run release checks
         run: npm run check
