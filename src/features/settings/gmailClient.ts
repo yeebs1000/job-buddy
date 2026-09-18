@@ -1,11 +1,18 @@
 import type { GmailConnectionStatus } from "../../domain/mail";
 
+const setupErrors: Record<string, string> = {
+  "setup-managed": "This client ID comes from the app environment or build. Update that configuration and restart the companion; this form cannot override it.",
+  "disconnect-required": "Disconnect Gmail first, then save the replacement client ID. Your tracked applications will remain.",
+  "connection-busy": "A Gmail connection operation is still finishing. Wait a moment, then retry.",
+};
+export class GmailSetupError extends Error {}
+
 export interface GmailSettingsClient {
-  configureDesktopClient(clientId: string): Promise<void>;
+  configureDesktopClient(clientId: string, clientSecret?: string): Promise<void>;
   status(): Promise<GmailConnectionStatus>;
   start(): Promise<{ authorizationUrl: string }>;
   startPopup(signal?: AbortSignal): Promise<{ authorizationUrl: string; popupId: string }>;
-  popupResult(popupId: string, signal?: AbortSignal): Promise<"pending" | "connected" | "error" | "expired">;
+  popupResult(popupId: string, signal?: AbortSignal): Promise<"pending" | "connected" | "error" | "expired" | "client-config">;
   disconnect(): Promise<{ revocationConfirmed: boolean }>;
 }
 
@@ -16,7 +23,15 @@ async function request(path: string, init?: RequestInit): Promise<unknown> {
   } catch {
     throw new Error("The local Gmail companion is not running");
   }
-  if (!response.ok) throw new Error("The local Gmail companion could not complete this request");
+  if (!response.ok) {
+    if (path === "/api/gmail/setup") {
+      const payload = object(await response.json().catch(() => null));
+      const error = object(payload?.error);
+      const code = typeof error?.code === "string" ? error.code : "";
+      if (Object.hasOwn(setupErrors, code)) throw new GmailSetupError(setupErrors[code]);
+    }
+    throw new Error("The local Gmail companion could not complete this request");
+  }
   return response.status === 204 ? undefined : response.json().catch(() => { throw new Error("The local Gmail companion returned an invalid response"); });
 }
 
@@ -43,8 +58,8 @@ function parseStatus(value: unknown): GmailConnectionStatus {
 }
 
 export const gmailClient: GmailSettingsClient = {
-  async configureDesktopClient(clientId) {
-    await request("/api/gmail/setup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clientId }) });
+  async configureDesktopClient(clientId, clientSecret) {
+    await request("/api/gmail/setup", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clientId, clientSecret }) });
   },
   async startPopup(signal) {
     const payload = object(await request("/api/gmail/oauth/start", { method: "POST", headers: { "content-type": "application/json" }, body: '{"popup":true}', signal }));
@@ -53,8 +68,8 @@ export const gmailClient: GmailSettingsClient = {
   },
   async popupResult(popupId, signal) {
     const payload = object(await request("/api/gmail/oauth/popup-result", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ popupId }), signal }));
-    if (!payload || !["pending", "connected", "error", "expired"].includes(String(payload.state))) throw new Error("Invalid popup result");
-    return payload.state as "pending" | "connected" | "error" | "expired";
+    if (!payload || !["pending", "connected", "error", "expired", "client-config"].includes(String(payload.state))) throw new Error("Invalid popup result");
+    return payload.state as "pending" | "connected" | "error" | "expired" | "client-config";
   },
   async status() { return parseStatus(await request("/api/gmail/status")); },
   async start() {

@@ -38,6 +38,7 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
   const reviewed = proposal.status === "approved" || proposal.status === "rejected";
+  const outreach = proposal.classification.kind === "recruiter-outreach";
   const application = applications.find((item) => item.id === (reviewed ? proposal.match.applicationId : applicationId));
   const manuallySelectedApplication = !reviewed && Boolean(applicationId) && applicationId !== proposal.match.applicationId;
   const inference = proposal.match.originalInference ?? proposal.match;
@@ -74,7 +75,7 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
         await updateRepository.approveProposal(proposal.id, { applicationId, expectedApplicationUpdatedAt: application?.updatedAt, proposedStage: stage || undefined, proposedOutcome: outcome || undefined,
           deadlines: deadlines.map((deadline) => ({ ...deadline, label: deadline.label.trim(), at: new Date(deadline.at).toISOString() })) });
         setResult("Review result: Update applied."); onReviewed("Update applied.");
-      } else if (action === "reject") { await updateRepository.rejectProposal(proposal.id); setResult("Review result: Update rejected."); onReviewed("Update rejected."); }
+      } else if (action === "reject") { await updateRepository.rejectProposal(proposal.id); const feedback = outreach ? "Outreach dismissed." : "Update rejected."; setResult(`Review result: ${feedback}`); onReviewed(feedback); }
       else { await updateRepository.deferProposal(proposal.id); setResult("Review result: Update deferred. You can review it later."); onReviewed("Update deferred. You can review it later."); }
       setConfirming(false);
     } catch (cause) { setError(cause instanceof Error && cause.message.includes("changed while you were reviewing") ? "This application changed while you were reviewing it. Review the current state and confirm again." : "This update could not be saved. Check the selected application and try again."); }
@@ -85,28 +86,31 @@ export function UpdateProposalRow({ proposal, applications, onReviewed }: {
     <div className="update-row__evidence">
       <p className="update-row__step">1 · Source evidence <span className="update-row__source">{proposal.mailSource === "gmail" ? "Gmail" : "Demo"}</span></p>
       <h2 id={`${id}-subject`}>{proposal.source.subject}</h2>
-      <p><strong>{application ? `${application.company} · ${application.role}` : "Unmatched application"}</strong></p>
+      <p><strong>{outreach ? "Recruiter outreach" : application ? `${application.company} · ${application.role}` : "Unmatched application"}</strong></p>
       {proposal.source.fromName && <p>{proposal.source.fromName}</p>}
       <p>{proposal.source.fromAddress}</p>
+      {proposal.source.forwarded && <p>Forwarded text names {proposal.source.forwarded.fromAddress} as the original sender (unverified).<br />Original subject: {proposal.source.forwarded.subject}</p>}
       <time dateTime={proposal.source.receivedAt}>{timeLabel(proposal.source.receivedAt)}</time>
       <blockquote>{proposal.source.excerpt.slice(0, 500)}{proposal.source.excerpt.length > 500 ? "…" : ""}</blockquote>
       {links.length > 0 && <ul aria-label="Validated HTTPS links">{links.map((link) => <li key={link}><a href={link} target="_blank" rel="noopener noreferrer">{link}</a></li>)}</ul>}
     </div>
     <div className="update-row__basis">
       <p className="update-row__step">2 · Match &amp; interpretation</p>
-      <p>{showsOriginalInference ? "Original match confidence" : "Match confidence"}: {Math.round(inference.confidence * 100)}%</p>
+      <p>{showsOriginalInference ? "Original match" : "Match"}: {inference.applicationId ? "Suggested application" : "No application matched"}</p>
       <p>{showsOriginalInference ? "Original inference" : "Because"}: {inference.reasons.map(humanize).join(", ") || "no matching evidence was found"}.</p>
-      <p>Classification confidence: {Math.round(proposal.classification.confidence * 100)}%</p>
+      <p>{proposal.relevanceOverride ? "Manually restored — choose the interpretation yourself." : "Rule-based suggestion — not a measured probability."}</p>
+      {!proposal.relevanceOverride && <p>Supporting text: “{proposal.classification.evidenceExcerpt}”</p>}
       <ul aria-label="Classification reasons">{proposal.classification.reasons.map((reason) => <li key={reason}>{humanize(reason)}</li>)}</ul>
       {proposal.match.conflicts.length > 0 ? <p className="update-row__conflict">Scan-time conflicts: {proposal.match.conflicts.map(humanize).join(", ")}. Review carefully.</p> : <p>No scan-time matching conflicts recorded.</p>}
       {application && <p>Current application stage: {application.stage ? stageLabels[application.stage] : "Not set"}.</p>}
       {currentConflicts.length > 0 && <p className="update-row__conflict">Current application conflicts: {currentConflicts.map(humanize).join(", ")}. Confirm approval to apply this change.</p>}
-      <p>Status: <strong>{humanize(proposal.status)}</strong></p>
-      <StageRail compact stage={displayedStage || null} outcome={displayedOutcome || null} rejectedAtStage={displayedOutcome === "rejected" ? displayedStage || application?.stage || undefined : undefined} />
+      <p>Status: <strong>{outreach && proposal.status === "rejected" ? "dismissed" : humanize(proposal.status)}</strong></p>
+      {!outreach && <StageRail compact stage={displayedStage || null} outcome={displayedOutcome || null} rejectedAtStage={displayedOutcome === "rejected" ? displayedStage || application?.stage || undefined : undefined} />}
     </div>
     <div className="update-row__proposal">
       <p className="update-row__step">3 · Review proposal</p>
-      {reviewed ? <><p>Proposed stage: {proposal.classification.proposedStage ? stageLabels[proposal.classification.proposedStage] : "No change"}</p><p>Proposed outcome: {proposal.classification.proposedOutcome ? outcomeLabels[proposal.classification.proposedOutcome] : "No change"}</p>
+      {outreach ? <><p>A potential role, not an application or interview. No application stage or deadline is changed.</p>{!reviewed && <div className="update-row__actions"><Button variant="secondary" disabled={busy} onClick={() => void review("reject")}>Dismiss outreach</Button><Button variant="secondary" disabled={busy || proposal.status === "deferred"} onClick={() => void review("defer")}>Defer outreach</Button></div>}</>
+        : reviewed ? <><p>Proposed stage: {proposal.classification.proposedStage ? stageLabels[proposal.classification.proposedStage] : "No change"}</p><p>Proposed outcome: {proposal.classification.proposedOutcome ? outcomeLabels[proposal.classification.proposedOutcome] : "No change"}</p>
         {proposal.status === "approved" && proposal.classification.deadlines.map((deadline) => <p key={deadline.id}>Saved deadline: {deadline.label}<br /><time dateTime={deadline.at}>{timeLabel(deadline.at)}</time><br /><small>{deadline.at}</small></p>)}
         {proposal.status === "rejected" && proposal.classification.deadlines.map((deadline) => <p key={deadline.id}>Extracted deadline — not applied: {deadline.label}<br /><time dateTime={deadline.at}>{timeLabel(deadline.at)}</time></p>)}</>
         : <fieldset disabled={busy} className="update-row__fields"><legend className="sr-only">Edit update for {proposal.source.subject}</legend>

@@ -13,6 +13,94 @@ async function clearJobBuddyDatabase(page: Page) {
   await expect(page.getByRole("heading", { name: "Circuit Harbour Ltd" })).toBeVisible();
 }
 
+test("filters news by sender, title and offer context while retaining recruiting evidence", async ({ page }) => {
+  const gmail = new FakeGmailApi(page); await gmail.install();
+  gmail.setStatus({ state: "connected", accountEmail: "user@example.com", platformSupported: true });
+  const base = liveInterviewScan.messages[0];
+  gmail.queueScan({ ...liveInterviewScan, messages: [base,
+    { ...base, providerMessageId: "news-domain", fromAddress: "noreply@news.bloomberg.com", subject: "A consulting deal", excerpt: "A consulting offer was made to a third party." },
+    { ...base, providerMessageId: "news-promo", fromName: "Must Reads", fromAddress: "account@seekingalpha.com", subject: "Beyond Nvidia: AI stocks", excerpt: "Join now with a special intro offer." },
+    { ...base, providerMessageId: "news-title", subject: "Daily newsletter: Technical interview invitation", excerpt: "We invite you to a technical interview workshop." },
+    { ...base, providerMessageId: "real-offer", fromAddress: "recruiting@bloomberg.com", subject: "Your Software Engineer offer", excerpt: "We are pleased to offer you the Software Engineer position." },
+  ] });
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Scan last 90 days" }).click();
+  await expect(page.locator(".settings-page__message")).toContainText("recent updates were checked");
+  await page.getByRole("link", { name: /Updates/ }).click();
+  await expect(page.getByRole("heading", { name: base.subject })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your Software Engineer offer" })).toBeVisible();
+  for (const title of ["A consulting deal", "Beyond Nvidia: AI stocks", "Daily newsletter: Technical interview invitation"]) {
+    await expect(page.getByRole("heading", { name: title })).toHaveCount(0);
+  }
+  await expect(page.getByText(/classification confidence:.*%/i)).toHaveCount(0);
+
+  // Simulate an old persisted false positive in this isolated test browser only.
+  await page.evaluate(() => new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open("job-buddy");
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const tx = db.transaction("updateProposals", "readwrite");
+      const store = tx.objectStore("updateProposals");
+      const rows = store.getAll();
+      rows.onsuccess = () => {
+        const existing = rows.result.find(row => row.source.providerMessageId === "real-offer");
+        store.put({ ...existing, id: "legacy-news", status: "pending", state: "pending", source: { ...existing.source, providerMessageId: "legacy-news", fromAddress: "noreply@news.bloomberg.com", subject: "Saved news false positive", excerpt: "A consulting offer to a third party." } });
+      };
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    };
+  }));
+  await page.reload();
+  await page.getByRole("button", { name: "Show filtered (1)" }).click();
+  const filtered = page.getByRole("region", { name: "Filtered saved updates" });
+  await expect(filtered.getByRole("heading", { name: "Saved news false positive" })).toBeVisible();
+  await expect(filtered).toContainText("Newsletter sender");
+  await expect(filtered.getByRole("button", { name: "Approve update" })).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await filtered.scrollIntoViewIfNeeded();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/beta11-filtered-mobile.png" });
+  await filtered.getByRole("button", { name: "Restore for manual review" }).click();
+  const restored = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Saved news false positive" }) });
+  await expect(restored.getByLabel("Proposed stage")).toHaveValue("");
+  await expect(restored).toContainText("Manually restored");
+  await page.reload();
+  await expect(restored.getByLabel("Proposed stage")).toHaveValue("");
+});
+
+test("saves partial Gmail progress, survives reload, and resumes without duplicate evidence", async ({ page }) => {
+  const gmail = new FakeGmailApi(page); await gmail.install();
+  gmail.setStatus({ state: "connected", accountEmail: "user@example.com", platformSupported: true });
+  const token = `${"a".repeat(32)}:25`;
+  let requestNumber = 0;
+  await page.route("**/api/gmail/scan", async route => {
+    const input = route.request().postDataJSON(); requestNumber++;
+    expect(input.batch).toBe(true);
+    expect(input.cursor).toBeNull();
+    if (requestNumber === 1) {
+      expect(input.continuationToken).toBeUndefined();
+      return route.fulfill({ json: { ...liveInterviewScan, progress: { processed: 25, total: 30 }, continuationToken: token } });
+    }
+    expect(input.continuationToken).toBe(token);
+    if (requestNumber === 2) return route.fulfill({ status: 503, json: { error: { code: "gmail-timeout", message: "private provider text" } } });
+    return route.fulfill({ json: { ...liveInterviewScan, progress: { processed: 30, total: 30 } } });
+  });
+  await page.goto("/settings");
+  await page.getByRole("button", { name: "Scan last 90 days" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Google took too long" })).toBeVisible();
+  await expect(page.getByRole("progressbar", { name: "Gmail messages checked" })).toHaveAttribute("value", "25");
+  await page.reload();
+  await page.getByRole("button", { name: "Resume Gmail scan" }).click();
+  await expect(page.locator(".settings-page__message")).toContainText("recent updates were checked");
+  await expect(page.getByRole("progressbar", { name: "Gmail messages checked" })).toHaveAttribute("value", "30");
+  await page.getByRole("link", { name: "Overview" }).click();
+  await expect(page.getByRole("region", { name: "Live Gmail scan" })).not.toContainText("Last successful scan: Never");
+  await page.getByRole("link", { name: /Updates/ }).click();
+  await expect(page.getByRole("article").filter({ hasText: "Technical interview invitation — Software Engineer" })).toHaveCount(1);
+  expect(requestNumber).toBe(3);
+});
+
 test("connects, scans, survives revoked Gmail, and returns to demo", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-09-12T00:00:00.000Z") });
   const gmail = new FakeGmailApi(page);
@@ -105,7 +193,7 @@ test("denied consent and a manually closed popup leave scan controls safe", asyn
   await page.getByRole("button", { name: "Connect Gmail", exact: true }).click();
   await expect(await deniedPopup).toHaveURL(/accounts.google.com/);
   gmail.completePopup("error");
-  await expect(page.getByRole("alert").filter({ hasText: /cancelled or could not finish/i })).toBeVisible();
+  await expect(page.getByRole("alert").filter({ hasText: /Google sign-in could not finish/i })).toBeVisible();
   const closedPopup = page.waitForEvent("popup");
   await page.getByRole("button", { name: "Connect Gmail", exact: true }).click();
   const popup = await closedPopup;

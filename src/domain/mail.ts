@@ -8,6 +8,7 @@ export interface MailScanDiagnostics {
 
 export interface MailScanContext {
   initialSyncConfirmed?: boolean;
+  continuationToken?: string;
 }
 
 export type GmailConnectionStatus = {

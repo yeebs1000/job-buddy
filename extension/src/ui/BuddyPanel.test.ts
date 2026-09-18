@@ -2,6 +2,20 @@ import { describe, expect, it, vi } from "vitest";
 import { BuddyPanel } from "./BuddyPanel";
 
 describe("BuddyPanel", () => {
+  it("selects only empty safe fields with the bulk action and labels overwrites", () => {
+    const panel = new BuddyPanel(document.body);
+    panel.render({ state: "review", mode: "approval", matched: 3, manual: 0, autoFilled: 0, fields: [
+      { id: "first", label: "First name", risk: "safe", preview: "Alex" },
+      { id: "email", label: "Email", risk: "safe", preview: "alex@example.com", existingValue: true },
+      { id: "salary", label: "Salary", risk: "review", preview: "90000" },
+    ] });
+    panel.expand();
+    expect(panel.shadowRoot.querySelector<HTMLButtonElement>('[data-action="fill-approved"]')!.disabled).toBe(true);
+    panel.shadowRoot.querySelector<HTMLButtonElement>('[data-action="select-safe"]')!.click();
+    expect([...panel.shadowRoot.querySelectorAll<HTMLInputElement>('input:checked')].map((input) => input.value)).toEqual(["first"]);
+    expect(panel.shadowRoot.querySelector<HTMLButtonElement>('[data-action="fill-approved"]')!.disabled).toBe(false);
+    expect(panel.shadowRoot.textContent).toContain("Replaces an existing answer");
+  });
   it("mounts an accessible collapsed Buddy with isolated reduced-motion styles", () => {
     const panel = new BuddyPanel(document.body);
     panel.render({ state: "fields-found", matched: 6, review: 2, manual: 1 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { MailEnvelope } from "../../src/integrations/mail/MailAdapter";
 import { GmailSyncError, GmailSyncService, initialGmailQuery, type GmailTransportPort } from "./GmailSyncService";
 import { GmailTransportError } from "./GmailTransport";
@@ -37,6 +37,87 @@ class FakeTransport implements GmailTransportPort {
 }
 
 describe("GmailSyncService", () => {
+  it("expires resume tokens and refuses unissued offsets", async () => {
+    const transport = new FakeTransport(); transport.messageIds = transport.messageIds.slice(0, 60);
+    const service = new GmailSyncService(transport, message => envelope(message.id!));
+    const first = await service.scan({ cursor: null, initialSyncConfirmed: true, batch: true });
+    const input = { cursor: null, initialSyncConfirmed: true, batch: true, continuationToken: first.continuationToken };
+    await expect(service.scan({ ...input, continuationToken: first.continuationToken!.replace(/:25$/, ":50") })).rejects.toMatchObject({ code: "gmail-scan-expired" });
+    const now = Date.now(); const clock = vi.spyOn(Date, "now").mockReturnValue(now + 31 * 60_000);
+    try { await expect(service.scan(input)).rejects.toMatchObject({ code: "gmail-scan-expired" }); }
+    finally { clock.mockRestore(); }
+  });
+
+  it("does not reuse a completed scan when Gmail's cursor stays unchanged", async () => {
+    const transport = new FakeTransport();
+    transport.listHistory = async () => { transport.historyPages++; return { history: [], historyId: "same" }; };
+    const service = new GmailSyncService(transport);
+    const input = { cursor: "same", initialSyncConfirmed: false, batch: true };
+    await service.scan(input); await service.scan(input);
+    expect(transport.historyPages).toBe(2);
+  });
+
+  it("invalidates an in-flight batch when the account connection changes", async () => {
+    const transport = new FakeTransport(); transport.messageIds = ["g-1"];
+    let release!: (message: GmailMessage) => void;
+    transport.getMessage = () => new Promise(resolve => { release = resolve; });
+    const service = new GmailSyncService(transport, message => envelope(message.id!));
+    const pending = service.scan({ cursor: null, initialSyncConfirmed: true, batch: true });
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    service.reset(); release({ id: "g-1" });
+    await expect(pending).rejects.toMatchObject({ code: "gmail-scan-expired" });
+  });
+  it("resumes a failed batch without refetching committed batches and replays a lost response", async () => {
+    const transport = new FakeTransport(); transport.messageIds = transport.messageIds.slice(0, 30);
+    const fetched: string[] = []; let fail = true;
+    transport.getMessage = async id => { fetched.push(id); if (id === "g-26" && fail) throw new GmailTransportError(503); return { id }; };
+    const service = new GmailSyncService(transport, message => envelope(message.id!));
+    const first = await service.scan({ cursor: null, initialSyncConfirmed: true, batch: true });
+    expect(first.messages).toHaveLength(25);
+    expect(first.progress).toEqual({ processed: 25, total: 30 });
+    expect(first.continuationToken).toEqual(expect.any(String));
+    expect(await service.scan({ cursor: null, initialSyncConfirmed: true, batch: true })).toEqual(first);
+    const next = { cursor: null, initialSyncConfirmed: true, batch: true, continuationToken: first.continuationToken };
+    await expect(service.scan(next)).rejects.toMatchObject({ status: 503 });
+    fail = false;
+    const final = await service.scan(next);
+    expect(final.messages).toHaveLength(5);
+    expect(final.continuationToken).toBeUndefined();
+    expect(final.nextCursor).toBe("184500");
+    expect(fetched.filter(id => id === "g-1")).toHaveLength(1);
+    expect(await service.scan(next)).toEqual(final);
+    service.reset();
+    await expect(service.scan(next)).rejects.toMatchObject({ code: "gmail-scan-expired" });
+  });
+
+  it("ignores deleted messages without treating a message 404 as expired history", async () => {
+    const transport = new FakeTransport();
+    transport.getMessage = async id => { if (id === "g-2") throw new GmailTransportError(404); return { id, labelIds: ["INBOX"] }; };
+    const result = await new GmailSyncService(transport, message => envelope(message.id!)).scan({ cursor: "184000", initialSyncConfirmed: false });
+    expect(result.nextCursor).toBe("184100");
+    expect(result.diagnostics.ignoredMessageCount).toBe(1);
+    expect(transport.listedPages).toBe(0);
+  });
+  it("rejects overlapping scans and releases the lock after completion", async () => {
+    const transport = new FakeTransport();
+    transport.messageIds = [];
+    let finish!: (value: { historyId: string }) => void;
+    transport.getProfile = () => new Promise(resolve => { finish = resolve; });
+    const service = new GmailSyncService(transport);
+    const first = service.scan({ cursor: null, initialSyncConfirmed: true });
+    await expect(service.scan({ cursor: null, initialSyncConfirmed: true })).rejects.toMatchObject({ code: "gmail-scan-busy" });
+    finish({ historyId: "123" });
+    await expect(first).resolves.toMatchObject({ nextCursor: "123" });
+    transport.getProfile = async () => ({ historyId: "124" });
+    await expect(service.scan({ cursor: null, initialSyncConfirmed: true })).resolves.toMatchObject({ nextCursor: "124" });
+  });
+  it("does not fan out more requests after one message fails", async () => {
+    const transport = new FakeTransport();
+    const fetched: string[] = [];
+    transport.getMessage = async id => { fetched.push(id); throw new GmailTransportError(403); };
+    await expect(new GmailSyncService(transport).scan({ cursor: null, initialSyncConfirmed: true })).rejects.toBeInstanceOf(GmailTransportError);
+    expect(fetched).toEqual(["g-1"]);
+  });
   it("requires consent and caps the 90-day initial scan at 500 newest inbox messages", async () => {
     const transport = new FakeTransport();
     const sync = new GmailSyncService(transport, (message) => envelope(message.id!));

@@ -13,9 +13,12 @@ import { fixtureMessages } from "../../fixtures/mail/messages";
 import { FixtureMailAdapter } from "../../integrations/mail/FixtureMailAdapter";
 import type { MailAdapter } from "../../integrations/mail/MailAdapter";
 import { GmailMailAdapter } from "../../integrations/mail/GmailMailAdapter";
+import { gmailScanErrorMessage } from "../../integrations/mail/gmailScanErrors";
 import type { GmailConnectionStatus } from "../../domain/mail";
 import type { MailScanMode } from "../updates/runMailScan";
 import { useMailScan } from "../updates/useMailScan";
+import { MailScanProgress } from "../updates/MailScanProgress";
+import { RecheckMailControl } from "../updates/RecheckMailControl";
 import { gmailClient } from "../settings/gmailClient";
 import { defaultGmailPreferences, gmailPreferences, type GmailPreferences } from "../settings/gmailPreferences";
 import { PendingCaptures } from "../buddy/PendingCaptures";
@@ -51,12 +54,24 @@ function MailScanStatus({ adapter, onScanned, mode, onModeChange, gmailStatus, p
   preferences: GmailPreferences;
 }) {
   const [failed, setFailed] = useState(false);
+  const [failureMessage, setFailureMessage] = useState<string | null>(null);
   const { state, pending, isScanning, scan } = useMailScan(adapter, mode);
   const live = adapter.source === "gmail";
   const connected = gmailStatus.state === "connected";
-  async function startScan() {
+  const firstScan = live && !state?.cursor && !preferences.initialSyncCompleted;
+  async function startScan(recheck = false) {
     setFailed(false);
-    try { const result = await scan(); if (!result.error) await onScanned(); else setFailed(true); }
+    setFailureMessage(null);
+    try {
+      const result = await scan(firstScan || recheck, recheck);
+      if (!result.error) {
+        if (live) {
+          const current = await gmailPreferences.get();
+          await gmailPreferences.save({ ...current, initialSyncCompleted: true });
+        }
+        await onScanned();
+      } else { setFailed(true); if (live && result.errorCode) setFailureMessage(gmailScanErrorMessage(result.errorCode)); }
+    }
     catch { setFailed(true); }
   }
   const sourceLabel = live ? "Live Gmail" : "Demo inbox";
@@ -64,14 +79,17 @@ function MailScanStatus({ adapter, onScanned, mode, onModeChange, gmailStatus, p
   return <section aria-label={`${sourceLabel} scan`} className="command-center__scan" data-source={adapter.source}>
     <div><strong>{sourceLabel}</strong><p>{live ? connected ? `Read-only connection · ${gmailStatus.accountEmail ?? "Connected account"}` : "Live source selected · Reconnect from Settings to resume." : "Fictional messages · No credentials or live Gmail access."}</p><p>Last successful scan: {state?.lastSuccessfulScanAt ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Singapore", dateStyle: "medium", timeStyle: "short" }).format(new Date(state.lastSuccessfulScanAt)) + " SGT (UTC+08:00)" : "Never"}</p></div>
     <label>Scan mode<select value={mode} disabled={isScanning || (live && !connected)} onChange={(event) => onModeChange(event.target.value as MailScanMode)}><option value="approval">Approval</option><option value="unrestricted">Auto-apply safe updates</option></select></label>
-    <Button disabled={isScanning || (live && !connected)} onClick={() => void startScan()}>{isScanning ? `Scanning ${scanLabel}…` : state?.error || failed ? `Retry ${live ? "Gmail" : "demo"} scan` : live ? "Scan Gmail now" : "Scan demo inbox"}</Button>
+    <Button disabled={isScanning || (live && !connected)} onClick={() => void startScan()}>{isScanning ? `Scanning ${scanLabel}…` : state?.continuationToken ? "Resume Gmail scan" : firstScan ? "Scan last 90 days" : state?.error || failed ? `Retry ${live ? "Gmail" : "demo"} scan` : live ? "Scan Gmail now" : "Scan demo inbox"}</Button>
+    {live && <MailScanProgress state={state} />}
+    {live && connected && <RecheckMailControl disabled={isScanning || Boolean(state?.continuationToken)} onRecheck={() => void startScan(true)} />}
+    {firstScan && <p>Checks up to 500 inbox messages from the last 90 days. The first scan can take a few minutes; keep Job Buddy open.</p>}
     <Link to="/updates">Review {pending.length} pending update{pending.length === 1 ? "" : "s"}</Link>
     {live && !connected && <Link to="/settings">Reconnect Gmail</Link>}
-    {isScanning && <p role="status">Checking {live ? "Gmail" : "fictional messages"}…</p>}
+    {isScanning && <p role="status">{live ? "Checking Gmail at a paced rate. This can take a few minutes; temporary Google limits are retried automatically." : "Checking fictional messages…"}</p>}
     {mode === "unrestricted" && <p role="alert" className="command-center__scan-warning">Job Buddy may automatically apply high-confidence forward updates. Offers, terminal outcomes and conflicts still require approval.</p>}
     {state?.diagnostics?.truncated && <p role="status" className="command-center__scan-notice">Only the newest 500 matching Gmail messages were checked.</p>}
     {state?.diagnostics?.recoverySync && <p role="status" className="command-center__scan-notice">Gmail history expired, so Job Buddy completed a bounded recovery scan.</p>}
-    {(state?.error || failed) && <p role="alert" className="command-center__scan-warning">{live ? "Gmail" : "Demo"} scan could not be completed. Please try again.</p>}
+    {!isScanning && (state?.error || failed) && <p role="alert" className="command-center__scan-warning">{failureMessage ?? (live && state?.errorCode ? gmailScanErrorMessage(state.errorCode) : `${live ? "Gmail" : "Demo"} scan could not be completed. Please try again.`)}</p>}
   </section>;
 }
 
@@ -105,9 +123,11 @@ export function CommandCenterPage({ mailAdapter, gmailAdapter = liveMail, fixtur
 
   async function setScanMode(mode: MailScanMode) {
     if (!integration) return;
-    const preferences = { ...integration.preferences, automationMode: mode };
-    setIntegration({ ...integration, preferences });
-    if (!mailAdapter && !initialPreferences) await gmailPreferences.save(preferences);
+    const persisted = !mailAdapter && !initialPreferences;
+    const current = persisted ? await gmailPreferences.get() : integration.preferences;
+    const preferences = { ...current, automationMode: mode };
+    if (persisted) await gmailPreferences.save(preferences);
+    setIntegration(current => current && ({ ...current, preferences }));
   }
 
   async function readApplications() {

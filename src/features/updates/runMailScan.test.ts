@@ -11,8 +11,184 @@ import type { MailAdapter, MailEnvelope } from "../../integrations/mail/MailAdap
 import { runMailScan } from "./runMailScan";
 import { scanStateKey, updateRepository, type ProposalEdits } from "./updateRepository";
 import { useMailScan } from "./useMailScan";
+import { GmailMailAdapter } from "../../integrations/mail/GmailMailAdapter";
+import { GmailScanError } from "../../integrations/mail/gmailScanErrors";
+import { vi } from "vitest";
 
 const now = "2026-09-14T09:00:00.000Z";
+
+it("keeps matched recruiter outreach informational even in automatic mode and blocks stage approval", async () => {
+  await applicationRepository.create(application());
+  await runMailScan({ adapter: adapter([{ ...mail, subject: "Senior Consultant opportunity", excerpt: "I am reaching out regarding a Senior Consultant opportunity. Your profile could be a strong fit." }]), mode: "unrestricted", now });
+  const proposal = (await updateRepository.list())[0];
+  expect(proposal).toMatchObject({ status: "pending", classification: { kind: "recruiter-outreach", requiresApproval: true } });
+  await expect(approveProposal(proposal.id, { proposedStage: "interview" })).rejects.toThrow(/outreach/i);
+  expect((await applicationRepository.get("app-1"))?.stage).toBe("applied");
+});
+
+it("rechecks ignored messages without replacing existing proposals or advancing the history cursor", async () => {
+  await applicationRepository.create(application());
+  await runMailScan({ adapter: adapter(), mode: "approval", now });
+  const existing = (await updateRepository.list())[0];
+  await updateRepository.rejectProposal(existing.id);
+  const reviewed = await updateRepository.get(existing.id);
+  const ignored = { ...mail, providerMessageId: "previously-ignored" };
+  await jobBuddyDb.processedMessages.put({ id: ignored.providerMessageId, processedAt: now });
+  const before = await applicationRepository.get("app-1");
+  const calls: Array<string | null> = [];
+  const recheckAdapter: MailAdapter = { source: "simulated", async scan(cursor, context) {
+    calls.push(cursor); expect(context?.initialSyncConfirmed).toBe(true);
+    return { messages: [mail, ignored], nextCursor: "new-cursor", scannedAt: now };
+  } };
+  await runMailScan({ adapter: recheckAdapter, mode: "unrestricted", recheck: true, now });
+  expect(calls).toEqual([null]);
+  expect(await updateRepository.get(existing.id)).toEqual(reviewed);
+  expect(await updateRepository.list()).toHaveLength(2);
+  expect((await updateRepository.listPending())[0]).toMatchObject({ classification: { requiresApproval: true } });
+  expect(await applicationRepository.get("app-1")).toEqual(before);
+  expect((await updateRepository.getScanState("simulated")).cursor).toBe("cursor-1");
+  await runMailScan({ adapter: recheckAdapter, mode: "unrestricted", recheck: true, now });
+  expect(await updateRepository.list()).toHaveLength(2);
+});
+
+it("persists recheck intent across a failed batch and resumes without auto-applying", async () => {
+  await applicationRepository.create(application());
+  await updateRepository.saveScanState("simulated", { cursor: "old" });
+  let calls = 0;
+  const recheckAdapter: MailAdapter = { source: "simulated", async scan(cursor, context) {
+    expect(cursor).toBeNull(); expect(context?.initialSyncConfirmed).toBe(true);
+    calls++;
+    if (calls === 1) return { messages: [], nextCursor: "new", scannedAt: now, continuationToken: "token:25", progress: { processed: 25, total: 26 } };
+    expect(context?.continuationToken).toBe("token:25");
+    if (calls === 2) throw new Error("Temporary failure");
+    return { messages: [mail], nextCursor: "new", scannedAt: now, progress: { processed: 26, total: 26 } };
+  } };
+  expect((await runMailScan({ adapter: recheckAdapter, mode: "unrestricted", recheck: true, now })).error).toBeDefined();
+  expect(await updateRepository.getScanState("simulated")).toMatchObject({ cursor: "old", rechecking: true, continuationToken: "token:25" });
+  const result = await runMailScan({ adapter: recheckAdapter, mode: "unrestricted", now });
+  expect(result.error).toBeUndefined(); expect(result.cursor).toBe("old");
+  expect(result.rechecking).toBeUndefined();
+  expect((await applicationRepository.get("app-1"))?.stage).toBe("applied");
+  expect((await updateRepository.listPending())[0].classification.requiresApproval).toBe(true);
+});
+
+it("does not create application proposals from newsletter offers even with a matching recruiter", async () => {
+  await applicationRepository.create(application());
+  const result = await runMailScan({ adapter: adapter([{ ...mail, subject: "Newsletter: Special offer", excerpt: "Join now with a special intro offer." }]), mode: "unrestricted", now });
+  expect(result.error).toBeUndefined();
+  expect(await jobBuddyDb.processedMessages.count()).toBe(1);
+  expect(await jobBuddyDb.updateProposals.count()).toBe(0);
+  expect((await applicationRepository.get("app-1"))?.stage).toBe("applied");
+});
+
+it("never auto-applies restored news and blocks direct approval before restoration", async () => {
+  await applicationRepository.create(application());
+  await updateRepository.create({ id: "old-news", status: "pending", mailSource: "gmail", createdAt: now,
+    source: { ...mail, fromAddress: "noreply@news.bloomberg.com" },
+    match: { applicationId: "app-1", confidence: 1, reasons: ["recruiter"], conflicts: [] },
+    classification: { proposedStage: "interview", confidence: 1, reasons: ["interview-invitation"], evidenceExcerpt: mail.excerpt, deadlines: [], links: [], requiresApproval: false },
+  });
+  await expect(approveProposal("old-news")).rejects.toThrow(/restore filtered/i);
+  await updateRepository.restoreForManualReview("old-news");
+  await updateRepository.autoApproveProposal("old-news", now);
+  expect((await updateRepository.get("old-news"))?.status).toBe("pending");
+  expect((await applicationRepository.get("app-1"))?.stage).toBe("applied");
+});
+
+it("starts fresh history batches after a larger completed initial scan", async () => {
+  await updateRepository.saveScanState("gmail", { cursor: "old", progress: { processed: 500, total: 500 }, lastSuccessfulScanAt: now });
+  let calls = 0;
+  const result = await runMailScan({ adapter: { source: "gmail", async scan() {
+    calls++;
+    return { messages: [], nextCursor: "new", scannedAt: now, progress: { processed: calls === 1 ? 25 : 30, total: 30 }, ...(calls === 1 ? { continuationToken: "session:25" } : {}) };
+  } }, mode: "approval", now });
+  expect(result).toMatchObject({ cursor: "new", progress: { processed: 30, total: 30 } });
+  expect(result.error).toBeUndefined();
+});
+
+it("rejects an old-account response after an initial scan is reset to another null cursor", async () => {
+  const result = await runMailScan({ adapter: { source: "gmail", async scan() {
+    await updateRepository.saveScanState("gmail", { cursor: null });
+    return { messages: [mail], nextCursor: "old-account", scannedAt: now };
+  } }, mode: "approval", now, initialSyncConfirmed: true });
+  expect(result.errorCode).toBe("gmail-scan-superseded");
+  expect(await updateRepository.getScanState("gmail")).toEqual({ cursor: null });
+  expect(await jobBuddyDb.processedMessages.count()).toBe(0);
+});
+
+it("returns a sanitized storage error even when metadata cannot be written", async () => {
+  const put = vi.spyOn(jobBuddyDb.metadata, "put").mockRejectedValue(new Error("private QuotaExceededError"));
+  const scan = vi.fn();
+  try {
+    const result = await runMailScan({ adapter: { source: "gmail", scan }, mode: "approval", now });
+    expect(result.errorCode).toBe("gmail-local-save-failed");
+    expect(result.error).not.toContain("private");
+    expect(scan).not.toHaveBeenCalled();
+  } finally { put.mockRestore(); }
+});
+
+it("clears an expired checkpoint but keeps saved evidence and the prior successful cursor", async () => {
+  await updateRepository.saveScanState("gmail", { cursor: "old", lastSuccessfulScanAt: now, continuationToken: "expired:25", progress: { processed: 25, total: 50 } });
+  await jobBuddyDb.processedMessages.add({ id: "saved", processedAt: now });
+  const result = await runMailScan({ adapter: { source: "gmail", async scan() { throw new GmailScanError("gmail-scan-expired"); } }, mode: "approval", now });
+  expect(result).toMatchObject({ cursor: "old", lastSuccessfulScanAt: now, errorCode: "gmail-scan-expired" });
+  expect(result.continuationToken).toBeUndefined();
+  expect(result.progress).toBeUndefined();
+  expect(await jobBuddyDb.processedMessages.count()).toBe(1);
+});
+
+it("keeps an already committed batch when the next browser storage transaction fails", async () => {
+  let calls = 0;
+  const batchAdapter: MailAdapter = { source: "gmail", async scan() {
+    calls++;
+    return { messages: calls === 1 ? [mail] : [{ ...mail, providerMessageId: "bad" }], nextCursor: "new", scannedAt: now,
+      progress: { processed: calls, total: 2 }, ...(calls === 1 ? { continuationToken: "session:25" } : {}) };
+  } };
+  const original = jobBuddyDb.processedMessages.add.bind(jobBuddyDb.processedMessages);
+  const insert = vi.spyOn(jobBuddyDb.processedMessages, "add").mockImplementation((record) => {
+    if (record.id === "bad") throw new Error("private browser storage failure");
+    return original(record);
+  });
+  try {
+    const result = await runMailScan({ adapter: batchAdapter, mode: "approval", now, initialSyncConfirmed: true });
+    expect(result).toMatchObject({ cursor: null, continuationToken: "session:25", errorCode: "gmail-local-save-failed" });
+    expect(result.lastSuccessfulScanAt).toBeUndefined();
+    expect(await jobBuddyDb.processedMessages.count()).toBe(1);
+    expect(await jobBuddyDb.updateProposals.count()).toBe(1);
+    expect(JSON.stringify(result)).not.toContain("private browser storage failure");
+  } finally { insert.mockRestore(); }
+});
+
+it("commits batch evidence but not the final cursor, then resumes after a reload without duplicates", async () => {
+  let fail = true;
+  const seen: Array<string | undefined> = [];
+  const batchAdapter: MailAdapter = { source: "gmail", async scan(_cursor, context) {
+    seen.push(context?.continuationToken);
+    if (context?.continuationToken && fail) throw new GmailScanError("gmail-timeout");
+    return { messages: [mail], nextCursor: "finished", scannedAt: now, progress: { processed: context?.continuationToken ? 2 : 1, total: 2 }, ...(!context?.continuationToken ? { continuationToken: "session:25" } : {}) };
+  } };
+  const first = await runMailScan({ adapter: batchAdapter, mode: "approval", initialSyncConfirmed: true, now });
+  expect(first).toMatchObject({ cursor: null, continuationToken: "session:25", progress: { processed: 1, total: 2 } });
+  expect(first.lastSuccessfulScanAt).toBeUndefined();
+  expect(await jobBuddyDb.processedMessages.count()).toBe(1);
+  fail = false;
+  const final = await runMailScan({ adapter: batchAdapter, mode: "approval", initialSyncConfirmed: true, now });
+  expect(final).toMatchObject({ cursor: "finished", lastSuccessfulScanAt: now });
+  expect(final.continuationToken).toBeUndefined();
+  expect(seen).toEqual([undefined, "session:25", "session:25"]);
+  expect(await jobBuddyDb.processedMessages.count()).toBe(1);
+});
+
+it("preserves the cursor and translates quota codes across the real scan adapter without persisting provider text", async () => {
+  await updateRepository.saveScanState("gmail", { cursor: "old", lastSuccessfulScanAt: now });
+  vi.stubGlobal("fetch", async () => Response.json({ error: { code: "gmail-rate-limited", message: "private message" } }, { status: 429 }));
+  try {
+    const result = await runMailScan({ adapter: new GmailMailAdapter(), mode: "approval", now });
+    expect(result).toMatchObject({ cursor: "old", lastSuccessfulScanAt: now, errorCode: "gmail-rate-limited" });
+    expect(result.error).toMatch(/Google.*limit.*wait/i);
+    expect(JSON.stringify(await updateRepository.getScanState("gmail"))).not.toContain("private message");
+  } finally { vi.unstubAllGlobals(); }
+});
 const mail: MailEnvelope = {
   providerMessageId: "mail-meridian-001", threadId: "thread-meridian-quant",
   fromName: "Meridian Quant Recruiting", fromAddress: "recruiting@meridianquant.example",
@@ -440,7 +616,7 @@ it.each<[string, ProposalEdits]>([
 ])("records manual lifecycle provenance when %s", async (_name, edits) => {
   await applicationRepository.create(application());
   await updateRepository.create({
-    id: "lifecycle-proposal", status: "pending", mailSource: "simulated", source: mail,
+    id: "lifecycle-proposal", status: "pending", mailSource: "simulated", source: { ...mail, subject: "Assessment invitation update", excerpt: "Your application has been rejected after the assessment." },
     match: { applicationId: "app-1", confidence: 1, reasons: ["recruiter"], conflicts: [] },
     classification: {
       proposedStage: "assessment", proposedOutcome: "rejected", confidence: 0.95,

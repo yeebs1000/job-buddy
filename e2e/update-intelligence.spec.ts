@@ -27,8 +27,9 @@ test("scans fixture mail, reviews evidence, and updates an interview deadline", 
   await expect(technicalInterview).toContainText("Taylor Ng");
   await expect(technicalInterview).toContainText("taylor.ng@circuitharbour.example");
   await expect(technicalInterview).toContainText("Circuit Harbour Ltd would like to invite you to a technical interview on 2026-09-13 at 2:00 PM SGT.");
-  await expect(technicalInterview).toContainText("Match confidence: 100%");
-  await expect(technicalInterview).toContainText("Classification confidence: 95%");
+  await expect(technicalInterview).toContainText("Match: Suggested application");
+  await expect(technicalInterview).toContainText("Rule-based suggestion — not a measured probability.");
+  await expect(technicalInterview).not.toContainText("confidence:");
   await expect(technicalInterview).toContainText("technical interview invitation");
   await technicalInterview.getByRole("button", { name: "Approve update" }).click();
   await expect(technicalInterview.getByText("Review result: Update applied.")).toBeVisible();

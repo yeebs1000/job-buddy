@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   candidateProfileSchema,
   emptyCandidateProfile,
   type CandidateProfile,
 } from "../../domain/profile";
 import { profileClient, type ProfileClient } from "./profileClient";
+import { ResumeImport } from "./ResumeImport";
 import "./profile.css";
 
 interface ProfilePageProps {
@@ -25,6 +26,11 @@ export function ProfilePage({
   const [supported, setSupported] = useState(true);
   const [hasProfile, setHasProfile] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [importOpen, setImportOpen] = useState(false);
+  const importButton = useRef<HTMLButtonElement>(null);
+  const editor = useRef<HTMLFieldSetElement>(null);
   const [message, setMessage] = useState<{ tone: "status" | "error"; text: string } | null>(null);
 
   useEffect(() => {
@@ -34,13 +40,14 @@ export function ProfilePage({
       setProfile(response.profile);
       setSupported(response.platformSupported);
       setHasProfile(response.hasProfile);
+      setLoadFailed(false);
     }).catch(() => {
       if (!active) return;
       setProfile(structuredClone(emptyCandidateProfile));
-      setMessage({ tone: "error", text: "Profile could not be loaded. Start the local companion and reload." });
+      setLoadFailed(true);
     });
     return () => { active = false; };
-  }, [client]);
+  }, [client, loadAttempt]);
 
   const completeness = useMemo(() => profile ? countProfileValues(profile) : 0, [profile]);
 
@@ -73,11 +80,14 @@ export function ProfilePage({
   }
 
   async function save() {
-    if (!profile || !supported) return;
+    if (!profile || !supported || loadFailed) return;
     setMessage(null);
     const parsed = candidateProfileSchema.safeParse({ ...profile, updatedAt: new Date().toISOString() });
     if (!parsed.success) {
-      setMessage({ tone: "error", text: "Review the highlighted profile information. Email, links, and salary values must be valid." });
+      const labels = [...new Set(parsed.error.issues.map(issue => profileFieldLabel(issue.path)))];
+      setMessage({ tone: "error", text: `Could not save. Check ${labels.join(", ")}. Use a valid email, HTTPS links, positive whole-number salary, and complete reusable answers. Your draft is unchanged.` });
+      const label = Array.from(editor.current?.querySelectorAll("label") ?? []).find(item => item.querySelector("span")?.textContent === labels[0]);
+      label?.querySelector<HTMLInputElement | HTMLTextAreaElement>("input, textarea, select")?.focus();
       return;
     }
     setBusy(true);
@@ -115,7 +125,15 @@ export function ProfilePage({
     <ProfileHeader completeness={completeness} />
 
     {!supported && <p className="profile-page__message profile-page__message--error" role="alert">Windows profile encryption is required. Job Buddy will not store this profile as plaintext.</p>}
-    {message && <p className={`profile-page__message profile-page__message--${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p>}
+    {loadFailed && <div className="profile-page__message profile-page__message--error" role="alert"><p>Profile could not be loaded. Your saved profile has not been replaced. Start the local companion, then retry loading before editing.</p><button type="button" className="button button--secondary" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry loading profile</button></div>}
+
+    {importOpen ? <ResumeImport profile={profile} onClose={() => { setImportOpen(false); requestAnimationFrame(() => importButton.current?.focus()); }} onApply={(next) => {
+      setProfile(next); setImportOpen(false);
+      setMessage({ tone: "status", text: "Resume details added to your draft. Review the profile below, then Save profile to keep them." });
+      requestAnimationFrame(() => importButton.current?.focus());
+    }} /> : <section className="profile-section resume-import__intro"><div><h2>Start with your resume</h2><p>Import a PDF, DOCX or pasted text. Review each suggestion before adding it to your profile.</p></div><button ref={importButton} type="button" className="button button--primary" disabled={busy || loadFailed} onClick={() => { setMessage(null); setImportOpen(true); }}>Import resume</button></section>}
+
+    <fieldset ref={editor} className="profile-page__editor" disabled={busy || importOpen || loadFailed} aria-label="Profile details" onChangeCapture={() => setMessage(null)}>
 
     <ProfileSection title="Identity and contact" description="The ordinary details Buddy can safely reuse.">
       <Field label="First name" value={profile.identity.givenName} onChange={(value) => setIdentity("givenName", value)} />
@@ -130,6 +148,13 @@ export function ProfilePage({
       <Field label="State or region" value={profile.contact.region} onChange={(value) => setContact("region", value)} />
       <Field label="Postal code" value={profile.contact.postalCode} onChange={(value) => setContact("postalCode", value)} />
       <Field label="Country" value={profile.contact.country} onChange={(value) => setContact("country", value)} />
+    </ProfileSection>
+
+    <ProfileSection title="Separate address fields" description="For forms that ask for each part separately, including Oracle's Singapore address form. Enter these explicitly; Buddy does not guess them from Address line 1 or 2. Existing application answers still require your approval to replace.">
+      <Field label="Block or house number" value={profile.contact.houseNumber} onChange={(value) => setContact("houseNumber", value)} />
+      <Field label="Street name" value={profile.contact.streetName} onChange={(value) => setContact("streetName", value)} />
+      <Field label="Level / unit number" value={profile.contact.unitNumber} onChange={(value) => setContact("unitNumber", value)} />
+      <Field label="Building name" value={profile.contact.buildingName} onChange={(value) => setContact("buildingName", value)} />
     </ProfileSection>
 
     <ProfileSection title="Professional links" description="HTTPS links only.">
@@ -194,11 +219,24 @@ export function ProfilePage({
     </CollectionSection>
 
     <footer className="profile-page__actions">
+      {message && <div className={`profile-page__message profile-page__message--${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</div>}
       <button className="button button--primary" disabled={!supported || busy} onClick={() => void save()} type="button">{busy ? "Saving…" : "Save profile"}</button>
       <button className="button button--secondary" disabled={!hasProfile || busy} onClick={() => void deleteProfile()} type="button">Delete local profile</button>
       <p>Passwords, OTPs, payment information, demographic answers, signatures, and uploaded files are never stored here.</p>
     </footer>
+    </fieldset>
   </div>;
+}
+
+function profileFieldLabel(path: PropertyKey[]): string {
+  const field = String(path.at(-1) ?? "profile");
+  const names: Record<string, string> = { givenName: "First name", familyName: "Last name", email: "Email", linkedin: "LinkedIn", github: "GitHub", portfolio: "Portfolio", salarySGDAnnual: "Singapore salary expectation (SGD annual)", salaryHKDAnnual: "Hong Kong salary expectation (HKD annual)", salaryUSDAnnual: "United States salary expectation (USD annual)" };
+  if (typeof path[1] === "number") {
+    const section = String(path[0]);
+    const labels: Record<string, string> = { institution: "Institution", degree: "Degree", fieldOfStudy: "Field of study", employer: "Employer", title: section === "projects" ? "Project title" : "Job title", url: "Project URL", summary: section === "projects" ? "Project summary" : "Experience summary", question: "Question", answer: "Answer" };
+    return `${labels[field] ?? field} ${path[1] + 1}`;
+  }
+  return names[field] ?? field.replace(/([A-Z])/g, " $1").replace(/^./, character => character.toUpperCase());
 }
 
 function ProfileHeader({ completeness }: { completeness: number | null }) {

@@ -23,6 +23,63 @@ function mail(overrides: Partial<MailEnvelope>): MailEnvelope {
 }
 
 describe("classifyMessage", () => {
+  it("recognizes the candidate-specific not-selected rejection", () => {
+    expect(classifyMessage(mail({ subject: "Update on Your Application for Associate Analyst", excerpt: "Thank you for your interest in the Associate Analyst role. We regret to inform you that you were not selected to move to the next stage in the process." }))).toMatchObject({ proposedOutcome: "rejected", requiresApproval: true });
+  });
+  it.each(["You have not been selected for the position.", "We have decided not to proceed with your application.", "We will not be moving forward with your candidacy."])("recognizes candidate rejection: %s", excerpt => {
+    expect(classifyMessage(mail({ excerpt }))).toMatchObject({ proposedOutcome: "rejected", requiresApproval: true });
+  });
+  it("labels personal recruiter outreach without inventing a stage", () => {
+    const result = classifyMessage(mail({ subject: "Senior Consultant opportunity - Shanghai", excerpt: "I am Taylor from an executive search firm focused on strategy consulting recruitment. I am reaching out regarding a Shanghai-based Senior Consultant opportunity. Given your engineering background, I believe your profile could be a strong fit for this opportunity." }));
+    expect(result).toMatchObject({ kind: "recruiter-outreach", requiresApproval: true, deadlines: [] });
+    expect(result?.proposedStage).toBeUndefined();
+    expect(result?.proposedOutcome).toBeUndefined();
+  });
+  it.each([
+    { subject: "Senior Consultant job alert", excerpt: "Your profile could be a strong fit. We are reaching out about an opportunity. View recommended jobs." },
+    { subject: "Business opportunity", excerpt: "I am reaching out about a business opportunity. Your profile could be a strong fit." },
+    { subject: "News digest", excerpt: "The candidate was not selected to move to the next stage." },
+  ])("does not confuse promotions or third-party rejection with candidate mail: $subject", sample => {
+    expect(classifyMessage(mail(sample))).toBeNull();
+  });
+  it("requires approval for forwarded recruiting text", () => {
+    expect(classifyMessage({ ...technicalInterviewMail, forwarded: { fromAddress: "recruiting@example.com", subject: "Interview invitation" } })).toMatchObject({ requiresApproval: true });
+  });
+  it.each([
+    { fromAddress: "noreply@news.bloomberg.com", subject: "Exclusive: How a consulting deal protected secrets", excerpt: "Bloomberg News Alert. A consulting offer to a third party came with legal privilege." },
+    { fromAddress: "account@seekingalpha.com", fromName: "Must Reads", subject: "Tesla: The Cybercab Failure Is Worse Than You Think", excerpt: "Read every article with Premium. Join now with a special intro offer." },
+    { subject: "Beyond Nvidia: Finding Opportunity In The AI Buildout", excerpt: "Must Reads. Join now with a special intro offer. FREE TRENDING ARTICLE." },
+    { subject: "Data Center Boom Accelerates: 3 Top AI Stocks", excerpt: "Read every article with Premium. Join now with a special intro offer." },
+    { subject: "Subscription renewal", excerpt: "We are pleased to offer you a discounted subscription." },
+    { subject: "Cash withdrawal confirmation", excerpt: "Your withdrawal has been processed." },
+    { subject: "Daily newsletter: Technical interview invitation", excerpt: "We invite you to a technical interview workshop." },
+    { fromAddress: "editor@news.bloomberg.com", subject: "Your employment offer", excerpt: "We are pleased to offer you the Engineer position." },
+    { subject: "Interview preparation webinar", excerpt: "We invite you to a technical interview practice session." },
+    { subject: "Loan application update", excerpt: "Your application has been rejected." },
+    { subject: "Employment update", excerpt: "We cannot offer you the Engineer position." },
+  ])("ignores non-application evidence: $subject", sample => {
+    expect(classifyMessage(mail(sample))).toBeNull();
+  });
+
+  it.each(["recruiting@bloomberg.com", "talent@careers.bloomberg.com", "no-reply@myworkday.com"])("keeps genuine employer and ATS offers from %s", fromAddress => {
+    expect(classifyMessage(mail({ fromAddress, subject: "Your offer for Software Engineer", excerpt: "We are pleased to offer you the Software Engineer position. Please review your employment offer letter." }))).toMatchObject({ proposedStage: "offer", requiresApproval: true });
+  });
+
+  it("does not let a promotional footer turn an interview into an offer", () => {
+    expect(classifyMessage(mail({ subject: "Technical interview invitation", excerpt: "We invite you to a technical interview. Our benefits provider has a special offer for subscribers." }))).toMatchObject({ proposedStage: "interview", requiresApproval: false });
+  });
+
+  it("does not confuse a Newsletter Editor role with a newsletter", () => {
+    expect(classifyMessage(mail({ subject: "Offer for Newsletter Editor", excerpt: "We are pleased to offer you the Newsletter Editor position." }))).toMatchObject({ proposedStage: "offer" });
+  });
+  it.each([
+    { subject: "Invitation to interview for the Analyst role", excerpt: "Dear candidate, please select a time using the scheduling link.", stage: "interview" },
+    { subject: "Offer of employment", excerpt: "We are pleased to offer the position of Analyst to you.", stage: "offer" },
+    { subject: "Graduate programme offer", excerpt: "We are pleased to offer you a place on our graduate programme.", stage: "offer" },
+    { subject: "Newsletter Editor - interview invitation", excerpt: "We invite you to a technical interview for the Newsletter Editor position.", stage: "interview" },
+  ])("retains ordinary candidate wording: $subject", ({ subject, excerpt, stage }) => {
+    expect(classifyMessage(mail({ subject, excerpt }))).toMatchObject({ proposedStage: stage });
+  });
   it("extracts a technical interview, SGT time, and HTTPS meeting link", () => {
     // Catches an interview branch that loses subtype, UTC+8 conversion, or a valid meeting link.
     expect(classifyMessage(technicalInterviewMail)).toEqual({

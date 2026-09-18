@@ -14,6 +14,7 @@ export interface RawField {
 }
 
 const autocompletePaths: Record<string, ProfilePath> = {
+  name: "identity.fullName",
   "given-name": "identity.givenName",
   "family-name": "identity.familyName",
   nickname: "identity.preferredName",
@@ -30,15 +31,33 @@ const autocompletePaths: Record<string, ProfilePath> = {
 };
 
 const exactAliases: Record<string, ProfilePath> = {
+  "full name": "identity.fullName",
   "first name": "identity.givenName",
+  "legal first name": "identity.givenName",
+  "given name": "identity.givenName",
   firstname: "identity.givenName",
   "last name": "identity.familyName",
+  "legal last name": "identity.familyName",
+  "family name": "identity.familyName",
+  surname: "identity.familyName",
   lastname: "identity.familyName",
   "preferred name": "identity.preferredName",
   email: "contact.email",
   "email address": "contact.email",
   phone: "contact.phoneNational",
   "phone number": "contact.phoneNational",
+  "mobile phone": "contact.phoneNational",
+  "mobile number": "contact.phoneNational",
+  "address line 1": "contact.addressLine1",
+  "street address": "contact.addressLine1",
+  "address line 2": "contact.addressLine2",
+  city: "contact.city",
+  state: "contact.region",
+  province: "contact.region",
+  "state province": "contact.region",
+  "postal code": "contact.postalCode",
+  "zip code": "contact.postalCode",
+  country: "contact.country",
   "linkedin url": "links.linkedin",
   linkedin: "links.linkedin",
   "github url": "links.github",
@@ -64,7 +83,7 @@ const manualPattern = /\b(gender|race|ethnicity|veteran|disability|demographic|e
 
 export function matchField(raw: RawField): DetectedField {
   const combined = `${raw.label} ${raw.name ?? ""} ${raw.helpText ?? ""}`;
-  if (raw.kind === "file" || raw.inputType === "password" || raw.inputType === "submit" || manualPattern.test(combined)) {
+  if (["file", "radio", "checkbox"].includes(raw.kind) || raw.inputType === "password" || raw.inputType === "submit" || manualPattern.test(combined)) {
     return result(raw, undefined, 1, "manual", "manual-only-field");
   }
 
@@ -84,6 +103,18 @@ export function matchField(raw: RawField): DetectedField {
     if (/\b(annual|annually|year|yearly)\b/.test(question) && !/\b(hour|hourly|month|monthly|week|weekly)\b/.test(question)) return result(raw, market.salary, 0.9, "review", "market-salary-label");
     return result(raw, undefined, 0, "review", "unspecified-pay-period");
   }
+
+  // A component label is more specific than Oracle's address-line autocomplete hint.
+  // Never split a saved free-text address or use its entire line for a house number.
+  const addressParts: Record<string, ProfilePath> = {
+    "block or house number": "contact.houseNumber",
+    "house number": "contact.houseNumber",
+    "street name": "contact.streetName",
+    "level unit number": "contact.unitNumber",
+    "building name": "contact.buildingName",
+  };
+  const addressPart = addressParts[question];
+  if (addressPart) return result(raw, addressPart, 0.95, "safe", "explicit-address-component");
 
   const autocomplete = raw.autocomplete?.trim().toLowerCase().split(/\s+/).at(-1) ?? "";
   const autocompletePath = autocompletePaths[autocomplete];
@@ -120,5 +151,5 @@ function riskForPath(path: ProfilePath): FieldRisk {
 }
 
 function normalize(value: string): string {
-  return value.toLowerCase().replace(/[_-]+/g, " ").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  return value.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase().replace(/[_-]+/g, " ").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 }

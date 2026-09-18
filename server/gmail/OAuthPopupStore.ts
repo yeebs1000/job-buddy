@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-type PopupResult = "pending" | "connected" | "error";
+type PopupResult = "pending" | "connected" | "error" | "client-config";
 interface PopupSession { id: string; origin: string; createdAt: number; result: PopupResult; processing: boolean; }
 
 // Ephemeral receipts contain no tokens or email data. OAuth state/PKCE validation
@@ -21,13 +21,18 @@ export class OAuthPopupStore {
     return id;
   }
   find(state: string) { this.prune(); return this.sessions.get(state); }
+  invalidatePending(): void {
+    for (const session of this.sessions.values()) {
+      if (session.result === "pending") session.result = "error";
+    }
+  }
   claim(state: string): boolean {
     const session = this.find(state);
     if (!session || session.result !== "pending" || session.processing) return false;
     session.processing = true;
     return true;
   }
-  finish(state: string, result: "connected" | "error") {
+  finish(state: string, result: "connected" | "error" | "client-config") {
     const session = this.find(state);
     if (session?.result === "pending") session.result = result;
   }

@@ -8,6 +8,9 @@ import { CommandCenterPage } from "./CommandCenterPage";
 import type { MailAdapter } from "../../integrations/mail/MailAdapter";
 import { defaultGmailPreferences } from "../settings/gmailPreferences";
 import { jobBuddyDb } from "../../db/database";
+import { GmailMailAdapter } from "../../integrations/mail/GmailMailAdapter";
+import { gmailPreferences } from "../settings/gmailPreferences";
+import { updateRepository } from "../updates/updateRepository";
 
 const { list, seedDemoData } = vi.hoisted(() => ({ list: vi.fn(), seedDemoData: vi.fn() }));
 
@@ -17,6 +20,23 @@ vi.mock("../../db/seed", () => ({ seedDemoData }));
 function renderPage() {
   return render(<MemoryRouter><CommandCenterPage /></MemoryRouter>);
 }
+
+it("offers a bounded recheck that fetches older mail without resetting incremental history", async () => {
+  list.mockResolvedValue([]);
+  await updateRepository.saveScanState("gmail", { cursor: "saved-history" });
+  const requests: Array<string | null> = [];
+  const gmailAdapter = new GmailMailAdapter(async input => {
+    requests.push(input.cursor);
+    if (!input.initialSyncConfirmed) throw new Error("Missing bounded-scan consent");
+    return { source: "gmail", messages: [], nextCursor: "latest-history", scannedAt: "2026-09-17T00:00:00Z", diagnostics: { truncated: false, recoverySync: false, ignoredMessageCount: 0 } };
+  });
+  render(<MemoryRouter><CommandCenterPage gmailAdapter={gmailAdapter} gmailStatus={{ state: "connected", platformSupported: true }} initialPreferences={{ ...defaultGmailPreferences, selectedSource: "gmail", initialSyncCompleted: true }} /></MemoryRouter>);
+  await userEvent.click(await screen.findByText("Missing an older email?"));
+  await userEvent.click(screen.getByRole("button", { name: "Recheck recent emails" }));
+  await waitFor(() => expect(requests).toEqual([null]));
+  await waitFor(async () => expect((await updateRepository.getScanState("gmail")).lastSuccessfulScanAt).toBeDefined());
+  expect((await updateRepository.getScanState("gmail")).cursor).toBe("saved-history");
+});
 
 beforeEach(() => {
   list.mockReset();
@@ -103,6 +123,27 @@ it("never falls back to demo when a live scan fails", async () => {
   await waitFor(() => expect(gmailScan).toHaveBeenCalledTimes(1));
   expect(fixtureScan).not.toHaveBeenCalled();
   expect(await screen.findByRole("alert")).toHaveTextContent(/Gmail scan could not be completed/i);
+});
+
+it("can recover a failed first scan from the dashboard with explicit bounded-scan consent", async () => {
+  list.mockResolvedValue([]);
+  const preferences = { ...defaultGmailPreferences, selectedSource: "gmail" as const, dailyActiveScanEnabled: true };
+  await gmailPreferences.save(preferences);
+  const gmailAdapter = new GmailMailAdapter(async input => {
+    if (input.cursor === null && !input.initialSyncConfirmed) throw new Error("initial-consent-required");
+    return { source: "gmail", messages: [], nextCursor: "123", scannedAt: "2026-09-17T00:00:00Z", diagnostics: { truncated: false, recoverySync: false, ignoredMessageCount: 0 } };
+  });
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ state: "connected", platformSupported: true }));
+  try {
+    render(<MemoryRouter><CommandCenterPage gmailAdapter={gmailAdapter} /></MemoryRouter>);
+    await userEvent.click(await screen.findByRole("button", { name: "Scan last 90 days" }));
+    await waitFor(async () => expect((await updateRepository.getScanState("gmail")).cursor).toBe("123"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scan Gmail now" })).toBeEnabled());
+    expect(await gmailPreferences.get()).toMatchObject({ initialSyncCompleted: true, dailyActiveScanEnabled: true });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Scan mode"), "unrestricted");
+    await waitFor(async () => expect(await gmailPreferences.get()).toMatchObject({ automationMode: "unrestricted", initialSyncCompleted: true, dailyActiveScanEnabled: true }));
+  } finally { fetcher.mockRestore(); }
 });
 
 it("uses canonical state for an unsorted rejection history and labels other terminal outcomes", async () => {

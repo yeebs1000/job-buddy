@@ -24,7 +24,7 @@ export interface GmailListHistoryResponse {
 }
 
 export class GmailTransportError extends Error {
-  constructor(readonly status: number) {
+  constructor(readonly status: number, readonly code = "gmail-request-failed", readonly operation?: "profile" | "list" | "history" | "message") {
     super("Gmail request failed");
     this.name = "GmailTransportError";
   }
@@ -76,6 +76,7 @@ function historyEntries(value: unknown): GmailHistoryEntry[] {
 }
 
 export class GmailTransport {
+  private nextRequestAt = 0;
   constructor(private readonly tokens: AccessTokenProvider, private readonly fetcher: typeof fetch = fetch) {}
 
   async listMessages(input: { query: string; pageToken?: string; maxResults: number }): Promise<GmailListMessagesResponse> {
@@ -83,7 +84,7 @@ export class GmailTransport {
     url.searchParams.set("q", input.query);
     url.searchParams.set("maxResults", String(Math.max(1, Math.min(500, input.maxResults))));
     if (input.pageToken) url.searchParams.set("pageToken", input.pageToken);
-    const payload = await this.request(url);
+    const payload = await this.request(url, "list");
     return {
       messages: messageReferences(payload.messages),
       ...(typeof payload.nextPageToken === "string" && payload.nextPageToken ? { nextPageToken: payload.nextPageToken } : {}),
@@ -96,7 +97,7 @@ export class GmailTransport {
     url.searchParams.set("historyTypes", "messageAdded");
     url.searchParams.set("maxResults", "500");
     if (input.pageToken) url.searchParams.set("pageToken", input.pageToken);
-    const payload = await this.request(url);
+    const payload = await this.request(url, "history");
     if (typeof payload.historyId !== "string" || !payload.historyId) throw new GmailTransportError(502);
     return {
       history: historyEntries(payload.history),
@@ -108,26 +109,51 @@ export class GmailTransport {
   async getMessage(id: string): Promise<GmailMessage> {
     const url = new URL(`${gmailApi}/messages/${encodeURIComponent(id)}`);
     url.searchParams.set("format", "full");
-    return await this.request(url) as GmailMessage;
+    return await this.request(url, "message") as GmailMessage;
   }
 
   async getProfile(): Promise<{ historyId: string }> {
-    const payload = await this.request(new URL(`${gmailApi}/profile`));
+    const payload = await this.request(new URL(`${gmailApi}/profile`), "profile");
     if (typeof payload.historyId !== "string" || !payload.historyId) throw new GmailTransportError(502);
     return { historyId: payload.historyId };
   }
 
-  private async request(url: URL): Promise<Record<string, unknown>> {
-    const accessToken = await this.tokens.getAccessToken();
-    let response: Response;
-    try {
-      response = await this.fetcher(url, { headers: { authorization: `Bearer ${accessToken}` } });
-    } catch {
-      throw new GmailTransportError(503);
+  private async request(url: URL, operation: "profile" | "list" | "history" | "message"): Promise<Record<string, unknown>> {
+    for (let attempt = 0; ; attempt++) {
+      const delay = Math.max(0, this.nextRequestAt - Date.now());
+      if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+      const accessToken = await this.tokens.getAccessToken();
+      let response: Response;
+      let payload: Record<string, unknown> | null;
+      try {
+        response = await this.fetcher(url, { headers: { authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(20_000) });
+        payload = object(await response.json().catch(error => { if (response.ok) throw error; return null; }));
+      } catch (error) {
+        const name = error instanceof Error ? error.name : "";
+        const code = name === "TimeoutError" || name === "AbortError" ? "gmail-timeout" : name === "SyntaxError" ? "gmail-response-invalid" : "gmail-network-error";
+        if (attempt >= 2) throw new GmailTransportError(503, code, operation);
+        await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt + Math.floor(Math.random() * 1000)));
+        continue;
+      }
+      // Serial scans plus a short pause avoid bursts, including between scans.
+      this.nextRequestAt = Date.now() + 250;
+      if (response.ok) {
+        if (!payload) throw new GmailTransportError(502, "gmail-response-invalid", operation);
+        return payload;
+      }
+      const error = object(payload?.error);
+      const reasons = Array.isArray(error?.errors) ? error.errors.map(entry => object(entry)?.reason) : [];
+      const limited = response.status === 429 || (response.status === 403 && reasons.some(reason => reason === "rateLimitExceeded" || reason === "userRateLimitExceeded"));
+      const retryable = limited || response.status >= 500;
+      const code = limited ? "gmail-rate-limited" : response.status === 401 ? "reconnect-required" : response.status === 403 ? "gmail-access-denied" : "gmail-request-failed";
+      if (!retryable || attempt >= 6) throw new GmailTransportError(response.status, code, operation);
+      const retryAfter = response.headers.get("retry-after");
+      const seconds = retryAfter === null ? NaN : Number(retryAfter);
+      const requestedWait = Number.isFinite(seconds) ? seconds * 1000 : retryAfter ? Date.parse(retryAfter) - Date.now() : 0;
+      // Do not retry earlier than Google's requested window or wait indefinitely.
+      if (requestedWait > 60_000) throw new GmailTransportError(response.status, code, operation);
+      const backoff = Math.max(1000 * 2 ** attempt + Math.floor(Math.random() * 1000), requestedWait || 0);
+      await new Promise(resolve => setTimeout(resolve, backoff));
     }
-    if (!response.ok) throw new GmailTransportError(response.status);
-    const payload = object(await response.json().catch(() => null));
-    if (!payload) throw new GmailTransportError(502);
-    return payload;
   }
 }

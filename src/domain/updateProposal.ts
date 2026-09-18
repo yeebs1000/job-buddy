@@ -1,10 +1,12 @@
 import type { Deadline } from "./application";
 import type { MailSource } from "./mail";
 import type { ApplicationOutcome, ApplicationStage } from "./stage";
+import type { MailEnvelope } from "../integrations/mail/MailAdapter";
 
 export type UpdateProposalStatus = "pending" | "approved" | "rejected" | "deferred";
 
 export interface UpdateProposalSource {
+  forwarded?: MailEnvelope["forwarded"];
   providerMessageId: string;
   threadId?: string;
   fromName?: string;
@@ -26,6 +28,7 @@ export interface UpdateProposalMatch {
 type UnconflictedUpdateProposalMatch = Omit<UpdateProposalMatch, "conflicts"> & { conflicts: [] };
 
 interface UpdateProposalClassificationFields {
+  kind?: "recruiter-outreach";
   confidence: number;
   reasons: string[];
   evidenceExcerpt: string;
@@ -61,6 +64,7 @@ interface UpdateProposalFields<TClassification> {
   classification: TClassification;
   createdAt: string;
   reviewedAt?: string;
+  relevanceOverride?: "manual-review";
 }
 
 export type UpdateProposal =

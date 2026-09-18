@@ -38,7 +38,7 @@ export function createMessageHandler(client: ExtensionWorkerClient, extensionId:
       }
     } catch (error) {
       const code = error && typeof error === "object" && "code" in error ? error.code : "request-failed";
-      return { ok: false, error: code === "unpaired" || code === "companion-offline" ? code : "request-failed" };
+      return { ok: false, error: code === "unpaired" || code === "companion-offline" || code === "invalid-pairing" || code === "origin-not-allowed" ? code : "request-failed" };
     }
   };
 }

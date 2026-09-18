@@ -2,6 +2,19 @@ import { describe, expect, it, vi } from "vitest";
 import { CompanionClient, type TokenStorage } from "./companionClient";
 
 describe("CompanionClient", () => {
+  it("calls the native browser fetch with its global receiver", async () => {
+    vi.stubGlobal("fetch", function (this: unknown) {
+      if (this !== globalThis) throw new TypeError("Illegal invocation");
+      return Promise.resolve(response({ token: "private-paired-token-abcdefghijklmnopqrstuvwxyz" }));
+    });
+    try { await expect(new CompanionClient({ storage: memoryTokenStorage() }).pair("ABCDE-FGHJK")).resolves.toEqual({ paired: true }); }
+    finally { vi.unstubAllGlobals(); }
+  });
+
+  it.each(["invalid-pairing", "origin-not-allowed"] as const)("preserves the safe %s error instead of calling it a connection failure", async (code) => {
+    const client = new CompanionClient({ storage: memoryTokenStorage(), fetcher: vi.fn().mockResolvedValue(response({ error: { code } }, code === "invalid-pairing" ? 400 : 403)) });
+    await expect(client.pair("ABCDE-FGHJK")).rejects.toMatchObject({ code });
+  });
   it("keeps the pairing token in extension storage and never returns it", async () => {
     const storage = memoryTokenStorage();
     const fetcher = vi.fn().mockResolvedValue(response({ token: "private-paired-token-abcdefghijklmnopqrstuvwxyz" }));

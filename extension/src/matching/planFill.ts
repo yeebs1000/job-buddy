@@ -4,6 +4,7 @@ import type { ProfileSelection } from "../../../src/domain/profile";
 export interface FieldSnapshot {
   fingerprint: string;
   currentValuePresent: boolean;
+  value?: string;
 }
 
 export interface PlanFillInput {
@@ -24,7 +25,7 @@ export function planFill(input: PlanFillInput): FillDecision[] {
     if (!field.canonicalPath || input.selections[field.canonicalPath] === undefined) return decision(field.id, "review", "missing-or-unresolved-profile-value");
     const expected = input.expectedSnapshots[field.id];
     const current = input.currentSnapshots[field.id];
-    if (!expected || !current || expected.fingerprint !== current.fingerprint || expected.currentValuePresent !== current.currentValuePresent) {
+    if (!expected || !current || expected.fingerprint !== current.fingerprint || expected.currentValuePresent !== current.currentValuePresent || expected.value !== current.value) {
       return decision(field.id, "blocked", "field-changed-since-scan");
     }
     if (input.mode === "approval") return approved.has(field.id) ? decision(field.id, "fill", "user-approved") : decision(field.id, "review", "approval-required");

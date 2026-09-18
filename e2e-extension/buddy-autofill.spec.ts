@@ -31,3 +31,47 @@ test("built Buddy fills approved safe fields and never submits", async ({ page }
   await expect(page.locator("#resume")).toHaveValue("");
   expect(await page.evaluate(() => (window as unknown as { jobBuddySubmitClicks: number }).jobBuddySubmitClicks)).toBe(0);
 });
+
+test("built Buddy survives reinjection and fills a second step while keeping salary review available", async ({ page }) => {
+  await page.route("https://jobs.fixture.test/**", (route) => route.fulfill({ contentType: "text/html", body: `<!doctype html><html><body>
+    <h1>Software Engineer</h1><p>Salary: SGD 120,000 to 165,000 a year</p>
+    <form id="application"><label>Full name<input id="full" autocomplete="name"></label>
+    <label>Email<input id="email" autocomplete="email" value="chosen@example.com"></label>
+    <label>Expected annual salary (SGD)<input id="salary"></label>
+    <button type="button" id="next">Next step</button><button type="submit">Submit application</button></form>
+    <script>document.querySelector('form').addEventListener('submit', e => { e.preventDefault(); window.submitted = true });
+    document.querySelector('#next').addEventListener('click', () => {
+      document.querySelector('#application').innerHTML = '<label>City *<input id="city"></label><label>Country<select id="country"><option value="">Choose</option><option>Singapore</option></select></label><button type="submit">Submit application</button>';
+    });</script></body></html>` }));
+  await page.addInitScript(() => {
+    (window as unknown as { chrome: unknown }).chrome = { runtime: { sendMessage: async (message: { type: string }) => {
+      if (message.type === "status") return { ok: true, type: "status", paired: true };
+      if (message.type === "get-preferences") return { ok: true, type: "preferences", preferences: { mode: "approval", paused: false, enabledDomains: [] } };
+      if (message.type === "select-profile") return { ok: true, type: "profile-selection", selection: { "identity.fullName": "Alex Tan", "contact.email": "alex@example.com", "contact.city": "Singapore", "contact.country": "Singapore", "preferences.salarySGDAnnual": 120000 } };
+      if (message.type === "record-activity") return { ok: true, type: "recorded" };
+      return { ok: false, error: "invalid-request" };
+    } } };
+  });
+  await page.goto("https://jobs.fixture.test/apply");
+  await page.addScriptTag({ path: resolve("dist-extension/content.js") });
+  await page.addScriptTag({ path: resolve("dist-extension/content.js") });
+  const buddy = page.locator('[data-job-buddy="panel"]');
+  await expect(buddy).toHaveCount(1);
+  await buddy.getByRole("button", { name: "Open Job Buddy", exact: true }).click();
+  await buddy.getByRole("button", { name: "Select safe, empty fields" }).click();
+  await buddy.getByRole("button", { name: "Fill approved fields" }).click();
+  await expect(page.locator("#full")).toHaveValue("Alex Tan");
+  await expect(page.locator("#email")).toHaveValue("chosen@example.com");
+  await expect(page.locator("#salary")).toHaveValue("");
+  await buddy.getByRole("button", { name: "Review salary found on this page" }).click();
+  await expect(buddy.getByRole("heading", { name: "Salary found" })).toBeVisible();
+  await buddy.getByRole("button", { name: "Scan this page again" }).click();
+  await page.getByRole("button", { name: "Next step" }).click();
+  await expect(buddy.locator('input[value="city"]')).toBeVisible();
+  await buddy.getByRole("button", { name: "Select safe, empty fields" }).click();
+  await buddy.getByRole("button", { name: "Fill approved fields" }).click();
+  await expect(page.locator("#city")).toHaveValue("Singapore");
+  await expect(page.locator("#country")).toHaveValue("Singapore");
+  expect(await page.evaluate(() => (window as unknown as { submitted?: boolean }).submitted)).not.toBe(true);
+  await page.screenshot({ path: "test-results/buddy-autofill-beta13.png", fullPage: true });
+});

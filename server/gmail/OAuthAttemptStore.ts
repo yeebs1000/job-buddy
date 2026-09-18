@@ -16,6 +16,8 @@ function base64url(bytes: Uint8Array): string {
 export class OAuthAttemptStore {
   private readonly attempts = new Map<string, OAuthAttempt>();
 
+  clear(): void { this.attempts.clear(); }
+
   create(now = new Date().toISOString()): OAuthAttempt {
     if (!Number.isFinite(Date.parse(now))) throw new Error("Invalid OAuth attempt timestamp");
     const state = base64url(randomBytes(32));

@@ -41,10 +41,16 @@ button, a { transition: color 180ms ease, background-color 180ms ease, border-co
 .empty-state h2, .empty-state p { margin: 0 0 var(--space-2); }
 .empty-state p { color: var(--color-muted); }
 
+.mail-scan-progress { align-items: center; display: flex; flex-wrap: wrap; gap: .625rem; flex-basis: 100%; color: var(--color-text); font-size: .875rem; }
+.mail-scan-progress progress { accent-color: #23784e; height: .65rem; max-width: 100%; width: 12rem; }
+
 @media (max-width: 42rem) {
   .app-shell__header { align-items: flex-start; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4); }
   .app-shell__nav { margin: 0 calc(-1 * var(--space-2)); padding: 0 var(--space-2) var(--space-2); width: calc(100% + var(--space-4)); }
   .app-shell__main { padding: var(--space-6) var(--space-4); }
 }
 
+.mail-recheck { flex-basis: 100%; min-width: 0; }
+.mail-recheck summary { cursor: pointer; font-weight: 600; padding-block: 0.5rem; }
+.mail-recheck p { max-width: 70ch; margin-block: 0.5rem 0.75rem; line-height: 1.55; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; } }

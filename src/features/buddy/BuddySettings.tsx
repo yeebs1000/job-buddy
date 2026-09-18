@@ -105,8 +105,11 @@ export function BuddySettings({
       <ol>
         <li>In your Job Buddy project, run <code>npm.cmd run build:extension</code> once to create the <code>dist-extension</code> folder.</li>
         <li>Open <code>chrome://extensions</code> or <code>edge://extensions</code>, enable Developer mode, choose Load unpacked, and select <code>dist-extension</code>. Browser installation requires your confirmation; a webpage cannot do this for you.</li>
-        <li>Click Pair browser extension here. Open the installed Job Buddy extension from your browser toolbar and enter the one-time code.</li>
+        <li>Open an HTTPS job application page, click the Job Buddy toolbar icon, and allow access to that site. Open the floating Buddy button. It cannot activate on this local dashboard or browser settings pages.</li>
+        <li>Click Pair browser extension here, then enter the one-time code in Buddy on the application page.</li>
         <li>Click Refresh connection here to verify pairing. The local companion must remain running.</li>
+        <li>Save your details in Profile. In Buddy, choose Select safe, empty fields, then Fill approved fields. Review sensitive answers separately. Use Scan this page again after changing your profile or moving to another application step.</li>
+        <li>After an update, rebuild the extension, click Reload on its browser extensions card, then refresh the job application tab.</li>
       </ol>
     </div>}
 

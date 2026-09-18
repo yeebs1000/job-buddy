@@ -2,6 +2,7 @@ import type { Deadline } from "../../domain/application";
 import type { ApplicationOutcome, ApplicationStage } from "../../domain/stage";
 import type { UpdateProposalClassification } from "../../domain/updateProposal";
 import type { MailEnvelope } from "../../integrations/mail/MailAdapter";
+import { employmentOffer, mailFilterReason, recruiterOutreach, recruitingInvitation } from "./mailRelevance";
 
 export type MessageClassification = UpdateProposalClassification;
 
@@ -17,7 +18,7 @@ const stageSignals: readonly StageSignal[] = [
     stage: "offer",
     reason: "offer-language",
     confidence: 0.95,
-    matches: (text) => /\b(?:pleased to )?offer(?: you)?\b/i.test(text),
+    matches: employmentOffer,
   },
   {
     stage: "assessment",
@@ -52,8 +53,8 @@ const stageSignals: readonly StageSignal[] = [
 ];
 
 const terminalSignals: readonly { outcome: ApplicationOutcome; reason: string; matches: (text: string) => boolean }[] = [
-  { outcome: "rejected", reason: "rejection-language", matches: (text) => /\b(?:will not be progressing|not progressing|application (?:has been )?rejected)\b/i.test(text) },
-  { outcome: "withdrawn", reason: "withdrawal-language", matches: (text) => /\b(?:application (?:has been )?withdrawn|withdrawal)\b/i.test(text) },
+  { outcome: "rejected", reason: "rejection-language", matches: (text) => /\b(?:will not be progressing|not progressing|application (?:has been )?rejected)\b|\byou (?:were not|have not been|were not being) selected\b.{0,100}\b(?:next stage|position|role|job)\b|\bnot (?:to |be )?(?:proceed|proceeding|moving forward) with your (?:application|candidacy)\b/i.test(text) },
+  { outcome: "withdrawn", reason: "withdrawal-language", matches: (text) => /\b(?:application (?:has been )?withdrawn|withdrawal of your application|your application withdrawal)\b/i.test(text) },
 ];
 
 const negativeInvitationSignals: readonly { reason: string; matches: (text: string) => boolean }[] = [
@@ -73,7 +74,7 @@ interface MessageSentence {
 
 function messageSentences(message: MailEnvelope): MessageSentence[] {
   const excerptSentences = sentences(message.excerpt).map((text, index) => ({ text, source: "excerpt" as const, index }));
-  const subject = message.subject.trim();
+  const subject = (message.forwarded?.subject || message.subject).trim();
   return subject ? [...excerptSentences, { text: subject, source: "subject", index: 0 }] : excerptSentences;
 }
 
@@ -103,7 +104,7 @@ function negatesStageInvitation(context: MessageSentence, stage: ApplicationStag
 function findStageSignal(signals: readonly StageSignal[], contexts: readonly MessageSentence[]): SignalMatch<StageSignal> | undefined {
   for (const signal of signals) {
     if (contexts.some((context) => negatesStageInvitation(context, signal.stage))) continue;
-    const match = findSignal([signal], contexts);
+    const match = findSignal([signal], contexts, context => !["interview", "assessment"].includes(signal.stage) || recruitingInvitation(context.text));
     if (match) return match;
   }
   return undefined;
@@ -162,7 +163,7 @@ function stageMentions(contexts: readonly MessageSentence[]): Set<ApplicationSta
     if (/\binterview\b/i.test(context.text)) mentions.add("interview");
     if (/\b(?:application|applications|candidacy|roles?)\b.{0,120}\b(?:is|are|remain) under review\b/i.test(context.text)) mentions.add("review");
     if (/\b(?:online |numerical )?assessment\b/i.test(context.text)) mentions.add("assessment");
-    if (/\boffer\b/i.test(context.text)) mentions.add("offer");
+    if (employmentOffer(context.text)) mentions.add("offer");
   }
   return mentions;
 }
@@ -195,6 +196,7 @@ function interviewSubtype(text: string): MessageClassification["interviewSubtype
 }
 
 export function classifyMessage(message: MailEnvelope): MessageClassification | null {
+  if (mailFilterReason(message)) return null;
   const contexts = messageSentences(message);
   const terminalMatch = findSignal(terminalSignals, contexts);
   const negativeInvitationMatch = findSignal(negativeInvitationSignals, contexts);
@@ -213,13 +215,17 @@ export function classifyMessage(message: MailEnvelope): MessageClassification | 
     };
   }
 
-  if (!terminalMatch && !stageMatch) return null;
+  if (!terminalMatch && !stageMatch) {
+    if (recruiterOutreach(message)) return { kind: "recruiter-outreach", confidence: 0.7, reasons: ["personal-recruiter-outreach"], evidenceExcerpt: message.excerpt,
+      deadlines: [], links: validHttpsLinks(message.links), requiresApproval: true };
+    return null;
+  }
 
   const proposedStage = contradictory && mentionedStages.has("review") ? "review" : stageMatch?.signal.stage;
   const selectedMatch = findStageSignal(stageSignals.filter((signal) => signal.stage === proposedStage), contexts) ?? stageMatch;
   const selectedSignal = selectedMatch?.signal;
   const isOffer = proposedStage === "offer";
-  const requiresApproval = Boolean(terminalMatch || isOffer || contradictory);
+  const requiresApproval = Boolean(terminalMatch || isOffer || contradictory || message.forwarded || /^\s*(?:fw|fwd):/i.test(message.subject));
   const subtype = proposedStage === "interview" ? interviewSubtype(selectedMatch?.evidenceExcerpt ?? "") : undefined;
   const label = proposedStage === "interview" ? `${subtype ? `${subtype[0].toUpperCase()}${subtype.slice(1)} ` : ""}interview` : proposedStage === "assessment" ? (selectedSignal?.reason === "numerical-assessment-deadline" ? "Numerical assessment deadline" : "Assessment") : "Application update";
   const evidenceExcerpt = terminalMatch?.evidenceExcerpt ?? selectedMatch?.evidenceExcerpt ?? "";

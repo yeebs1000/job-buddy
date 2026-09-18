@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { matchField } from "./matchFields";
 
 describe("matchField", () => {
+  it("supports full-name inputs but keeps radio widgets manual", () => {
+    expect(matchField(raw({ label: "Full name", autocomplete: "name" }))).toMatchObject({ canonicalPath: "identity.fullName", risk: "safe" });
+    expect(matchField(raw({ label: "Full name" }))).toMatchObject({ canonicalPath: "identity.fullName", risk: "safe" });
+    expect(matchField(raw({ label: "Country", kind: "radio" }))).toMatchObject({ risk: "manual" });
+  });
   it.each([
     ["Are you legally authorized to work in the United States?", "preferences.usAuthorization"],
     ["Will you now or in the future require sponsorship to work in the US?", "preferences.usSponsorship"],

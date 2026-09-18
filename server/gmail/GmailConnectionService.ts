@@ -4,7 +4,7 @@ import type { SecretStore } from "../secrets/SecretStore";
 import type { GmailConnectionStatus } from "../../src/domain/mail";
 import { GoogleOAuthClient, GoogleOAuthError, type GoogleTokens } from "./GoogleOAuthClient";
 import { OAuthAttemptStore } from "./OAuthAttemptStore";
-import { desktopClientIdSchema } from "./DesktopClientStore";
+import { desktopClientIdSchema, desktopClientSecretSchema } from "./DesktopClientStore";
 
 interface ConnectionMetadataPort {
   get(): Promise<GmailConnectionMetadata | null>;
@@ -19,11 +19,12 @@ interface GmailConnectionServiceOptions {
   fetcher?: typeof fetch;
   nowMs?: () => number;
   attempts?: OAuthAttemptStore;
-  saveDesktopClientId?: (clientId: string) => Promise<void>;
+  saveDesktopClientId?: (clientId: string, clientSecret?: string) => Promise<void>;
+  allowDesktopClientChanges?: boolean;
 }
 
 export class GmailConnectionError extends Error {
-  constructor(readonly code: "missing-config" | "platform-unsupported" | "invalid-state" | "offline-access-required" | "reconnect-required" | "request-failed" | "already-configured") {
+  constructor(readonly code: "missing-config" | "platform-unsupported" | "invalid-state" | "offline-access-required" | "reconnect-required" | "request-failed" | "setup-managed" | "disconnect-required" | "connection-busy" | "client-config") {
     const messages = {
       "missing-config": "Google OAuth is not configured",
       "platform-unsupported": "Persistent Gmail connection requires Windows",
@@ -31,7 +32,10 @@ export class GmailConnectionError extends Error {
       "offline-access-required": "Google did not grant offline access; reconnect and approve access again",
       "reconnect-required": "Gmail authorization must be renewed",
       "request-failed": "Gmail connection could not be completed",
-      "already-configured": "Gmail client setup is already configured or in progress",
+      "setup-managed": "This client ID is managed by the app environment or build",
+      "disconnect-required": "Disconnect Gmail before changing the client ID",
+      "connection-busy": "Wait for the current Gmail connection operation to finish",
+      "client-config": "Google rejected the OAuth client credentials; check the matching Desktop client ID and secret",
     } as const;
     super(messages[code]);
     this.name = "GmailConnectionError";
@@ -41,12 +45,15 @@ export class GmailConnectionError extends Error {
 export class GmailConnectionService {
   private oauth: GoogleOAuthClient | null;
   private configuring = false;
+  private completing = false;
+  private readonly editable: boolean;
   private readonly attempts: OAuthAttemptStore;
   private readonly nowMs: () => number;
   private access: GoogleTokens | null = null;
 
   constructor(private readonly options: GmailConnectionServiceOptions) {
     this.nowMs = options.nowMs ?? Date.now;
+    this.editable = options.allowDesktopClientChanges ?? !options.config.google;
     this.attempts = options.attempts ?? new OAuthAttemptStore();
     this.oauth = options.config.google ? new GoogleOAuthClient(options.config.google, options.fetcher, this.nowMs) : null;
   }
@@ -65,16 +72,23 @@ export class GmailConnectionService {
     return { state: "connected", accountEmail: metadata.accountEmail, platformSupported };
   }
 
-  async configureDesktopClient(input: string): Promise<void> {
+  async configureDesktopClient(input: string, secretInput?: string): Promise<void> {
     const clientId = desktopClientIdSchema.parse(input);
-    if (this.oauth || this.configuring) throw new GmailConnectionError("already-configured");
+    const clientSecret = desktopClientSecretSchema.optional().parse(secretInput);
+    if (!this.editable) throw new GmailConnectionError("setup-managed");
+    if (this.configuring || this.completing) throw new GmailConnectionError("connection-busy");
     if (!this.options.secrets.isSupported()) throw new GmailConnectionError("platform-unsupported");
     if (!this.options.saveDesktopClientId) throw new GmailConnectionError("missing-config");
     this.configuring = true;
     try {
-      await this.options.saveDesktopClientId(clientId);
-      this.options.config.google = { clientId, redirectUri: "http://127.0.0.1:43117/api/gmail/oauth/callback" };
+      if (await this.options.secrets.get("gmail-refresh-token") || await this.options.metadata.get()) {
+        throw new GmailConnectionError("disconnect-required");
+      }
+      await this.options.saveDesktopClientId(clientId, clientSecret);
+      this.options.config.google = { clientId, ...(clientSecret ? { clientSecret } : {}), redirectUri: "http://127.0.0.1:43117/api/gmail/oauth/callback" };
       this.oauth = new GoogleOAuthClient(this.options.config.google, this.options.fetcher, this.nowMs);
+      this.attempts.clear();
+      this.access = null;
     } finally { this.configuring = false; }
   }
 
@@ -86,6 +100,13 @@ export class GmailConnectionService {
   }
 
   async complete(input: { code: string; state: string; now?: string }): Promise<void> {
+    if (this.configuring || this.completing) throw new GmailConnectionError("connection-busy");
+    this.completing = true;
+    try { await this.completeAttempt(input); }
+    finally { this.completing = false; }
+  }
+
+  private async completeAttempt(input: { code: string; state: string; now?: string }): Promise<void> {
     const oauth = this.requireOAuth();
     if (!this.options.secrets.isSupported()) throw new GmailConnectionError("platform-unsupported");
     const now = input.now ?? new Date(this.nowMs()).toISOString();
@@ -94,7 +115,8 @@ export class GmailConnectionService {
     let tokens: GoogleTokens;
     try {
       tokens = await oauth.exchangeCode({ code: input.code, codeVerifier: attempt.codeVerifier });
-    } catch {
+    } catch (error) {
+      if (error instanceof GoogleOAuthError && error.code === "client-config") throw new GmailConnectionError("client-config");
       throw new GmailConnectionError("request-failed");
     }
     if (!tokens.refreshToken) throw new GmailConnectionError("offline-access-required");
@@ -147,6 +169,7 @@ export class GmailConnectionService {
   }
 
   private requireOAuth(): GoogleOAuthClient {
+    if (this.configuring) throw new GmailConnectionError("connection-busy");
     if (!this.oauth) throw new GmailConnectionError("missing-config");
     return this.oauth;
   }

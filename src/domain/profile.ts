@@ -31,6 +31,10 @@ const contactSchema = z.object({
   phoneNational: optionalShortText,
   addressLine1: optionalShortText,
   addressLine2: optionalShortText,
+  houseNumber: optionalShortText,
+  streetName: optionalShortText,
+  unitNumber: optionalShortText,
+  buildingName: optionalShortText,
   city: optionalShortText,
   region: optionalShortText,
   postalCode: optionalShortText,
@@ -120,9 +124,11 @@ export const emptyCandidateProfile: CandidateProfile = {
 };
 
 const staticPaths = new Set([
+  "identity.fullName",
   "identity.givenName", "identity.familyName", "identity.preferredName",
   "contact.email", "contact.phoneCountryCode", "contact.phoneNational",
   "contact.addressLine1", "contact.addressLine2", "contact.city", "contact.region",
+  "contact.houseNumber", "contact.streetName", "contact.unitNumber", "contact.buildingName",
   "contact.postalCode", "contact.country",
   "links.linkedin", "links.github", "links.portfolio", "skills",
   "preferences.sgAuthorization", "preferences.hkAuthorization",
@@ -173,6 +179,7 @@ export function parseProfilePath(input: string): ProfilePath {
 }
 
 function valueAt(profile: CandidateProfile, path: ProfilePath): ProfileValue | undefined {
+  if (path === "identity.fullName") return [profile.identity.givenName, profile.identity.familyName].filter(Boolean).join(" ") || undefined;
   if (path === "skills") return profile.skills.length ? profile.skills : undefined;
   const parts = path.split(".");
   if (parts.length === 2) {

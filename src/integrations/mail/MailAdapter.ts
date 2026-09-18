@@ -7,6 +7,8 @@ export interface MailEnvelope {
   receivedAt: string;
   excerpt: string;
   links: string[];
+  /** Sender/subject claimed inside forwarded text, not authenticated headers. */
+  forwarded?: { fromAddress: string; subject: string };
 }
 
 export interface MailScanResult {
@@ -14,6 +16,8 @@ export interface MailScanResult {
   nextCursor: string;
   scannedAt: string;
   diagnostics?: MailScanDiagnostics;
+  continuationToken?: string;
+  progress?: { processed: number; total: number };
 }
 
 export interface MailAdapter {

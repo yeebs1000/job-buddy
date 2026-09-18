@@ -8,6 +8,51 @@ import { createCompanionServer, type CompanionServerServices } from "./createCom
 const openServers: Array<ReturnType<typeof createCompanionServer>> = [];
 const pairedToken = "paired-token-abcdefghijklmnopqrstuvwxyz";
 
+it("allows extension preference reads by POST only with extension origin and bearer token", async () => {
+  const service = services(); const base = await start(service);
+  const origin = `chrome-extension://${"a".repeat(32)}`;
+  const request = (headers: Record<string, string>) => fetch(base + "/api/buddy/preferences/read", { method: "POST", headers: { "content-type": "application/json", ...headers }, body: "{}" });
+  expect((await request({ origin, authorization: `Bearer ${pairedToken}` })).status).toBe(200);
+  expect((await request({ origin })).status).toBe(401);
+  expect((await request({ authorization: `Bearer ${pairedToken}` })).status).toBe(403);
+  expect((await request({ origin: "https://jobs.example", authorization: `Bearer ${pairedToken}` })).status).toBe(403);
+  expect((await request({ origin: "http://127.0.0.1:5173", authorization: `Bearer ${pairedToken}` })).status).toBe(403);
+  expect(service.buddy.readPreferences).toHaveBeenCalledExactlyOnceWith({ token: pairedToken, origin });
+});
+
+it("forwards validated batch checkpoints and rejects malformed ones", async () => {
+  const service = services(); const base = await start(service);
+  const token = `${"a".repeat(32)}:25`;
+  const request = (body: unknown) => fetch(`${base}/api/gmail/scan`, { method: "POST", headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" }, body: JSON.stringify(body) });
+  expect((await request({ cursor: null, initialSyncConfirmed: true, batch: true, continuationToken: token })).status).toBe(200);
+  expect(service.sync.scan).toHaveBeenCalledWith({ cursor: null, initialSyncConfirmed: true, batch: true, continuationToken: token });
+  expect((await request({ cursor: null, initialSyncConfirmed: true, batch: true, continuationToken: "invalid" })).status).toBe(400);
+  expect((await request({ cursor: null, initialSyncConfirmed: true, continuationToken: token })).status).toBe(400);
+  expect(service.sync.scan).toHaveBeenCalledTimes(1);
+});
+
+it.each(["gmail-timeout", "gmail-network-error", "gmail-response-invalid", "gmail-normalization-failed", "gmail-scan-expired"])("exposes only the safe %s code", async code => {
+  const base = await start(services({ sync: { scan: async () => { throw Object.assign(new Error("private mailbox detail"), { code }); } } }));
+  const response = await fetch(`${base}/api/gmail/scan`, { method: "POST", headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" }, body: JSON.stringify({ cursor: null, initialSyncConfirmed: true }) });
+  expect(response.ok).toBe(false);
+  expect(await response.json()).toEqual({ error: { code } });
+});
+
+it.each(["disconnect", "oauth/start"])("invalidates scan checkpoints before %s", async action => {
+  const service = services(); service.sync.reset = vi.fn();
+  const base = await start(service);
+  const response = await fetch(`${base}/api/gmail/${action}`, { method: "POST", headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" }, body: "{}" });
+  expect(response.ok).toBe(true);
+  expect(service.sync.reset).toHaveBeenCalledOnce();
+});
+
+it("returns a safe actionable quota code from scans without provider details", async () => {
+  const base = await start(services({ sync: { scan: async () => { throw Object.assign(new Error("private mailbox detail"), { code: "gmail-rate-limited" }); } } }));
+  const response = await fetch(`${base}/api/gmail/scan`, { method: "POST", headers: { origin: "http://127.0.0.1:5173", "content-type": "application/json" }, body: JSON.stringify({ cursor: null, initialSyncConfirmed: true }) });
+  expect(response.status).toBe(429);
+  expect(await response.json()).toEqual({ error: { code: "gmail-rate-limited" } });
+});
+
 async function start(services: CompanionServerServices) {
   const server = createCompanionServer({
     services,
@@ -89,10 +134,29 @@ describe("createCompanionServer", () => {
     const send = (body: unknown, origin = "http://127.0.0.1:5173") => fetch(`${base}/api/gmail/setup`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
     expect((await send({ clientId: "123-test.apps.googleusercontent.com" }, "https://evil.example")).status).toBe(403);
     expect((await send({ clientId: "invalid\nSETTING=bad" })).status).toBe(400);
-    expect((await send({ clientId: "123-test.apps.googleusercontent.com", clientSecret: "not-accepted" })).status).toBe(400);
+    expect((await send({ clientId: "123-test.apps.googleusercontent.com", clientSecret: "invalid\nsecret" })).status).toBe(400);
     expect(saved).toBe("");
     expect((await send({ clientId: "123-test.apps.googleusercontent.com" })).status).toBe(204);
     expect(saved).toBe("123-test.apps.googleusercontent.com");
+    testServices.connection.configureDesktopClient = async (id, secret) => { saved = `${id}:${secret}`; };
+    const response = await send({ clientId: "123-test.apps.googleusercontent.com", clientSecret: "fixture-secret" });
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
+    expect(saved).toBe("123-test.apps.googleusercontent.com:fixture-secret");
+  });
+
+  it("returns only a safe credential error for the initiating popup", async () => {
+    const testServices = services();
+    testServices.connection.start = async () => ({ authorizationUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=client-failure" });
+    testServices.connection.complete = async () => { throw Object.assign(new Error("PRIVATE PROVIDER DETAIL"), { code: "client-config" }); };
+    const base = await start(testServices);
+    const headers = { origin: "http://127.0.0.1:5173", "content-type": "application/json" };
+    const { popupId } = await (await fetch(`${base}/api/gmail/oauth/start`, { method: "POST", headers, body: '{"popup":true}' })).json() as { popupId: string };
+    const callback = await (await fetch(`${base}/api/gmail/oauth/callback?state=client-failure&code=private-code`)).text();
+    expect(callback).not.toContain("PRIVATE PROVIDER DETAIL");
+    expect(callback).not.toContain("private-code");
+    const receipt = await fetch(`${base}/api/gmail/oauth/popup-result`, { method: "POST", headers, body: JSON.stringify({ popupId }) });
+    expect(await receipt.json()).toEqual({ state: "client-config" });
   });
 
   it("does not process duplicate popup callbacks while the first exchange is pending", async () => {

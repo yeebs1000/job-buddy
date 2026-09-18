@@ -2,22 +2,24 @@ import { buddyStyles } from "./styles";
 import type { PendingSalaryEvidence } from "../../../src/domain/buddy";
 
 export type BuddyPanelModel =
-  | { state: "unpaired" }
+  | { state: "unpaired"; message?: string }
   | { state: "idle" }
   | { state: "fields-found"; matched: number; review: number; manual: number }
-  | { state: "review"; mode: "approval" | "automatic"; matched: number; manual: number; autoFilled: number; fields: readonly BuddyReviewField[] }
+  | { state: "review"; mode: "approval" | "automatic"; matched: number; manual: number; autoFilled: number; fields: readonly BuddyReviewField[]; message?: string; salaryAvailable?: boolean }
   | { state: "capture"; company: string; role: string; location: string }
   | { state: "capture-sent" }
   | { state: "salary-evidence"; evidence: PendingSalaryEvidence }
   | { state: "salary-evidence-sent" }
   | { state: "error"; message: string };
 
-export interface BuddyReviewField { id: string; label: string; risk: "safe" | "review"; preview?: string; }
+export interface BuddyReviewField { id: string; label: string; risk: "safe" | "review"; preview?: string; existingValue?: boolean; }
 export interface BuddyPanelOptions {
   onPair?: (code: string) => Promise<void> | void;
   onFillApproved?: (fieldIds: string[]) => Promise<void> | void;
   onSendCapture?: () => Promise<void> | void;
   onSendSalaryEvidence?: (evidence: PendingSalaryEvidence) => Promise<void> | void;
+  onRescan?: () => Promise<void> | void;
+  onReviewSalary?: () => void;
 }
 
 export class BuddyPanel {
@@ -29,6 +31,8 @@ export class BuddyPanel {
   private readonly onFillApproved: (fieldIds: string[]) => Promise<void> | void;
   private readonly onSendCapture: () => Promise<void> | void;
   private readonly onSendSalaryEvidence: (evidence: PendingSalaryEvidence) => Promise<void> | void;
+  private readonly onRescan: () => Promise<void> | void;
+  private readonly onReviewSalary: () => void;
 
   constructor(parent: HTMLElement, options: BuddyPanelOptions = {}) {
     this.host = parent.ownerDocument.createElement("div");
@@ -39,6 +43,8 @@ export class BuddyPanel {
     this.onFillApproved = options.onFillApproved ?? (() => undefined);
     this.onSendCapture = options.onSendCapture ?? (() => undefined);
     this.onSendSalaryEvidence = options.onSendSalaryEvidence ?? (() => undefined);
+    this.onRescan = options.onRescan ?? (() => undefined);
+    this.onReviewSalary = options.onReviewSalary ?? (() => undefined);
     this.shadowRoot.addEventListener("keydown", (event) => { if ((event as KeyboardEvent).key === "Escape") this.collapse(); });
     parent.append(this.host);
     this.draw();
@@ -86,6 +92,14 @@ export class BuddyPanel {
     const body = doc.createElement("div");
     body.className = "body";
     this.populateBody(body);
+    const rescan = doc.createElement("button");
+    rescan.type = "button"; rescan.className = "close"; rescan.dataset.action = "rescan";
+    rescan.textContent = "Scan this page again";
+    rescan.addEventListener("click", async () => {
+      rescan.disabled = true; rescan.textContent = "Scanning…";
+      try { await this.onRescan(); } finally { rescan.disabled = false; rescan.textContent = "Scan this page again"; }
+    });
+    body.append(rescan);
     panel.append(header, body);
     return panel;
   }
@@ -95,6 +109,7 @@ export class BuddyPanel {
     if (this.model.state === "unpaired") {
       const heading = doc.createElement("h2"); heading.textContent = "Pair this browser";
       const copy = doc.createElement("p"); copy.textContent = "Create a one-time code in Job Buddy Settings, then enter it here.";
+      if (this.model.message) { copy.textContent = this.model.message; copy.setAttribute("role", "alert"); }
       const form = doc.createElement("form");
       const label = doc.createElement("label"); label.textContent = "Pairing code";
       const input = doc.createElement("input"); input.name = "pairing-code"; input.autocomplete = "off"; input.maxLength = 12;
@@ -131,6 +146,7 @@ export class BuddyPanel {
         text.textContent = field.label;
         const badge = doc.createElement("small");
         badge.textContent = field.preview !== undefined ? `Review answer: ${field.preview}` : field.risk === "review" ? "Check carefully" : "Profile match";
+        if (field.existingValue) badge.textContent += " · Replaces an existing answer";
         label.append(checkbox, text, badge);
         list.append(label);
       }
@@ -139,17 +155,39 @@ export class BuddyPanel {
       submit.dataset.action = "fill-approved";
       submit.type = "submit";
       submit.textContent = "Fill approved fields";
-      submit.disabled = this.model.fields.length === 0;
-      form.append(list, submit);
-      form.addEventListener("submit", (event) => {
+      submit.disabled = true;
+      const updateSubmit = () => { submit.disabled = !form.querySelector('input[name="approved-field"]:checked'); };
+      form.addEventListener("change", updateSubmit);
+      const selectSafe = doc.createElement("button"); selectSafe.type = "button"; selectSafe.className = "close";
+      selectSafe.dataset.action = "select-safe"; selectSafe.textContent = "Select safe, empty fields";
+      const safeIds = new Set(this.model.fields.filter((field) => field.risk === "safe" && !field.existingValue).map((field) => field.id));
+      selectSafe.disabled = !safeIds.size;
+      selectSafe.addEventListener("click", () => {
+        for (const input of list.querySelectorAll<HTMLInputElement>('input[name="approved-field"]')) if (safeIds.has(input.value)) input.checked = true;
+        updateSubmit();
+      });
+      form.append(selectSafe, list, submit);
+      form.addEventListener("submit", async (event) => {
         event.preventDefault();
         const ids = [...form.querySelectorAll<HTMLInputElement>('input[name="approved-field"]:checked')].map((input) => input.value);
-        if (ids.length) void this.onFillApproved(ids);
+        if (ids.length) {
+          submit.disabled = true; submit.textContent = "Filling…";
+          try { await this.onFillApproved(ids); } finally { submit.textContent = "Fill approved fields"; updateSubmit(); }
+        }
       });
       const guarantee = doc.createElement("small");
       guarantee.className = "guarantee";
       guarantee.textContent = "Buddy never submits applications or fills files, credentials, or demographic fields.";
       body.append(heading, summary, form, guarantee);
+      if (this.model.message) {
+        const message = doc.createElement("p"); message.setAttribute("role", "status"); message.textContent = this.model.message;
+        body.insertBefore(message, form);
+      }
+      if (this.model.salaryAvailable) {
+        const salary = doc.createElement("button"); salary.type = "button"; salary.className = "close";
+        salary.dataset.action = "review-salary"; salary.textContent = "Review salary found on this page";
+        salary.addEventListener("click", () => this.onReviewSalary()); body.append(salary);
+      }
       return;
     }
     if (this.model.state === "capture") {

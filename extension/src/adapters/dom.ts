@@ -6,28 +6,36 @@ type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | 
 
 export function scanControls(document: Document): AdapterField[] {
   const seen = new Map<string, number>();
-  return [...document.querySelectorAll<FormControl>("input, select, textarea, button[type='submit'], input[type='submit']")]
-    .filter((element) => !element.disabled && inputType(element) !== "hidden")
+  const fields = [...document.querySelectorAll<FormControl>("input, select, textarea, button[type='submit'], input[type='submit']")]
+    .filter(isEditable)
     .map((element, index) => toAdapterField(document, element, index))
     .map((field) => {
       const occurrence = (seen.get(field.id) ?? 0) + 1;
       seen.set(field.id, occurrence);
       return occurrence === 1 ? field : { ...field, id: `${field.id}--${occurrence}` };
     });
+  const pathCounts = new Map<string, number>();
+  for (const field of fields) if (field.canonicalPath) pathCounts.set(field.canonicalPath, (pathCounts.get(field.canonicalPath) ?? 0) + 1);
+  return fields.map((field) => field.canonicalPath && (pathCounts.get(field.canonicalPath) ?? 0) > 1
+    ? { ...field, canonicalPath: undefined, risk: "manual", reason: "repeated-field-context" } : field);
 }
 
 export function fillControl(field: AdapterField, value: string | number | boolean | string[]): FillResult {
+  if (field.element.getAttribute("role") === "combobox" && !(field.element instanceof HTMLSelectElement)) return { ok: false, reason: "custom-selection-required" };
   if (field.risk === "manual" || field.element instanceof HTMLButtonElement) return { ok: false, reason: "manual-only-field" };
   const element = field.element;
+  if (!isEditable(element)) return { ok: false, reason: "field-unavailable" };
   if (element instanceof HTMLInputElement && ["file", "password", "submit", "checkbox", "radio"].includes(element.type)) {
     return { ok: false, reason: "manual-only-field" };
   }
 
   const text = Array.isArray(value) ? value.join(", ") : String(value);
+  let expected = text;
   if (element instanceof HTMLSelectElement) {
     const normalized = normalize(text);
-    const option = [...element.options].find((candidate) => normalize(candidate.value) === normalized || normalize(candidate.text) === normalized);
+    const option = [...element.options].find((candidate) => !candidate.disabled && !candidate.closest("optgroup[disabled]") && (normalize(candidate.value) === normalized || normalize(candidate.text) === normalized));
     if (!option) return { ok: false, reason: "select-option-not-found" };
+    expected = option.value;
     setNativeValue(element, option.value);
   } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
     setNativeValue(element, text);
@@ -36,13 +44,15 @@ export function fillControl(field: AdapterField, value: string | number | boolea
   element.dispatchEvent(new Event("input", { bubbles: true }));
   element.dispatchEvent(new Event("change", { bubbles: true }));
   element.dispatchEvent(new FocusEvent("blur", { bubbles: false }));
-  return { ok: true };
+  return element.isConnected && element.value === expected ? { ok: true } : { ok: false, reason: "page-rejected-value" };
 }
 
 export function snapshotFields(fields: readonly AdapterField[]) {
   return Object.fromEntries(fields.map((field) => [field.id, {
     fingerprint: field.fingerprint,
     currentValuePresent: hasCurrentValue(field.element),
+    // Ephemeral local comparison only: never sent to the worker or activity log.
+    value: field.element.value,
   }]));
 }
 
@@ -71,19 +81,39 @@ function toAdapterField(document: Document, element: FormControl, index: number)
     helpText: describedByText(document, element),
     inputType: inputType(element),
   });
+  if (hasHistoricalContext(element)) return { ...matched, canonicalPath: undefined, risk: "manual", reason: "historical-or-other-person-context", element, fingerprint: fingerprint(element, label) };
+  // Changing a combobox input's text does not commit its selected option/model.
+  if (element.getAttribute("role") === "combobox" && !(element instanceof HTMLSelectElement)) return { ...matched, canonicalPath: undefined, risk: "manual", reason: "custom-selection-required", element, fingerprint: fingerprint(element, label) };
   return { ...matched, element, fingerprint: fingerprint(element, label) };
 }
 
+function hasHistoricalContext(element: FormControl): boolean {
+  for (let scope = element.parentElement; scope && scope.tagName !== "BODY"; scope = scope.parentElement) {
+    const heading = scope.matches("fieldset, section, [role='group']")
+      ? scope.querySelector(":scope > legend, :scope > h2, :scope > h3, :scope > h4")?.textContent ?? "" : "";
+    const labelled = (scope.getAttribute("aria-labelledby") ?? "").split(/\s+/).map((id) => element.ownerDocument.getElementById(id)?.textContent ?? "").join(" ");
+    const context = `${heading} ${labelled} ${scope.getAttribute("aria-label") ?? ""} ${scope.getAttribute("data-automation-id") ?? ""}`.replace(/([a-z])([A-Z])/g, "$1 $2");
+    if (/\b(education|employment|work experience|work history|reference|references|referee|emergency contact|school|university)\b/i.test(context)) return true;
+  }
+  return false;
+}
+
 function resolveLabel(document: Document, element: FormControl): string {
-  if ("labels" in element && element.labels?.length) {
-    const text = [...element.labels].map((label) => label.textContent?.trim()).filter(Boolean).join(" ");
+  // Follow accessible-name precedence: Oracle's dial-code input also carries
+  // the enclosing "Phone Number" label, but aria-labelledby identifies its purpose.
+  const labelledBy = element.getAttribute("aria-labelledby");
+  if (labelledBy) {
+    const text = labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(" ");
     if (text) return text;
   }
   const ariaLabel = element.getAttribute("aria-label")?.trim();
   if (ariaLabel) return ariaLabel;
-  const labelledBy = element.getAttribute("aria-labelledby");
-  if (labelledBy) {
-    const text = labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.textContent?.trim()).filter(Boolean).join(" ");
+  if ("labels" in element && element.labels?.length) {
+    const text = [...element.labels].map((label) => {
+      const copy = label.cloneNode(true) as HTMLElement;
+      copy.querySelectorAll("input, select, textarea, button").forEach((control) => control.remove());
+      return copy.textContent?.trim();
+    }).filter(Boolean).join(" ");
     if (text) return text;
   }
   const ownText = element.textContent?.trim();
@@ -107,6 +137,16 @@ function fieldKind(element: FormControl): DetectedField["kind"] {
 function inputType(element: FormControl): string {
   if (element instanceof HTMLInputElement || element instanceof HTMLButtonElement) return element.type.toLowerCase();
   return element.tagName.toLowerCase();
+}
+
+function isEditable(element: FormControl): boolean {
+  if (!element.isConnected || element.matches(":disabled, [readonly]") || inputType(element) === "hidden") return false;
+  for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+    if (node.hidden || node.hasAttribute("inert") || node.getAttribute("aria-hidden") === "true") return false;
+    const style = (element.ownerDocument.defaultView ?? window).getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+  }
+  return true;
 }
 
 function hasCurrentValue(element: FormControl): boolean {

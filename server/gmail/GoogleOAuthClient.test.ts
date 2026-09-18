@@ -10,6 +10,10 @@ const google = {
 } satisfies NonNullable<CompanionConfig["google"]>;
 
 describe("GoogleOAuthClient", () => {
+  it("identifies the missing client_secret response without exposing provider text", async () => {
+    const oauth = new GoogleOAuthClient({ clientId: "desktop-id", redirectUri: google.redirectUri }, async () => new Response(JSON.stringify({ error: "invalid_request", error_description: "client_secret is missing." }), { status: 400 }));
+    await expect(oauth.exchangeCode({ code: "unused", codeVerifier: "verifier" })).rejects.toMatchObject({ code: "client-config" });
+  });
   it("exchanges and refreshes desktop tokens using PKCE without a secret", async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({ access_token: "access-token", refresh_token: "refresh-token", expires_in: 3600 })));
     const oauth = new GoogleOAuthClient({ clientId: "desktop-id", redirectUri: google.redirectUri }, fetcher);

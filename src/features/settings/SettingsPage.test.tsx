@@ -11,6 +11,19 @@ import { defaultGmailPreferences, gmailPreferences, type GmailPreferencesStore }
 
 const adapter: MailAdapter = { source: "gmail", scan: vi.fn() };
 
+it("lets connected users set daily scans before initial sync without starting a scan", async () => {
+  const preferences = preferenceStore();
+  const scan = vi.fn();
+  render(<MemoryRouter><SettingsPage client={client({ state: "connected", platformSupported: true })} preferences={preferences} scan={scan} /></MemoryRouter>);
+  const checkbox = await screen.findByRole("checkbox", { name: "Daily active-session scan" });
+  expect(checkbox).toBeEnabled();
+  await userEvent.click(checkbox);
+  await waitFor(() => expect(checkbox).toBeChecked());
+  expect(await preferences.get()).toMatchObject({ dailyActiveScanEnabled: true, initialSyncCompleted: false });
+  expect(scan).not.toHaveBeenCalled();
+  expect(checkbox).toHaveAccessibleDescription(/first scan/i);
+});
+
 function client(status: GmailConnectionStatus): GmailSettingsClient {
   return {
     status: vi.fn().mockResolvedValue(status),
@@ -29,7 +42,7 @@ function preferenceStore(overrides = {}): GmailPreferencesStore {
 
 afterEach(async () => { cleanup(); sessionStorage.clear(); window.history.replaceState({}, "", "/"); await jobBuddyDb.delete(); await jobBuddyDb.open(); vi.restoreAllMocks(); });
 
-it("offers in-app desktop setup and then enables Google sign-in without a secret input", async () => {
+it("offers in-app desktop setup with a masked secret field", async () => {
   const gmail = client({ state: "unconfigured", platformSupported: true, lastError: "missing-config" });
   vi.mocked(gmail.status).mockResolvedValueOnce({ state: "unconfigured", platformSupported: true }).mockResolvedValue({ state: "disconnected", platformSupported: true });
   render(<MemoryRouter><SettingsPage client={gmail} preferences={preferenceStore()} /></MemoryRouter>);
@@ -41,7 +54,21 @@ it("offers in-app desktop setup and then enables Google sign-in without a secret
   await userEvent.click(screen.getByRole("button", { name: "Save client ID" }));
   expect(await screen.findByRole("button", { name: /^Connect Gmail$/ })).toBeEnabled();
   expect(gmail.configureDesktopClient).toHaveBeenCalledWith("123-test.apps.googleusercontent.com");
-  expect(screen.queryByLabelText(/client secret/i)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/client secret/i)).not.toBeInTheDocument(); // form closes after saving
+});
+
+it("saves an optional Desktop client secret without retaining it in the form", async () => {
+  const gmail = client({ state: "disconnected", platformSupported: true });
+  render(<MemoryRouter><SettingsPage client={gmail} preferences={preferenceStore()} /></MemoryRouter>);
+  await userEvent.click(await screen.findByRole("button", { name: "Change client ID" }));
+  await userEvent.type(screen.getByLabelText("Desktop client ID"), "123-test.apps.googleusercontent.com");
+  expect(screen.getByLabelText(/Desktop client secret/)).toHaveAttribute("type", "password");
+  await userEvent.type(screen.getByLabelText(/Desktop client secret/), "fixture-secret");
+  await userEvent.click(screen.getByRole("button", { name: "Save client ID" }));
+  await waitFor(() => expect(screen.queryByLabelText(/Desktop client secret/)).not.toBeInTheDocument());
+  expect(gmail.configureDesktopClient).toHaveBeenCalledWith("123-test.apps.googleusercontent.com", "fixture-secret");
+  await userEvent.click(screen.getByRole("button", { name: "Change client ID" }));
+  expect(screen.getByLabelText(/Desktop client secret/)).toHaveValue("");
 });
 
 it("connects in a popup and updates the existing dashboard before syncing", async () => {
@@ -59,6 +86,17 @@ it("connects in a popup and updates the existing dashboard before syncing", asyn
   expect(popup.close).toHaveBeenCalled();
   expect(scan).toHaveBeenCalledOnce();
   expect(await preferences.get()).toMatchObject({ dailyActiveScanEnabled: true, initialSyncCompleted: true });
+});
+
+it("lets a disconnected user correct a saved client ID and closes the editor on success", async () => {
+  const gmail = client({ state: "disconnected", platformSupported: true });
+  render(<MemoryRouter><SettingsPage client={gmail} preferences={preferenceStore()} /></MemoryRouter>);
+  await userEvent.click(await screen.findByRole("button", { name: "Change client ID" }));
+  await userEvent.type(screen.getByLabelText("Desktop client ID"), "456-correct.apps.googleusercontent.com");
+  await userEvent.click(screen.getByRole("button", { name: "Save client ID" }));
+  await waitFor(() => expect(screen.queryByLabelText("Desktop client ID")).not.toBeInTheDocument());
+  expect(gmail.configureDesktopClient).toHaveBeenCalledWith("456-correct.apps.googleusercontent.com");
+  expect(screen.getByRole("button", { name: /^Connect Gmail$/ })).toBeEnabled();
 });
 
 it("offers retry when a popup is blocked without changing saved scan preferences", async () => {
@@ -110,7 +148,7 @@ it("requires an explicit 90-day scan after connecting", async () => {
   await userEvent.click(screen.getByRole("button", { name: /scan last 90 days/i }));
 
   expect(scan).toHaveBeenCalledWith(expect.objectContaining({ adapter, mode: "approval", initialSyncConfirmed: true }));
-  await waitFor(() => expect(preferences.save).toHaveBeenCalledWith(expect.objectContaining({ selectedSource: "gmail", initialSyncCompleted: true, dailyActiveScanEnabled: true })));
+  await waitFor(() => expect(preferences.save).toHaveBeenCalledWith(expect.objectContaining({ selectedSource: "gmail", initialSyncCompleted: true, dailyActiveScanEnabled: false })));
 });
 
 it("keeps approval as default and requires confirmation before unrestricted automation", async () => {

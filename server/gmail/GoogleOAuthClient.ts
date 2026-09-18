@@ -13,7 +13,7 @@ export interface GoogleTokens {
   refreshToken?: string;
 }
 
-export type GoogleOAuthErrorCode = "invalid-grant" | "request-failed" | "invalid-response";
+export type GoogleOAuthErrorCode = "invalid-grant" | "request-failed" | "invalid-response" | "client-config";
 
 export class GoogleOAuthError extends Error {
   constructor(readonly code: GoogleOAuthErrorCode) {
@@ -102,6 +102,10 @@ export class GoogleOAuthClient {
     const payload = record(await response.json().catch(() => null));
     if (!response.ok) {
       if (payload?.error === "invalid_grant") throw new GoogleOAuthError("invalid-grant");
+      if (payload?.error === "invalid_client" || payload?.error === "unauthorized_client"
+        || (payload?.error === "invalid_request" && typeof payload.error_description === "string" && /client_secret.*missing|missing.*client_secret/i.test(payload.error_description))) {
+        throw new GoogleOAuthError("client-config");
+      }
       throw new GoogleOAuthError("request-failed");
     }
     if (!payload || typeof payload.access_token !== "string" || typeof payload.expires_in !== "number" || payload.expires_in <= 0) {

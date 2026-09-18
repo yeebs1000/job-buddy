@@ -1,4 +1,6 @@
-# Job Buddy v1.0.0-beta.4
+# Job Buddy v1.0.0-beta.15
+
+Latest: [beta.15 Oracle address compatibility](docs/releases/v1-beta-15.md): separate address components, corrected phone-field recognition and explicit manual dropdown guidance. [Beta.14 pairing fixes](docs/releases/v1-beta-14.md), [beta.13 autofill improvements](docs/releases/v1-beta-13.md) and [beta.12 mail improvements](docs/releases/v1-beta-12.md) remain included.
 
 > A local-first workspace for replacing the job-application spreadsheet.
 
@@ -53,6 +55,7 @@ The repository is structured as a reproducible local project: fixtures are ficti
 - Simulated Update Intelligence with synthetic recruiter messages, evidence-backed match/classification confidence, reviewable interview/deadline extraction, and deterministic local fixture scans.
 - Optional read-only Gmail OAuth on Windows with encrypted refresh-token storage, bounded initial sync, incremental history sync, explicit Gmail/Demo provenance, reconnect handling, and retained reviewed evidence after disconnect.
 - Windows-DPAPI encrypted candidate profile with contact details, links, education, experience, projects, skills, work preferences, and reusable factual answers.
+- Local resume import in Profile: text-based PDF, DOCX or pasted text → editable suggestions → apply selected details → Save profile. Conflicting existing values start unchecked; files and source snippets are not saved. Correct a previous import with explicit section-replacement controls. English headings and common layouts work best; scanned PDFs need pasted text. See [beta 8 fixes](docs/releases/v1-beta-8.md).
 - Paired Manifest V3 Chrome/Edge Buddy with per-site permission, Approval and Automatic modes, emergency pause, revocation, and metadata-only activity history.
 - Deterministic guarded autofill for semantic forms plus Greenhouse, Workday, Oracle Recruiting, and Lever markers. Existing values require approval; salary and work authorization always require review; uploads, credentials, demographic/legal fields, CAPTCHA, and final Submit stay manual.
 - User-confirmed completed-application capture into the tracker, with editable Singapore/Hong Kong metadata and canonical duplicate protection.
@@ -141,9 +144,12 @@ Open **Discover**, paste a company's `job-boards.greenhouse.io`, `boards.greenho
 1. Keep `npm run dev` running, open **Profile**, and save the factual fields you want Buddy to use.
 2. Build the unpacked extension with `npm run build:extension`.
 3. In Chrome open `chrome://extensions`; in Edge open `edge://extensions`. Enable **Developer mode**, choose **Load unpacked**, and select this repository's `dist-extension` folder.
-4. Open **Settings → Browser Buddy** in Job Buddy and choose **Pair browser extension**. Open Buddy on a job page and enter the one-time code.
-5. On an HTTPS application page, click the Job Buddy toolbar icon. The browser asks for access to that exact site; Job Buddy never asks for all-site access in one prompt.
-6. Use **Approval mode** to choose every field, or **Automatic fill** for empty, safe, high-confidence matches. Salary, availability, relocation, sponsorship/work authorization, custom prose, existing values, and uncertain matches still wait for approval.
+4. On an HTTPS application page, click the Job Buddy toolbar icon and allow access to that site. Open the floating **Buddy** button. The toolbar cannot activate on the local dashboard or browser settings pages.
+5. Open **Settings → Browser Buddy** in Job Buddy and choose **Pair browser extension**. Enter the one-time code in the floating Buddy on the application page.
+6. In **Approval mode**, choose individual answers or **Select safe, empty fields**, then **Fill approved fields**. In **Automatic fill**, safe empty matches fill without this step. Sensitive answers and existing values still require individual approval. Buddy never clicks Next or Submit for you.
+7. Move to the next application step yourself. Buddy detects added form controls; use **Scan this page again** if the page or your saved profile changed. Salary research is a separate button and does not replace autofill controls.
+
+After updating, rebuild the extension, click **Reload** on its card in `chrome://extensions` or `edge://extensions`, then refresh the application tab. The extension currently fills native text, email, phone, URL, textarea and exact-match select controls. Full name is derived from your saved given/family names; common address labels are supported. Repeated education/employment forms, custom dropdown widgets, radio groups, checkboxes and cross-origin embedded forms remain manual rather than guessed.
 
 Buddy supports semantic Generic forms and stable markers for Greenhouse, Workday, Oracle Recruiting, and Lever. Vendor redesigns deliberately fall back to conservative Generic matching. Buddy never selects files, enters passwords or one-time codes, fills demographic/legal/signature fields, solves CAPTCHA, or clicks final Submit. After you submit yourself and the site shows a strong confirmation, choose **Send to Job Buddy**, then review the pending record on the dashboard before adding it.
 
@@ -163,7 +169,7 @@ The demo inbox works without Google configuration. The planned public distributi
 1. In [Google Cloud Console](https://console.cloud.google.com/), create or select a project, then [enable the Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com).
 2. Configure the OAuth consent screen. For a personal prototype, keep the app in **Testing** and add the Gmail address you will connect as a test user.
 3. Create an OAuth 2.0 Client ID with application type **Desktop app**. The app uses a loopback callback and PKCE.
-4. Open **Settings → Set up Gmail**, paste the public Desktop client ID, and select **Save client ID**. It is saved outside the repository under `%LOCALAPPDATA%\JobBuddy\gmail-desktop-client.json` and takes effect without a restart. No client secret is accepted. Existing environment/build configuration takes precedence; the setup form does not overwrite it.
+4. Open **Settings → Set up Gmail**, paste the public Desktop client ID and its matching **Desktop client secret** if Google provides one, then select **Save client ID**. Google may require the secret even with PKCE. The secret is Windows-DPAPI encrypted; the ID and encrypted secret are saved atomically outside the repository under `%LOCALAPPDATA%\JobBuddy\gmail-desktop-client.json` and take effect without a restart. To correct either value, choose **Stop waiting** if sign-in is pending, then **Change client ID**. Disconnect a connected account first. Re-enter both matching values; a blank secret removes the previous one. Replacement invalidates old sign-in attempts without deleting your tracker. Environment/build configuration takes precedence. See [beta.6 credential recovery](docs/releases/v1-beta-6.md).
 5. Choose **Connect Gmail** and complete Google's consent popup. The dashboard stays open and starts the disclosed first 90-day scan after confirmation; failures expose a retry button. Developers can still configure `.env.local` as described in the maintainer guide.
 
 ```dotenv
@@ -180,8 +186,8 @@ Job Buddy requests `https://www.googleapis.com/auth/gmail.readonly`, which Googl
 
 - **Popup blocked:** allow popups for Job Buddy and click Connect Gmail again. **Stop waiting** closes the popup when browser isolation permits and stops dashboard polling; it does not revoke permission already granted to Google. If you already approved, reload Settings to check the connection. Automatic scans remain paused until a successful first scan.
 
-- **Setup needed:** configure the desktop client ID (or both ID/secret with `GOOGLE_OAUTH_CLIENT_TYPE=web` for an existing self-hosted web client), then fully restart the dev command.
-- **Redirect URI mismatch:** the Google Cloud redirect and `.env.local` value must exactly match the loopback URI above, including `127.0.0.1`, port `43117`, path, and `http` scheme.
+- **Setup needed:** use **Settings → Set up Gmail**; no restart is needed. Environment-based configuration changes still require restarting the dev command.
+- **Wrong client ID / Redirect URI mismatch:** choose **Stop waiting**, then **Change client ID** and paste a **Desktop app** client ID. A Web application client is not interchangeable. For a deliberately configured self-hosted web client, its Google Cloud authorized redirect and `.env.local` value must exactly match the loopback URI above, including `127.0.0.1`, port `43117`, path, and `http` scheme.
 - **Reconnect needed / revoked token:** open Settings and reconnect. Approved tracker changes and normalized evidence remain available.
 - **First scan stopped at 500:** this is the intentional privacy and performance bound. The UI reports truncation; later checks use incremental Gmail history.
 - **No automatic daily check:** finish the first scan, enable **Daily active-session scan**, leave Gmail selected, and reopen Job Buddy after the last successful scan is at least 24 hours old.

@@ -22,13 +22,15 @@ import { DesktopClientStore } from "./gmail/DesktopClientStore";
 
 const desktopClientStore = new DesktopClientStore();
 const environmentConfig = readCompanionConfig(process.env);
-const config = environmentConfig.google ? environmentConfig : readCompanionConfig(process.env, await desktopClientStore.get());
+const localCredentials = environmentConfig.google ? null : await desktopClientStore.getCredentials();
+const config = environmentConfig.google ? environmentConfig : readCompanionConfig(process.env, localCredentials?.clientId);
+if (config.google && localCredentials?.clientSecret) config.google.clientSecret = localCredentials.clientSecret;
 const developmentOrigin = "http://127.0.0.1:5173";
 const productionOrigin = "http://127.0.0.1:43117";
 const uiOrigin = process.env.JOB_BUDDY_UI_ORIGIN === developmentOrigin ? developmentOrigin : productionOrigin;
 const secrets = new WindowsDpapiSecretStore();
 const metadata = new ConnectionMetadataStore();
-const connection = new GmailConnectionService({ config, secrets, metadata, saveDesktopClientId: (id) => desktopClientStore.save(id) });
+const connection = new GmailConnectionService({ config, secrets, metadata, allowDesktopClientChanges: !environmentConfig.google, saveDesktopClientId: (id, secret) => desktopClientStore.save(id, secret) });
 const sync = new GmailSyncService(new GmailTransport(connection));
 const profile = new ProfileService(new WindowsDpapiProfileVault());
 const buddyStore = new BuddyStore();

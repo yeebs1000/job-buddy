@@ -4,6 +4,14 @@
 .updates__feedback { min-height: 1.5rem; margin: 1rem 0 .5rem; }
 .updates__summary { margin-bottom: .75rem; }
 .updates__list { background: var(--color-surface); border: 1px solid var(--color-border); }
+.updates__filter-controls { align-items: center; display: flex; flex-wrap: wrap; gap: .75rem; margin: 0 0 1rem; }
+.updates__filter-controls p { margin: 0; font-size: .875rem; }
+.updates__filtered-item { padding: 1.25rem; overflow-wrap: anywhere; }
+.updates__filtered-item + .updates__filtered-item { border-top: 1px solid var(--color-border); }
+.updates__filtered-item h2 { font-size: 1rem; margin: 0 0 .75rem; }
+.updates__filtered-item p, .updates__filtered-item details { font-size: .875rem; line-height: 1.5; margin: 0 0 .75rem; }
+.updates__filtered-item summary { cursor: pointer; }
+.updates__filtered-item blockquote { margin: .75rem 0; max-width: 70ch; }
 .update-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .85fr) minmax(0, 1.3fr); }
 .update-row + .update-row, .updates__skeleton + .updates__skeleton { border-top: 1px solid var(--color-border); }
 .update-row > div { min-width: 0; padding: 1.25rem; overflow-wrap: anywhere; }

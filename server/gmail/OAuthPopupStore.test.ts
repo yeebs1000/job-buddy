@@ -1,6 +1,17 @@
 import { expect, it } from "vitest";
 import { OAuthPopupStore } from "./OAuthPopupStore";
 
+it("invalidates abandoned popups without changing completed receipts", () => {
+  const store = new OAuthPopupStore();
+  const pending = store.create("pending", "origin");
+  const connected = store.create("done", "origin");
+  store.finish("done", "connected");
+  store.invalidatePending();
+  expect(store.result(pending, "origin")).toBe("error");
+  expect(store.claim("pending")).toBe(false);
+  expect(store.result(connected, "origin")).toBe("connected");
+});
+
 it("correlates completion to one attempt and its initiating origin", () => {
   const store = new OAuthPopupStore();
   const first = store.create("state-a", "http://127.0.0.1:5173");

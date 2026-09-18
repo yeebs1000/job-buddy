@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { normalizeGmailMessage } from "./GmailMessageNormalizer";
 import type { GmailMessage, GmailMessagePart } from "./gmailTypes";
+import { classifyMessage } from "../../src/features/updates/classifyMessage";
 
 function encoded(value: string): string {
   return Buffer.from(value, "utf8").toString("base64url");
@@ -23,6 +24,50 @@ function message(parts: GmailMessagePart[]): GmailMessage {
 }
 
 describe("normalizeGmailMessage", () => {
+  it("consumes folded recipient headers after Subject while preserving an indented body", () => {
+    const body = "  You were not selected to move to the next stage in the process.";
+    const text = `From: Recruiter <recruiter@employer.example>\nDate: Yesterday\nSubject: Application update\nTo: Candidate <candidate@example.test>\nCc: team@example.test,\n${"  another.long.email.address@example.test,\n".repeat(20)}\n${body}`;
+    const input = message([{ mimeType: "text/plain", body: { data: encoded(text) } }]);
+    input.payload!.headers![1].value = "Fwd: Application update";
+    const result = normalizeGmailMessage(input)!;
+    expect(result.excerpt).toBe(body.trim());
+    expect(classifyMessage(result)).toMatchObject({ proposedOutcome: "rejected", requiresApproval: true });
+  });
+  it("classifies an original forwarded subject even when the user changed the outer subject", () => {
+    const input = message([{ mimeType: "text/plain", body: { data: encoded("From: Recruiter <recruiter@employer.example>\nDate: Yesterday\nSubject: Technical interview invitation\nTo: Candidate <candidate@example.test>\n\nDear candidate, please choose a suitable time at the following link.") } }]);
+    input.payload!.headers![1].value = "Fwd: Application update";
+    expect(classifyMessage(normalizeGmailMessage(input)!)).toMatchObject({ proposedStage: "interview", requiresApproval: true });
+  });
+  it("recognizes a long auto-forwarded recruiter approach within the stored excerpt bound", () => {
+    const body = "External Mail. Dear Candidate, I hope you are doing well! I am Alex from Example Talent Asia, an executive search firm focused on strategy consulting recruitment. I am reaching out regarding a Shanghai-based Senior Consultant opportunity with a highly regarded international boutique strategy consulting firm, known for its entrepreneurial culture, close collaboration with Partners, and hands-on approach to solving strategic challenges. The firm is currently expanding its Advanced Industrials practice in China, advising leading companies across industrial technology, advanced manufacturing, mobility, energy transition, and other high-growth sectors. Given your engineering background and relevant experience in industrial products, I believe your profile could be a strong fit for this opportunity.";
+    const input = message([{ mimeType: "text/plain", body: { data: encoded(body) } }]);
+    input.payload!.headers![1].value = "Senior Consultant opportunity - Shanghai";
+    const normalized = normalizeGmailMessage(input)!;
+    expect(Array.from(normalized.excerpt).length).toBeLessThanOrEqual(600);
+    expect(classifyMessage(normalized)).toMatchObject({ kind: "recruiter-outreach", requiresApproval: true });
+  });
+  it.each(["text/plain", "text/html"])("unwraps %s forwarding headers before the excerpt limit, without trusting the named sender", mimeType => {
+    const headers = `---------- Forwarded message ---------\nFrom: Workday Notify <recruiting@myworkday.com>\nDate: Wed, 19 Aug 2026 15:29:45\nSubject: Update on Your Application for Associate Analyst\nTo: Candidate <candidate@university.example>\nCc: ${"another@example.test, ".repeat(40)}\n\n`;
+    const body = "Dear Candidate, thank you for your interest in the Associate Analyst role. We regret to inform you that you were not selected to move to the next stage in the process.";
+    const input = message([{ mimeType, body: { data: encoded(mimeType === "text/html" ? (headers + body).split("\n").map(line => `<div>${line.replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</div>`).join("") : headers + body) } }]);
+    input.payload!.headers![1].value = "Fwd: Application update";
+    const result = normalizeGmailMessage(input);
+    expect(result?.excerpt).toBe(body);
+    expect(result?.fromAddress).toBe("recruiter@example.com");
+    expect(result).toMatchObject({ forwarded: { fromAddress: "recruiting@myworkday.com", subject: "Update on Your Application for Associate Analyst" } });
+  });
+
+  it("keeps a normal auto-forwarded body intact", () => {
+    const body = "I am reaching out regarding a Senior Consultant opportunity. Your background could be a strong fit.";
+    expect(normalizeGmailMessage(message([{ mimeType: "text/plain", body: { data: encoded(body) } }]))?.excerpt).toBe(body);
+  });
+
+  it("does not unwrap ordinary reply history as the current message", () => {
+    const body = "Your application is under review.\n\nFrom: Old Recruiter <old@example.com>\nSent: Yesterday\nTo: Candidate <candidate@example.test>\nSubject: Rejection\n\nYour application has been rejected.";
+    const result = normalizeGmailMessage(message([{ mimeType: "text/plain", body: { data: encoded(body) } }]));
+    expect(result?.excerpt).toMatch(/^Your application is under review/);
+    expect(result).not.toHaveProperty("forwarded");
+  });
   it("prefers plain text and emits bounded evidence", () => {
     const result = normalizeGmailMessage(message([
       { mimeType: "text/html", body: { data: encoded("<p>HTML should not win</p>") } },

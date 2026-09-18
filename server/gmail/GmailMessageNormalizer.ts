@@ -77,7 +77,39 @@ function htmlToText(html: string): string {
   return decodeEntities(html
     .replace(/<!--[^]*?(?:-->|$)/g, " ")
     .replace(/<(script|style)\b[^>]*>[^]*?(?:<\/\1\s*>|$)/gi, " ")
+    .replace(/<(?:br\b[^>]*|\/(?:div|p|tr)\s*)>/gi, "\n")
+    .replace(/<(?:div|p|tr)\b[^>]*>/gi, "")
     .replace(/<[^>]*>/g, " "));
+}
+
+function forwardedContent(text: string, subject: string): { text: string; forwarded?: MailEnvelope["forwarded"] } {
+  // Only unwrap explicit forwards, never ordinary reply history. Quoted sender
+  // identities remain unverified display context and do not replace Gmail headers.
+  if (!/^\s*(?:fw|fwd):/i.test(subject) && !/^-+\s*Forwarded message\s*-+|^Begin forwarded message:/im.test(text)) return { text };
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const start = lines.findIndex(line => /^\s*From:\s*.+@/i.test(line));
+  if (start < 0) return { text };
+  const fields = new Map<string, string>();
+  let lastField = "";
+  let end = start;
+  for (; end < lines.length; end++) {
+    const line = lines[end];
+    const field = /^\s*(From|Sent|Date|To|Cc|Bcc|Subject):\s*(.*)$/i.exec(line);
+    if (field) { lastField = field[1].toLowerCase(); fields.set(lastField, field[2]); }
+    else if (!line.trim()) {
+      // HTML may separate header rows with blank lines. A blank line followed
+      // by non-header text ends the block, even when the body is indented.
+      while (end + 1 < lines.length && !lines[end + 1].trim()) end++;
+      if (!/^\s*(?:From|Sent|Date|To|Cc|Bcc|Subject):/i.test(lines[end + 1] ?? "") && fields.has("subject") && fields.has("to")) { end++; break; }
+    }
+    else if (/^[\t ]+\S/.test(line) && lastField) fields.set(lastField, `${fields.get(lastField)} ${line.trim()}`);
+    else break;
+  }
+  const from = sender(fields.get("from") ?? "");
+  if (!from || !fields.has("subject") || !fields.has("to") || (!fields.has("date") && !fields.has("sent"))) return { text };
+  const body = lines.slice(end).join("\n").trim();
+  if (!body) return { text };
+  return { text: body, forwarded: { fromAddress: from.fromAddress.slice(0, 320), subject: normalizeWhitespace(fields.get("subject")!).slice(0, 300) } };
 }
 
 function normalizeWhitespace(value: string): string {
@@ -144,7 +176,8 @@ export function normalizeGmailMessage(message: GmailMessage): MailEnvelope | nul
   const evidence = traversal.plain.length
     ? traversal.plain.join(" ")
     : traversal.html.map(htmlToText).join(" ");
-  const boundedExcerpt = excerpt(evidence);
+  const content = forwardedContent(evidence, subject);
+  const boundedExcerpt = excerpt(content.text);
   if (!boundedExcerpt) return null;
 
   return {
@@ -154,6 +187,7 @@ export function normalizeGmailMessage(message: GmailMessage): MailEnvelope | nul
     subject,
     receivedAt: timestamp,
     excerpt: boundedExcerpt,
+    ...(content.forwarded ? { forwarded: content.forwarded } : {}),
     links: links(traversal.linkSources),
   };
 }

@@ -49,6 +49,46 @@ async function proposal(overrides: Partial<UpdateProposalInput> = {}) {
 }
 function inbox() { return render(<MemoryRouter><UpdateInboxPage /></MemoryRouter>); }
 
+it("shows recruiter outreach without application stage controls and lets users dismiss it", async () => {
+  await proposal({ source: { ...technicalInterviewMail, subject: "Senior Consultant opportunity", excerpt: "I am reaching out regarding a Senior Consultant opportunity. Your background could be a strong fit." },
+    classification: { kind: "recruiter-outreach", confidence: 0.7, reasons: ["personal-recruiter-outreach"], evidenceExcerpt: "A potential role", deadlines: [], links: [], requiresApproval: true } });
+  inbox();
+  expect(await screen.findByText("Recruiter outreach", { exact: true })).toBeVisible();
+  expect(screen.queryByLabelText("Proposed stage")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Approve update" })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Dismiss outreach" }));
+  await waitFor(async () => expect((await updateRepository.get("proposal-1"))?.status).toBe("rejected"));
+  expect((await applicationRepository.get("application-1"))?.stage).toBe("applied");
+});
+
+it("rechecks saved pending news, excludes it from badges, and lets users restore it without deleting evidence", async () => {
+  await proposal({ mailSource: "gmail", source: { ...technicalInterviewMail, fromAddress: "noreply@news.bloomberg.com", subject: "News alert: A consulting offer", excerpt: "A consulting offer was made to a third party." } });
+  const original = await updateRepository.get("proposal-1");
+  expect(await updateRepository.listPending()).toHaveLength(0);
+  const view = inbox();
+  expect(await screen.findByRole("button", { name: /show filtered.*1/i })).toBeVisible();
+  expect(screen.queryByRole("heading", { name: "News alert: A consulting offer" })).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: /show filtered.*1/i }));
+  expect(await screen.findByRole("heading", { name: "News alert: A consulting offer" })).toBeVisible();
+  expect(screen.getByText(/newsletter sender/i)).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Approve update" })).not.toBeInTheDocument();
+  expect(await updateRepository.get("proposal-1")).toEqual(original);
+  await userEvent.click(screen.getByRole("button", { name: "Restore for manual review" }));
+  await waitFor(async () => expect(await updateRepository.listPending()).toHaveLength(1));
+  expect((await updateRepository.get("proposal-1"))?.classification.requiresApproval).toBe(true);
+  expect((await updateRepository.get("proposal-1"))?.classification.proposedStage).toBeUndefined();
+  expect((await updateRepository.get("proposal-1"))?.classification.deadlines).toEqual([]);
+  view.unmount(); inbox();
+  expect(await screen.findByRole("button", { name: "Approve update" })).toBeVisible();
+});
+
+it("does not hide approved history even when its source now fails the relevance rules", async () => {
+  await proposal({ status: "approved", mailSource: "gmail", source: { ...technicalInterviewMail, fromAddress: "noreply@news.bloomberg.com", subject: "Previously approved news", excerpt: "A subscription offer." } });
+  inbox();
+  expect(await screen.findByRole("heading", { name: "Previously approved news" })).toBeVisible();
+  expect((await updateRepository.get("proposal-1"))?.status).toBe("approved");
+});
+
 it("shows source evidence and atomically applies edited stage and deadline, then displays them after remount", async () => {
   await proposal();
   const user = userEvent.setup();
@@ -56,8 +96,9 @@ it("shows source evidence and atomically applies edited stage and deadline, then
   expect(await screen.findByText("recruiting@meridianquant.example")).toBeVisible();
   expect(screen.getByText("Demo")).toBeVisible();
   expect(screen.getByText(/company, role, sender domain/i)).toBeVisible();
-  expect(screen.getByText(/Match confidence: 95%/)).toBeVisible();
-  expect(screen.getByText(/Classification confidence: 95%/)).toBeVisible();
+  expect(screen.getByText("Match: Suggested application")).toBeVisible();
+  expect(screen.getByText(/not a measured probability/i)).toBeVisible();
+  expect(screen.queryByText(/confidence:.*%/i)).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: /meet.example/ })).toHaveAttribute("href", "https://meet.example/meridian-technical");
   expect(screen.queryByRole("link", { name: /javascript/ })).not.toBeInTheDocument();
   await user.selectOptions(screen.getByLabelText("Proposed stage"), "final");
@@ -99,7 +140,7 @@ it("labels retained matching evidence as the original inference after selecting 
   inbox();
   await userEvent.selectOptions(await screen.findByLabelText("Application"), "application-2");
 
-  expect(screen.getByText("Original match confidence: 95%")).toBeVisible();
+  expect(screen.getByText("Original match: Suggested application")).toBeVisible();
   expect(screen.getByText(/Original inference: company, role, sender domain/i)).toBeVisible();
 });
 
@@ -115,7 +156,7 @@ it("persists original inference labels after approving a different application a
   expect(await screen.findByText("Update applied.")).toBeVisible();
 
   view.unmount(); inbox();
-  expect(await screen.findByText("Original match confidence: 95%")).toBeVisible();
+  expect(await screen.findByText("Original match: Suggested application")).toBeVisible();
   expect(screen.getByText(/Original inference: company, role, sender domain/i)).toBeVisible();
   expect((await updateRepository.get("proposal-1"))?.match).toMatchObject({ applicationId: "application-2", originalInference: { applicationId: "application-1", confidence: 0.95, reasons: ["company", "role", "sender-domain"] } });
 });

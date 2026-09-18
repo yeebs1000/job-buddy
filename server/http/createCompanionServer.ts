@@ -1,20 +1,20 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomBytes } from "node:crypto";
 import { OAuthPopupStore } from "../gmail/OAuthPopupStore";
-import { desktopClientIdSchema } from "../gmail/DesktopClientStore";
+import { desktopClientIdSchema, desktopClientSecretSchema } from "../gmail/DesktopClientStore";
 import { readFile } from "node:fs/promises";
 import { extname, resolve, sep } from "node:path";
 import type { GmailConnectionStatus } from "../../src/domain/mail";
 import type { BuddyActivityEntry, BuddyPreferences, PendingCapture, PendingSalaryEvidence } from "../../src/domain/buddy";
 import type { CandidateProfile, ProfileSelection } from "../../src/domain/profile";
-import type { GmailScanResponse } from "../gmail/GmailSyncService";
+import type { GmailScanInput, GmailScanResponse } from "../gmail/GmailSyncService";
 import { z } from "zod";
 import { currencySchema, marketSchema, type Market, type Currency } from "../../src/domain/research";
 import { boardSchema, type JobBoard, type DiscoveryResult, type PostingPay } from "../../src/domain/discovery";
 import type { FxQuote } from "../../src/domain/fx";
 
 interface ConnectionServicePort {
-  configureDesktopClient?(clientId: string): Promise<void>;
+  configureDesktopClient?(clientId: string, clientSecret?: string): Promise<void>;
   status(): Promise<GmailConnectionStatus>;
   start(): Promise<{ authorizationUrl: string }>;
   complete(input: { code: string; state: string }): Promise<void>;
@@ -22,7 +22,8 @@ interface ConnectionServicePort {
 }
 
 interface SyncServicePort {
-  scan(input: { cursor: string | null; initialSyncConfirmed: boolean }): Promise<GmailScanResponse>;
+  scan(input: GmailScanInput): Promise<GmailScanResponse>;
+  reset?(): void;
 }
 
 interface ProfileServicePort {
@@ -97,7 +98,7 @@ function json(response: ServerResponse, status: number, body: unknown): void {
   response.end(JSON.stringify(body));
 }
 
-function popupComplete(response: ServerResponse, result: "pending" | "connected" | "error"): void {
+function popupComplete(response: ServerResponse, result: "pending" | "connected" | "error" | "client-config"): void {
   const nonce = randomBytes(18).toString("base64");
   applySecurityHeaders(response);
   response.statusCode = 200;
@@ -166,8 +167,20 @@ function safeError(error: unknown): { status: number; code: string } {
   const code = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "internal-error";
   const statuses: Record<string, number> = {
     "initial-consent-required": 409,
+    "gmail-rate-limited": 429,
+    "gmail-access-denied": 403,
+    "gmail-request-failed": 502,
+    "gmail-scan-busy": 409,
+    "gmail-scan-expired": 409,
+    "gmail-timeout": 503,
+    "gmail-network-error": 503,
+    "gmail-response-invalid": 502,
+    "gmail-normalization-failed": 502,
     "missing-config": 409,
-    "already-configured": 409,
+    "setup-managed": 409,
+    "disconnect-required": 409,
+    "connection-busy": 409,
+    "client-config": 409,
     "platform-unsupported": 501,
     "invalid-state": 400,
     "offline-access-required": 409,
@@ -313,16 +326,19 @@ export function createCompanionServer(options: CompanionServerOptions) {
         }
       }
       if (request.method === "POST" && url.pathname === "/api/gmail/setup") {
-        const body = z.object({ clientId: desktopClientIdSchema }).strict().safeParse(await readJson(request));
+        const body = z.object({ clientId: desktopClientIdSchema, clientSecret: desktopClientSecretSchema.optional() }).strict().safeParse(await readJson(request));
         if (!body.success) throw new HttpInputError(400, "invalid-client-id");
         if (!options.services.connection.configureDesktopClient) throw new HttpInputError(503, "setup-unavailable");
-        await options.services.connection.configureDesktopClient(body.data.clientId);
+        options.services.sync.reset?.();
+        await options.services.connection.configureDesktopClient(body.data.clientId, body.data.clientSecret);
+        popups.invalidatePending();
         noContent(response);
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/gmail/oauth/start") {
         const body = z.object({ popup: z.boolean().optional() }).strict().safeParse(await readJson(request));
         if (!body.success) throw new HttpInputError(400, "invalid-oauth-request");
+        options.services.sync.reset?.();
         const result = await options.services.connection.start();
         const popupId = body.data.popup ? popups.create(new URL(result.authorizationUrl).searchParams.get("state") ?? "", origin!) : undefined;
         json(response, 200, { ...result, ...(popupId ? { popupId } : {}) });
@@ -344,14 +360,16 @@ export function createCompanionServer(options: CompanionServerOptions) {
         try {
           const code = url.searchParams.get("code") ?? "";
           await options.services.connection.complete({ code, state });
+          options.services.sync.reset?.();
           if (popup) {
             popups.finish(state, "connected"); popupComplete(response, "connected"); return;
           }
           response.statusCode = 302;
           response.setHeader("location", `${options.uiOrigin}/settings?gmail=connected`);
-        } catch {
+        } catch (error) {
           if (popup) {
-            popups.finish(state, "error"); popupComplete(response, "error"); return;
+            const result = safeError(error).code === "client-config" ? "client-config" : "error";
+            popups.finish(state, result); popupComplete(response, result); return;
           }
           response.statusCode = 302;
           response.setHeader("location", `${options.uiOrigin}/settings?gmail=error`);
@@ -365,11 +383,17 @@ export function createCompanionServer(options: CompanionServerOptions) {
         const cursor = body.cursor;
         const initialSyncConfirmed = body.initialSyncConfirmed;
         if (!(cursor === null || typeof cursor === "string") || typeof initialSyncConfirmed !== "boolean") throw new HttpInputError(400, "invalid-scan-request");
-        json(response, 200, await options.services.sync.scan({ cursor, initialSyncConfirmed }));
+        if (body.batch !== undefined && typeof body.batch !== "boolean") throw new HttpInputError(400, "invalid-scan-request");
+        if (body.continuationToken !== undefined && (typeof body.continuationToken !== "string" || !/^[a-f0-9]{32}:\d{1,10}$/.test(body.continuationToken) || body.batch !== true)) throw new HttpInputError(400, "invalid-scan-request");
+        json(response, 200, await options.services.sync.scan({ cursor, initialSyncConfirmed,
+          ...(body.batch !== undefined ? { batch: body.batch } : {}),
+          ...(typeof body.continuationToken === "string" ? { continuationToken: body.continuationToken } : {}),
+        }));
         return;
       }
       if (request.method === "POST" && url.pathname === "/api/gmail/disconnect") {
         await readJson(request);
+        options.services.sync.reset?.();
         json(response, 200, await options.services.connection.disconnect());
         return;
       }
@@ -428,6 +452,13 @@ export function createCompanionServer(options: CompanionServerOptions) {
         const body = await readJson(request);
         if (!Array.isArray(body.paths) || !body.paths.every((path) => typeof path === "string") || body.paths.length > 100) throw new HttpInputError(400, "invalid-profile-selection");
         json(response, 200, { selection: await options.services.buddy.selectProfile({ token, origin: pairedOrigin }, body.paths) });
+        return;
+      }
+      if (request.method === "POST" && url.pathname === "/api/buddy/preferences/read") {
+        if (!pairedOrigin) throw new HttpInputError(403, "origin-not-allowed");
+        const token = bearerToken(request);
+        await readJson(request);
+        json(response, 200, { preferences: await options.services.buddy.readPreferences({ token, origin: pairedOrigin }) });
         return;
       }
       if (url.pathname === "/api/buddy/preferences") {

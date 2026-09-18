@@ -23,3 +23,12 @@ it("fails closed for malformed saved configuration", async () => {
   await writeFile(store.path, JSON.stringify({ clientId: "123-test.apps.googleusercontent.com", clientSecret: "must-not-load" }));
   await expect(store.get()).rejects.toThrow();
 });
+
+it.skipIf(process.platform !== "win32")("encrypts a Desktop secret and restores the matching credentials after restart", async () => {
+  const store = await setup();
+  await store.save("123-test.apps.googleusercontent.com", "fixture-desktop-secret");
+  expect(await readFile(store.path, "utf8")).not.toContain("fixture-desktop-secret");
+  expect(await new DesktopClientStore(roots[0]).getCredentials()).toEqual({ clientId: "123-test.apps.googleusercontent.com", clientSecret: "fixture-desktop-secret" });
+  await store.save("456-replacement.apps.googleusercontent.com");
+  expect(await store.getCredentials()).toEqual({ clientId: "456-replacement.apps.googleusercontent.com" });
+});

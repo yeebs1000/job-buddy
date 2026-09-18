@@ -4,13 +4,19 @@ import { isSafeExternalHttpsUrl } from "../../domain/jobUrl";
 import { applicationStages } from "../../domain/stage";
 import { createUpdateProposal, type UpdateProposal, type UpdateProposalClassificationInput } from "../../domain/updateProposal";
 import type { MailScanDiagnostics, MailSource } from "../../domain/mail";
+import { proposalFilterReason } from "./proposalRelevance";
 
 export interface MailScanState {
   cursor: string | null;
+  attemptId?: string;
   lastAttemptedScanAt?: string;
   lastSuccessfulScanAt?: string;
   error?: string;
+  errorCode?: string;
   diagnostics?: MailScanDiagnostics;
+  continuationToken?: string;
+  progress?: { processed: number; total: number };
+  rechecking?: true;
 }
 
 export type ProposalEdits = Partial<Pick<UpdateProposalClassificationInput, "proposedStage" | "proposedOutcome" | "interviewSubtype" | "deadlines" | "links">> & {
@@ -38,7 +44,7 @@ export function proposalConflicts(application: PersistedApplication, proposal: P
 }
 
 export function canAutomaticallyApprove(proposal: UpdateProposal, application: PersistedApplication): boolean {
-  return !proposal.classification.requiresApproval && !proposal.classification.proposedOutcome
+  return !proposal.relevanceOverride && !proposal.source.forwarded && proposal.classification.kind !== "recruiter-outreach" && !proposalFilterReason(proposal) && !proposal.classification.requiresApproval && !proposal.classification.proposedOutcome
     && proposal.classification.proposedStage !== "offer"
     && Boolean(proposal.classification.proposedStage || proposal.classification.deadlines.length)
     && proposal.match.confidence >= 0.9 && proposal.classification.confidence >= 0.9
@@ -68,6 +74,11 @@ async function approve(id: string, edits: ProposalEdits, at: string, automatic: 
     if (!existing) throw new Error("Update proposal does not exist");
     if (existing.status === "approved") return existing;
     if (existing.status === "rejected") throw new Error("Rejected proposals cannot be approved");
+    if (existing.classification.kind === "recruiter-outreach") {
+      if (automatic) return existing;
+      throw new Error("Recruiter outreach does not change application stages");
+    }
+    if (proposalFilterReason(existing)) throw new Error("Restore filtered evidence for manual review before approving");
     const { applicationId: editedApplicationId, expectedApplicationUpdatedAt, ...classificationEdits } = edits;
     const applicationId = editedApplicationId ?? existing.match.applicationId;
     if (!applicationId) throw new Error("Choose an application before approving this update");
@@ -151,11 +162,23 @@ async function setReviewStatus(id: string, status: "rejected" | "deferred"): Pro
   });
 }
 
+async function restoreForManualReview(id: string): Promise<void> {
+  await jobBuddyDb.transaction("rw", jobBuddyDb.updateProposals, async () => {
+    const proposal = await jobBuddyDb.updateProposals.get(id);
+    if (!proposal || !proposalFilterReason(proposal)) throw new Error("This update is not filtered");
+    await jobBuddyDb.updateProposals.update(id, { relevanceOverride: "manual-review", classification: {
+      confidence: 0, reasons: ["manually-restored-for-review"], evidenceExcerpt: proposal.source.excerpt,
+      links: proposal.classification.links, deadlines: [], requiresApproval: true,
+    } });
+  });
+}
+
 export const updateRepository = {
   getScanState, saveScanState, create,
   get: (id: string) => jobBuddyDb.updateProposals.get(id),
   list: () => jobBuddyDb.updateProposals.toArray(),
-  listPending: () => jobBuddyDb.updateProposals.where("state").equals("pending").toArray(),
+  listPending: async () => (await jobBuddyDb.updateProposals.where("state").equals("pending").toArray()).filter(proposal => !proposalFilterReason(proposal)),
+  restoreForManualReview,
   approveProposal: (id: string, edits: ProposalEdits = {}) => approve(id, edits, new Date().toISOString(), false),
   autoApproveProposal: (id: string, at: string) => approve(id, {}, at, true),
   rejectProposal: (id: string) => setReviewStatus(id, "rejected"),

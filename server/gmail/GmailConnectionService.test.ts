@@ -26,6 +26,17 @@ class MemoryMetadata {
 }
 
 describe("GmailConnectionService", () => {
+  it("persists matching client credentials and uses the secret only for the token request", async () => {
+    const save = vi.fn(async () => undefined);
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({ error: "invalid_request", error_description: "client_secret is missing." }), { status: 400 }));
+    const service = new GmailConnectionService({ config: { ...config, google: null }, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), saveDesktopClientId: save, fetcher });
+    await service.configureDesktopClient("123-test.apps.googleusercontent.com", "fixture-secret");
+    expect(save).toHaveBeenCalledWith("123-test.apps.googleusercontent.com", "fixture-secret");
+    const auth = new URL((await service.start()).authorizationUrl);
+    expect(auth.toString()).not.toContain("fixture-secret");
+    await expect(service.complete({ state: auth.searchParams.get("state")!, code: "unused" })).rejects.toMatchObject({ code: "client-config" });
+    expect(new URLSearchParams(String(fetcher.mock.calls[0][1]?.body)).get("client_secret")).toBe("fixture-secret");
+  });
   it("saves first-time desktop setup before enabling OAuth without restarting", async () => {
     let saved = "";
     const service = new GmailConnectionService({ config: { ...config, google: null }, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), saveDesktopClientId: async (id) => { saved = id; } });
@@ -35,8 +46,11 @@ describe("GmailConnectionService", () => {
     const url = new URL((await service.start()).authorizationUrl);
     expect(url.searchParams.get("client_id")).toBe(saved);
     expect(url.searchParams.get("redirect_uri")).toBe("http://127.0.0.1:43117/api/gmail/oauth/callback");
-    await expect(service.configureDesktopClient("456-other.apps.googleusercontent.com")).rejects.toMatchObject({ code: "already-configured" });
-    expect(saved).toBe("123-test.apps.googleusercontent.com");
+    const oldState = url.searchParams.get("state")!;
+    await service.configureDesktopClient("456-other.apps.googleusercontent.com");
+    expect(saved).toBe("456-other.apps.googleusercontent.com");
+    await expect(service.complete({ code: "stale-code", state: oldState })).rejects.toMatchObject({ code: "invalid-state" });
+    expect(new URL((await service.start()).authorizationUrl).searchParams.get("client_id")).toBe("456-other.apps.googleusercontent.com");
   });
 
   it("does not enable OAuth when saving the client ID fails", async () => {
@@ -44,6 +58,55 @@ describe("GmailConnectionService", () => {
     await expect(service.configureDesktopClient("123-test.apps.googleusercontent.com")).rejects.toThrow();
     expect(await service.status()).toMatchObject({ state: "unconfigured" });
   });
+
+  it("permits correction after restart only for locally managed setup", async () => {
+    const local = new GmailConnectionService({ config: { ...config }, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), allowDesktopClientChanges: true, saveDesktopClientId: async () => undefined });
+    await local.configureDesktopClient("456-fixed.apps.googleusercontent.com");
+    expect(new URL((await local.start()).authorizationUrl).searchParams.get("client_id")).toBe("456-fixed.apps.googleusercontent.com");
+    const managed = new GmailConnectionService({ config: { ...config }, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), saveDesktopClientId: async () => undefined });
+    await expect(managed.configureDesktopClient("456-fixed.apps.googleusercontent.com")).rejects.toMatchObject({ code: "setup-managed" });
+  });
+
+  it("requires disconnect before replacing a client with saved account credentials", async () => {
+    const secrets = new MemorySecrets(); secrets.value = "existing-refresh-token";
+    const service = new GmailConnectionService({ config: { ...config }, secrets, metadata: new MemoryMetadata(), allowDesktopClientChanges: true, saveDesktopClientId: async () => undefined });
+    await expect(service.configureDesktopClient("456-fixed.apps.googleusercontent.com")).rejects.toMatchObject({ code: "disconnect-required" });
+    expect(secrets.value).toBe("existing-refresh-token");
+  });
+
+  it("keeps the existing client usable if its replacement cannot be persisted", async () => {
+    const service = new GmailConnectionService({ config: { ...config }, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), allowDesktopClientChanges: true, saveDesktopClientId: async () => { throw new Error("disk failure"); } });
+    await expect(service.configureDesktopClient("456-fixed.apps.googleusercontent.com")).rejects.toThrow("disk failure");
+    expect(new URL((await service.start()).authorizationUrl).searchParams.get("client_id")).toBe("client-id");
+  });
+  it("blocks sign-in and competing replacements while a client ID is saving", async () => {
+    let finish!: () => void;
+    const saved = new Promise<void>((resolve) => { finish = resolve; });
+    const service = new GmailConnectionService({ config: { ...config }, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), allowDesktopClientChanges: true, saveDesktopClientId: () => saved });
+    const state = new URL((await service.start()).authorizationUrl).searchParams.get("state")!;
+    const saving = service.configureDesktopClient("456-fixed.apps.googleusercontent.com");
+    await expect(service.start()).rejects.toMatchObject({ code: "connection-busy" });
+    await expect(service.complete({ state, code: "stale" })).rejects.toMatchObject({ code: "connection-busy" });
+    await expect(service.configureDesktopClient("789-other.apps.googleusercontent.com")).rejects.toMatchObject({ code: "connection-busy" });
+    finish(); await saving;
+    await expect(service.complete({ state, code: "stale" })).rejects.toMatchObject({ code: "invalid-state" });
+  });
+
+  it("blocks replacement while an OAuth callback is exchanging its code", async () => {
+    let finish!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => { finish = resolve; });
+    const save = vi.fn(async () => undefined);
+    const service = new GmailConnectionService({ config: { ...config }, secrets: new MemorySecrets(), metadata: new MemoryMetadata(), allowDesktopClientChanges: true, saveDesktopClientId: save, fetcher: () => response });
+    const state = new URL((await service.start()).authorizationUrl).searchParams.get("state")!;
+    const completing = service.complete({ state, code: "pending" });
+    const failed = expect(completing).rejects.toMatchObject({ code: "request-failed" });
+    await expect(service.configureDesktopClient("456-fixed.apps.googleusercontent.com")).rejects.toMatchObject({ code: "connection-busy" });
+    expect(save).not.toHaveBeenCalled();
+    finish(new Response("{}", { status: 400 })); await failed;
+    await service.configureDesktopClient("456-fixed.apps.googleusercontent.com");
+    expect(save).toHaveBeenCalledOnce();
+  });
+
   it("reports missing configuration without attempting a provider request", async () => {
     const unconfigured = { ...config, google: null };
     const service = new GmailConnectionService({

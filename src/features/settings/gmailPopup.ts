@@ -3,7 +3,7 @@ import type { GmailSettingsClient } from "./gmailClient";
 let connecting = false;
 export function isGmailConnectionInProgress() { return connecting; }
 export class GmailPopupError extends Error {
-  constructor(readonly code: "blocked" | "stopped" | "timeout" | "authorization" | "connection") { super(code); }
+  constructor(readonly code: "blocked" | "stopped" | "timeout" | "authorization" | "connection" | "client-config") { super(code); }
 }
 
 function wait(signal: AbortSignal): Promise<void> {
@@ -56,6 +56,7 @@ export async function connectGmailPopup(client: Pick<GmailSettingsClient, "start
         await options.onConnected();
         return;
       }
+      if (result === "client-config") throw new GmailPopupError("client-config");
       if (result === "error" || result === "expired") throw new GmailPopupError(result === "expired" ? "timeout" : "authorization");
       // COOP can make a live popup appear closed. Never treat that as proof of
       // denial or success; continue checking the exact server-side receipt.

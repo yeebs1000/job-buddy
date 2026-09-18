@@ -147,7 +147,7 @@ export type ExtensionResponse =
   | { ok: true; type: "profile-selection"; selection: ProfileSelection }
   | { ok: true; type: "preferences"; preferences: BuddyPreferences }
   | { ok: true; type: "recorded" | "captured" | "salary-evidence-captured" }
-  | { ok: false; error: "invalid-request" | "unpaired" | "companion-offline" | "request-failed" };
+  | { ok: false; error: "invalid-request" | "unpaired" | "companion-offline" | "request-failed" | "invalid-pairing" | "origin-not-allowed" };
 
 export function fieldCategory(path: ProfilePath | undefined): BuddyActivityEntry["fieldCategory"] {
   if (!path) return "unknown";

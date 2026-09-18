@@ -9,9 +9,9 @@ export function useMailScan(adapter: MailAdapter, mode: MailScanMode = "approval
   const pending = useLiveQuery(() => updateRepository.listPending(), []);
   const [activeScans, setActiveScans] = useState(0);
 
-  async function scan() {
+  async function scan(initialSyncConfirmed = false, recheck = false) {
     setActiveScans((count) => count + 1);
-    try { return await runMailScan({ adapter, mode }); }
+    try { return await runMailScan({ adapter, mode, initialSyncConfirmed, recheck }); }
     finally { setActiveScans((count) => count - 1); }
   }
 

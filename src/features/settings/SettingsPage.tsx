@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { MailScanProgress } from "../updates/MailScanProgress";
 import { connectGmailPopup, GmailPopupError } from "./gmailPopup";
 import type { GmailConnectionStatus } from "../../domain/mail";
 import { GmailMailAdapter } from "../../integrations/mail/GmailMailAdapter";
+import { gmailScanErrorMessage } from "../../integrations/mail/gmailScanErrors";
 import type { MailAdapter } from "../../integrations/mail/MailAdapter";
 import { runMailScan, type MailScanMode, type RunMailScanOptions } from "../updates/runMailScan";
 import { updateRepository, type MailScanState } from "../updates/updateRepository";
@@ -51,6 +54,7 @@ export function SettingsPage({
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "status" | "error"; text: string } | null>(null);
   const popupAttempt = useRef<AbortController | null>(null);
+  const scanState = useLiveQuery(() => updateRepository.getScanState("gmail"), []);
   useEffect(() => () => popupAttempt.current?.abort(), []);
 
   useEffect(() => {
@@ -110,7 +114,8 @@ export function SettingsPage({
         blocked: "Your browser blocked the Google sign-in window. Allow popups for Job Buddy, then click Connect Gmail again.",
         stopped: "Stopped waiting for Google. If you already approved access, reload Settings to check the connection; otherwise try again.",
         timeout: "Google sign-in timed out. Click Connect Gmail to start a new attempt.",
-        authorization: "Google sign-in was cancelled or could not finish. Click Connect Gmail to try again.",
+        authorization: "Google sign-in could not finish. Access may have been declined, or a later connection step failed. Click Connect Gmail to try again.",
+        "client-config": "Google rejected the app's client credentials. Choose Change client ID and enter the matching Desktop client ID and client secret from Google Cloud, then reconnect. Do not paste secrets into chat.",
         connection: "Could not finish connecting Gmail. Check that the local companion is running and try again.",
       }[code];
       setMessage({ tone: "error", text });
@@ -121,13 +126,13 @@ export function SettingsPage({
   }
 
   async function completeConnection(current: GmailPreferences) {
-    setBusy("scan"); setMessage({ tone: "status", text: "Gmail connected. Checking your recent recruiting email…" });
+    setBusy("scan"); setMessage({ tone: "status", text: "Gmail connected. Checking recent email at a paced rate. This can take a few minutes; keep Job Buddy open." });
     try {
       // A new consent flow may select a different account. Never reuse its predecessor's history cursor.
       await updateRepository.saveScanState("gmail", { cursor: null });
       await save({ ...current, initialSyncCompleted: false, dailyActiveScanEnabled: false, selectedSource: "gmail" });
       const result = await scan({ adapter: mailAdapter, mode: current.automationMode, initialSyncConfirmed: true });
-      if (result.error) throw new Error();
+      if (result.error) { setMessage({ tone: "error", text: result.errorCode ? gmailScanErrorMessage(result.errorCode) : "Gmail is connected, but the first scan did not finish. Retry Scan last 90 days below." }); return; }
       await save({ ...current, selectedSource: "gmail", initialSyncCompleted: true, dailyActiveScanEnabled: true });
       clearConnectionCallback();
       setMessage({ tone: "status", text: "Gmail connected and recent updates were checked. New updates are ready in Updates." });
@@ -148,13 +153,13 @@ export function SettingsPage({
     finally { setBusy(null); }
   }
 
-  async function initialScan() {
+  async function initialScan(recheck = false) {
     if (!preference) return;
-    setBusy("scan"); setMessage(null);
+    setBusy("scan"); setMessage({ tone: "status", text: "Checking Gmail at a paced rate. This can take a few minutes; temporary Google limits are retried automatically." });
     try {
-      const result = await scan({ adapter: mailAdapter, mode: preference.automationMode as MailScanMode, initialSyncConfirmed: true });
-      if (result.error) throw new Error();
-      await save({ ...preference, selectedSource: "gmail", initialSyncCompleted: true, dailyActiveScanEnabled: true });
+      const result = await scan({ adapter: mailAdapter, mode: preference.automationMode as MailScanMode, initialSyncConfirmed: true, recheck });
+      if (result.error) { setMessage({ tone: "error", text: result.errorCode ? gmailScanErrorMessage(result.errorCode) : "Gmail scan could not be completed. No live cursor was advanced." }); return; }
+      await save({ ...preference, selectedSource: "gmail", initialSyncCompleted: true });
       clearConnectionCallback();
       setMessage({ tone: "status", text: result.diagnostics?.truncated ? "Gmail connected. The newest 500 messages were checked." : "Gmail connected and recent updates were checked." });
     } catch { setMessage({ tone: "error", text: "Gmail scan could not be completed. No live cursor was advanced." }); }
@@ -175,17 +180,23 @@ export function SettingsPage({
   return <div className="settings-page">
     <header className="settings-page__header"><div><h1>Settings</h1><p>Control how Job Buddy reads email and updates your tracker.</p></div><span>Stored locally</span></header>
     {message && <p className={`settings-page__message settings-page__message--${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p>}
+    {status?.state === "connected" && <MailScanProgress state={scanState} />}
     {busy === "connect" && <button type="button" className="button button--secondary" onClick={() => popupAttempt.current?.abort()}>Stop waiting</button>}
     {!status || !preference
       ? <section className="gmail-settings gmail-settings--loading" aria-busy="true" aria-label="Loading Gmail settings"><div /><div /><div /></section>
       : <GmailSettingsPanel
-          status={status} preferences={preference} busy={busy}
-          onSetup={async (clientId) => {
-            await client.configureDesktopClient(clientId);
-            setStatus(await client.status());
-            setMessage({ tone: "status", text: "Gmail setup saved locally. Click Connect Gmail to sign in with Google." });
+          status={status} preferences={preference} busy={busy} resumable={Boolean(scanState?.continuationToken)}
+          onSetup={async (clientId, clientSecret) => {
+            setBusy("setup");
+            try {
+              if (clientSecret) await client.configureDesktopClient(clientId, clientSecret);
+              else await client.configureDesktopClient(clientId);
+              setStatus(await client.status());
+              setMessage({ tone: "status", text: "Gmail setup saved locally. Click Connect Gmail to sign in with Google." });
+            } finally { setBusy(null); }
           }}
           onConnect={() => void connect()} onDisconnect={() => void disconnect()} onInitialScan={() => void initialScan()}
+          onRecheck={() => void initialScan(true)}
           onDailyChange={(enabled) => void changePreference({ dailyActiveScanEnabled: enabled })}
           onModeChange={changeMode}
           onSourceChange={(selectedSource) => void changePreference({ selectedSource })}

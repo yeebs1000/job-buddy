@@ -7,6 +7,23 @@ import {
 } from "./profile";
 
 describe("candidate profile", () => {
+  it("persists split address details without inferring them from legacy address lines", () => {
+    const profile = candidateProfileSchema.parse({ ...emptyCandidateProfile, contact: {
+      addressLine1: "12A Example Road", houseNumber: "12A", streetName: "Example Road", unitNumber: "#03-45", buildingName: "Example House",
+    } });
+    expect(selectProfilePaths(profile, ["contact.houseNumber", "contact.streetName", "contact.unitNumber", "contact.buildingName"])).toEqual({
+      "contact.houseNumber": "12A", "contact.streetName": "Example Road", "contact.unitNumber": "#03-45", "contact.buildingName": "Example House",
+    });
+    const legacy = candidateProfileSchema.parse({ ...emptyCandidateProfile, contact: { addressLine1: "12A Example Road" } });
+    expect(selectProfilePaths(legacy, ["contact.houseNumber", "contact.streetName"])).toEqual({});
+    expect(legacy.contact.addressLine1).toBe("12A Example Road");
+  });
+  it("derives a full name only when requested, without changing stored profile data", () => {
+    const profile = candidateProfileSchema.parse({ ...emptyCandidateProfile, identity: { givenName: "Alex", familyName: "Tan" } });
+    expect(selectProfilePaths(profile, ["identity.fullName"])).toEqual({ "identity.fullName": "Alex Tan" });
+    expect(profile.identity).not.toHaveProperty("fullName");
+    expect(selectProfilePaths(emptyCandidateProfile, ["identity.fullName"])).toEqual({});
+  });
   it("keeps sponsorship separate from authorization in all launch markets", () => {
     const parsed = candidateProfileSchema.safeParse({ ...emptyCandidateProfile, preferences: {
       usAuthorization: "Yes", usSponsorship: "Yes", sgSponsorship: "No", hkSponsorship: "Yes", salaryUSDAnnual: 80000,

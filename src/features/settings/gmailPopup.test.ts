@@ -50,6 +50,13 @@ it.each(["error", "expired"])("never syncs for a %s receipt", async (result) => 
   expect(onConnected).not.toHaveBeenCalled();
 });
 
+it("surfaces a credential setup failure instead of treating it as cancellation", async () => {
+  const { client } = setup(); client.popupResult = vi.fn().mockResolvedValue("client-config");
+  const onConnected = vi.fn(async () => undefined);
+  await expect(connectGmailPopup(client, { onConnected })).rejects.toMatchObject({ code: "client-config" });
+  expect(onConnected).not.toHaveBeenCalled();
+});
+
 it("stops polling and closes the popup when the user stops waiting", async () => {
   vi.useFakeTimers();
   const { popup, client } = setup(); client.popupResult = vi.fn().mockResolvedValue("pending");

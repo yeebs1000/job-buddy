@@ -23,7 +23,7 @@ export interface CompanionClientOptions {
 }
 
 export class CompanionClientError extends Error {
-  constructor(readonly code: "unpaired" | "companion-offline" | "request-failed") { super(code); }
+  constructor(readonly code: "unpaired" | "companion-offline" | "request-failed" | "invalid-pairing" | "origin-not-allowed") { super(code); }
 }
 
 const chromeTokenStorage: TokenStorage = {
@@ -41,7 +41,7 @@ export class CompanionClient {
   private readonly baseUrl: string;
 
   constructor(options: CompanionClientOptions = {}) {
-    this.fetcher = options.fetcher ?? fetch;
+    this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
     this.storage = options.storage ?? chromeTokenStorage;
     this.baseUrl = options.baseUrl ?? "http://127.0.0.1:43117";
   }
@@ -76,7 +76,9 @@ export class CompanionClient {
   }
 
   async getPreferences(): Promise<BuddyPreferences> {
-    const body = await this.sendJson("/api/buddy/preferences", { method: "GET" });
+    // Privileged Chromium extension GETs can omit Origin; POST preserves the
+    // browser-controlled origin required by the companion's authentication gate.
+    const body = await this.sendJson("/api/buddy/preferences/read", { method: "POST", body: {} });
     if (!body || typeof body !== "object" || !("preferences" in body)) throw new CompanionClientError("request-failed");
     return buddyPreferencesSchema.parse(body.preferences);
   }
@@ -121,7 +123,11 @@ export class CompanionClient {
       await this.storage.clearToken();
       throw new CompanionClientError("unpaired");
     }
-    if (!response.ok) throw new CompanionClientError("request-failed");
+    if (!response.ok) {
+      let code: unknown;
+      try { code = (await response.json())?.error?.code; } catch { /* Never expose arbitrary response text. */ }
+      throw new CompanionClientError(code === "invalid-pairing" || code === "origin-not-allowed" ? code : "request-failed");
+    }
     if (options.expectJson === false || response.status === 204) return undefined;
     try { return await response.json(); }
     catch { throw new CompanionClientError("request-failed"); }
