@@ -10,6 +10,12 @@
 
 **Spec:** User-approved six-part launch checklist in this conversation: repository safety; extension reliability; Gmail acceptance; clean installation; data safety; release preparation.
 
+## Execution status — 2026-09-18
+
+Tasks 1–3 were executed and reviewed in the user-selected current checkout. Final source commit `4a521df` passes the local release gate (713 unit tests, 21 dashboard E2E, five extension E2E). Same-machine clean installation/builds and narrow/broad secret checks passed. Gmail disconnect races, archive metadata checks, packaging, lifecycle tests and documentation were improved.
+
+**Not launch-ready:** the single final fix wave left an Important XLSX parser-consistency issue: bounded validation and downstream ExcelJS can interpret different entries from the original archive. Preserve it as the next implementation priority; do not mark public readiness until resolved and reviewed. Google/live-mail, separate-machine acceptance and owner publication approval also remain open. See `docs/releases/v1-launch-checklist.md` for evidence and limitations. The original task checkboxes below are the implementation specification, not publication sign-off.
+
 ## Global Constraints
 
 - Keep the repository private; do not push, publish, create a public release, or change repository visibility.
@@ -48,13 +54,14 @@
 
 ### Task 3: Acceptance coverage, onboarding, and truthful release documentation
 
-**Ownership:** Missing Gmail/data-safety acceptance tests in existing test modules or new focused tests; README, CONTRIBUTING, SECURITY, new PRIVACY.md, `.github/ISSUE_TEMPLATE`, `docs/releases/v1-beta-16.md`, `docs/releases/v1-launch-checklist.md`, version fields in package/lock/manifest. No unrelated feature work.
+**Ownership:** Missing Gmail/data-safety acceptance tests in existing test modules or new focused tests; README, README.zh-CN, CONTRIBUTING, SECURITY, new PRIVACY.md, `.github/ISSUE_TEMPLATE`, `docs/releases/v1-beta-16.md`, `docs/releases/v1-launch-checklist.md`, version fields in package/lock/manifest. No unrelated feature work.
 
 **Interfaces:** Consume `verify:public-tree` and `package:extension`. Public-facing version is `1.0.0-beta.16`; retain valid Chrome numeric manifest version. Do not claim published artifacts or Google approval.
 
 - [ ] Map existing tests to direct/forwarded confirmations and rejections, recruiter outreach, newsletter exclusions, duplicates, reconnect, and partial scan/cursor failures. Add only concrete missing regressions; use anonymized synthetic fixtures. Correct discovered failures with focused TDD.
 - [ ] Map existing tests to profile parse-review-save-reload, stored-data upgrades, tracker import/export, disconnect, profile deletion, and extension revocation. Add missing critical acceptance tests without touching real user stores. Clearly state that tracker CSV/XLSX is not a full backup and shortlists are not exported.
 - [ ] Update Windows quickstart with `npm.cmd ci`, browser test prerequisites, startup and port troubleshooting, packaged ZIP loading/unzipping, pairing, revoke/reconnect, and known supported/manual fields. Test the documented commands rather than promising one-click installation.
+- [ ] Replace obsolete Chinese setup/privacy claims with a concise current Chinese summary and links to the authoritative English setup and privacy documents; do not leave contradictory claims that Gmail/autofill are absent.
 - [ ] Add concise privacy/data-flow and private vulnerability-report guidance plus bug/feature templates that warn against uploading resumes, tokens, or private emails. Document narrow supported ATS behavior, salary provenance/estimation, discovery limitations, and deferred features.
 - [ ] Update version and beta notes. Build a launch checklist distinguishing verified local results, failed checks, live-mail/Google verification, separate Windows-machine acceptance, and user publication review. Include a synthetic screenshot using an existing test/demo fixture if practical; never personal screenshots.
 - [ ] Run targeted tests and typecheck; commit explicit owned paths. Report external gates honestly. The controller runs the final full check, dependency audit, disposable clean install, and independent whole-change review before declaring readiness.

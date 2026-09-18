@@ -19,6 +19,8 @@ Use the repository's **Security → Report a vulnerability** private-advisory fl
 
 ## External-source processing
 
+**Private beta.16 release blocker:** the bounded XLSX validator and the downstream Excel parser can interpret the same archive differently. The limits described below are intended protections, not yet a verified end-to-end boundary for XLSX. Do not import untrusted XLSX files; public release remains blocked pending a fix and review. See `docs/releases/v1-launch-checklist.md`.
+
 Official salary downloads are restricted to allowlisted MOM/SingStat, Hong Kong C&SD, and BLS hosts. Downloads have time, redirect, and body-size limits; releases are parsed into strict schemas, checksummed, staged, and quarantined on failure before promotion. The last known good release remains available when a refresh fails.
 
 Workbook import is values-only. Inputs are limited to 5 MB compressed and 25 MB uncompressed, 20 worksheets, 2,000 data rows, and 100 columns at the workbook boundary (the tracker accepts 80 mapped columns). Encrypted archives, ZIP64, unsafe paths, excessive compression, formulas, macros, and external links are rejected. PDF and tabular official-source parsers also enforce bounded pages, rows, columns, entries, and decompressed size.

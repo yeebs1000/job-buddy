@@ -26,4 +26,10 @@ An isolated `npm.cmd ci --no-audit --no-fund` completed with Node 24.19.0/npm 11
 
 The production entrypoint was also invoked with isolated local application data and blank Google configuration while port 43117 was occupied. It exited with actionable port-in-use guidance and did not replace the existing listener. Actual serving is covered by a synthetic end-to-end server on an ephemeral port; this does not prove a clean start on a separate Windows machine.
 
-The independent checksum-verified Gitleaks 8.30.1 run scanned 88 reachable commits (about 1.98 MB) without findings at that checkpoint. A fresh scan remains mandatory after the final release-candidate commits. The GitHub repository was confirmed private with default branch `feature/job-buddy-core`; no visibility, publication, or other remote state was changed.
+The final source-checkpoint scan at `4a521df` used independent checksum-verified Gitleaks 8.30.1: 92 reachable commits (about 2.05 MB), no findings. The GitHub repository was confirmed private with default branch `feature/job-buddy-core`; no visibility, publication, or other remote state was changed. Repeat scanners before publication after any additional changes.
+
+At `4a521df`, the full release command passed 713 unit tests, 21 dashboard E2E tests, five extension E2E tests, typecheck, both builds and all guard scripts. A Git-exported disposable copy independently passed clean installation, builds and packaging. The production audit still reports the two moderate findings described above.
+
+The root beta.16 extension ZIP contains only the three runtime files listed above; SHA-256 `eff70b12f35ab4a9b551b4281f8b3f62ef6fe4c3295e9094fc931ca8ed7d4955`. ZIP timestamps mean separately generated packages can have different hashes.
+
+**Publication remains blocked:** final review found an XLSX parser disagreement after bounded validation. Passing scans and tests do not establish end-to-end import safety. See [v1-launch-checklist.md](v1-launch-checklist.md).
