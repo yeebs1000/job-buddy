@@ -19,6 +19,7 @@ import { UnitedStatesBlsAdapter } from "./research/adapters/UnitedStatesBlsAdapt
 import { DiscoveryService } from "./discovery/DiscoveryService";
 import { FxService } from "./research/FxService";
 import { DesktopClientStore } from "./gmail/DesktopClientStore";
+import { companionListenError } from "./startup";
 
 const desktopClientStore = new DesktopClientStore();
 const environmentConfig = readCompanionConfig(process.env);
@@ -46,6 +47,10 @@ const server = createCompanionServer({
   ...(uiOrigin === productionOrigin ? { staticDir: resolve("dist") } : {}),
 });
 
+server.once("error", (error) => {
+  console.error(companionListenError(error, config.port));
+  process.exitCode = 1;
+});
 server.listen(config.port, config.host, () => {
   console.log(`Job Buddy is available at ${uiOrigin}`);
 });
