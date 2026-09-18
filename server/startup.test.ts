@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { companionListenError } from "./startup";
+import { companionListenError, companionRuntimeError } from "./startup";
 
 describe("companion startup errors", () => {
   it("identifies an occupied configured port without suggesting that its listener be killed", () => {
@@ -11,5 +11,10 @@ describe("companion startup errors", () => {
 
   it("does not expose arbitrary operating-system error details", () => {
     expect(companionListenError(new Error("private path and provider detail"), 43117)).toBe("Job Buddy could not start its local companion. Retry npm.cmd run dev.");
+  });
+
+  it("distinguishes an error after listening from a startup failure", () => {
+    expect(companionRuntimeError()).toBe("Job Buddy's local companion stopped unexpectedly. Restart npm.cmd run dev.");
+    expect(companionRuntimeError()).not.toContain("could not start");
   });
 });

@@ -9,6 +9,7 @@ import { BuddyStore } from "../server/buddy/BuddyStore";
 import { BuddyService } from "../server/buddy/BuddyService";
 import { PairingService } from "../server/buddy/PairingService";
 import { emptyCandidateProfile, selectProfilePaths } from "../src/domain/profile";
+import { waitForHttpFinish } from "./httpPhaseWaiter";
 
 test("installed extension keeps pairing lifecycle and approved fill reliable", async ({}, testInfo) => {
   test.setTimeout(60000);
@@ -16,7 +17,7 @@ test("installed extension keeps pairing lifecycle and approved fill reliable", a
   const extensionPath = join(root, "extension");
   const profileData = { ...emptyCandidateProfile, identity: { givenName: "Alex", familyName: "Tan" } };
   const profile = { status: async () => ({ platformSupported: true, hasProfile: true }), read: async () => profileData, replace: async () => profileData, select: async (paths: readonly string[]) => selectProfilePaths(profileData, paths), delete: async () => undefined };
-  const store = new BuddyStore({ root });
+  let store = new BuddyStore({ root });
   const forbidden = async (): Promise<never> => { throw new Error("No Gmail calls allowed in pairing test"); };
   const dashboardOrigin = "http://127.0.0.1:5173";
   const trace: Array<{ phase: "start" | "finish"; method?: string; path?: string; origin: "dashboard" | "extension" | "other"; status?: number; elapsedMs?: number }> = [];
@@ -77,6 +78,7 @@ test("installed extension keeps pairing lifecycle and approved fill reliable", a
       const port = (server.address() as AddressInfo).port;
       server.closeAllConnections();
       await close(server);
+      store = new BuddyStore({ root });
       buddy = createBuddy();
       server = createServer();
       await listen(server, port);
@@ -118,13 +120,7 @@ test("installed extension keeps pairing lifecycle and approved fill reliable", a
     return instance;
   }
   function nextFinished(path: string, status: number): Promise<void> {
-    return new Promise((done) => {
-      const listener = (request: { url?: string }, response: { statusCode: number; once(event: "finish", callback: () => void): void }) => {
-        if (request.url !== path) return;
-        response.once("finish", () => { if (response.statusCode === status) { server.off("request", listener); done(); } });
-      };
-      server.on("request", listener);
-    });
+    return waitForHttpFinish(server, path, status, 15_000);
   }
   function classifyOrigin(origin: string | undefined): "dashboard" | "extension" | "other" { return origin === dashboardOrigin ? "dashboard" : origin?.startsWith("chrome-extension://") ? "extension" : "other"; }
 });

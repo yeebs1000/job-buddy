@@ -10,7 +10,7 @@
 
 ## Root cause and observed evidence
 
-The original test passed once in 14.7 seconds. A bounded `--repeat-each=10` reproduction produced runs from 12.4 to 43.7 seconds and one failure at the invalid-pairing UI assertion. The assertion stopped after its default five seconds, but Playwright's failure snapshot already contained the exact expected invalid-code alert. This established a test synchronization race: the assertion deadline could expire while the installed extension operation was still completing.
+The original test passed once in 14.7 seconds. A bounded `--repeat-each=10` reproduction produced runs from 12.4 to 43.7 seconds and one failure at the invalid-pairing UI assertion. The assertion stopped after its default five seconds, while Playwright's later failure snapshot contained the exact expected invalid-code alert. This proves only that the expected UI appeared late relative to the assertion snapshot; it does not prove whether browser scheduling, transport, rendering, or another layer caused the delay. The acceptance test therefore needed explicit phase synchronization and bounded failure evidence.
 
 The historical empty `#first` result did not reproduce directly. The old test clicked Fill and immediately relied on an unrelated locator timeout. The replacement waits for the real `/api/buddy/activity` 204 acknowledgement, which happens only after the guarded DOM fill, then asserts `#first === "Alex"`. The first expanded test run exposed the same race after reload: the panel was opened while the restored content runtime was still idle. RED showed `Ready for this application`; the regression now waits for both authenticated preferences and profile-selection responses before checking the restored review.
 
@@ -67,3 +67,22 @@ The existing unrelated edit in `docs/superpowers/plans/2026-09-18-public-beta-re
 
 - The historical empty-field failure was not independently reproduced; current coverage proves the same installed path fills after an explicit activity acknowledgement and remains safe after revocation.
 - The Windows descendant test is Windows-only by design. Other platforms skip it, matching the brief's Windows shutdown scope.
+
+## Review fix round 1
+
+- Replaced the unbounded `nextFinished` promise with `waitForHttpFinish`, a reusable 15-second per-phase waiter. It matches the exact route, removes its listener on every outcome, rejects immediately on an unexpected status, and reports only route/status/timing metadata on timeout. The overall Playwright limit remains 60 seconds.
+- Recreated `BuddyStore({ root })` before rebuilding `BuddyService` and the companion server, so restart coverage now proves token persistence through a fresh store reading disk rather than a reused store object.
+- Extended Windows lifecycle cleanup bookkeeping to include both fake npm-wrapper PIDs and their descendants; cleanup remains limited to processes created by the test.
+- Replaced the surviving `once("error")` startup listener after successful listen with a distinct runtime handler, so later server errors are not mislabeled as startup failures.
+
+### Additional RED / GREEN evidence
+
+- RED: `npm.cmd test -- scripts/httpPhaseWaiter.test.ts`
+  - 3 failed against the deliberate unimplemented seam: exact-route success, unexpected-status rejection, and safe bounded timeout behavior.
+- GREEN: `npm.cmd test -- scripts/httpPhaseWaiter.test.ts scripts/dev.test.mjs server/startup.test.ts`
+  - 3 files passed, 7 tests passed.
+- GREEN: `npm.cmd run typecheck` and `npm.cmd run build:extension`
+  - Both exited 0.
+- First post-review installed run reached the unchanged 60-second whole-test limit without a route-waiter error; a direct focused rerun with the list reporter passed in 26.3 seconds. Because this did not isolate a layer, it is retained as an unresolved environment/browser-duration concern rather than attributed to HTTP or UI behavior.
+- GREEN: final `npm.cmd run test:e2e:extension`
+  - 5 passed in 18.3 seconds; the installed lifecycle case passed in 13.0 seconds.

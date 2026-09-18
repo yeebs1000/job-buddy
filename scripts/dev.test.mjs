@@ -23,7 +23,7 @@ describe.runIf(process.platform === "win32")("development launcher lifecycle", (
       import { spawn } from "node:child_process";
       const service = process.argv.at(-1);
       const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
-      appendFileSync(process.env.JOB_BUDDY_TEST_PIDS, child.pid + "\\n");
+      appendFileSync(process.env.JOB_BUDDY_TEST_PIDS, process.pid + "\\n" + child.pid + "\\n");
       if (service === "dev:web") setTimeout(() => process.exit(23), 100);
       else setInterval(() => {}, 1000);
     `);
@@ -36,7 +36,7 @@ describe.runIf(process.platform === "win32")("development launcher lifecycle", (
       env: environment,
     });
     try {
-      const pids = await waitForPids(pidsPath, 2);
+      const pids = await waitForPids(pidsPath, 4);
       for (const pid of pids) spawnedPids.add(pid);
       await new Promise((done, reject) => {
         const timer = setTimeout(() => reject(new Error("launcher did not exit")), 5000);
