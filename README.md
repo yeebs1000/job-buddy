@@ -36,7 +36,7 @@ Open [127.0.0.1:5173](http://127.0.0.1:5173). Connect Gmail in Settings using th
 | Next | V2 |
 | --- | --- |
 | Windows and macOS downloads | Browser Buddy autofill |
-| Smoother setup | Better email extraction and research summaries |
+| Smoother setup | Optional AI connection for email extraction and research summaries |
 
 ## Contributions welcome
 

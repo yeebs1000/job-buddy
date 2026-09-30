@@ -6,7 +6,7 @@ Keep Job Buddy useful, local and lightweight.
 | --- | --- |
 | **V1 · source beta** | Gmail updates, Application Hub, salary research, Excel import/export and local profile |
 | **Next** | Simpler setup and Windows/macOS downloads |
-| **V2** | Browser Buddy autofill, better email extraction and clearer research summaries |
+| **V2** | Browser Buddy autofill and optional AI connection for email extraction and research summaries |
 
 Browser Buddy is V2 work; its existing development code is not part of the V1 feature offering.
 
