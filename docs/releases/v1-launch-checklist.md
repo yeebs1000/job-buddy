@@ -55,6 +55,7 @@ Publishing source as a clearly labelled beta is separate from launching a genera
 
 | Evidence | Scope and limitations |
 | --- | --- |
+| [2026-09-30 production-server audit](2026-09-30-production-audit.md) | Reproduced and fixed production PDF worker loading and unguarded Gmail status; fresh Windows release gate passed; packaging, Mac and real-provider acceptance remain open |
 | [2026-09-30 hardening](2026-09-30-release-hardening.md) | Earlier same-machine run: 881 unit tests, 30 dashboard tests, 5 extension tests, 3 pairing repeats and web-core check passed in the documented sequence; not one uninterrupted final gate |
 | [2026-09-30 repository preparation](2026-09-30-repository-preparation.md) | Fresh checks for the GitHub cleanup; includes failures and subsequent results without replacing the earlier record |
 | [2026-09-24 lean verification](v1-lean-verification.md) | Historical XLSX fix and acceptance boundaries |

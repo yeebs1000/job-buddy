@@ -16,6 +16,7 @@ import { ProfileService } from "../server/profile/ProfileService";
 import { BuddyStore } from "../server/buddy/BuddyStore";
 import { PairingService } from "../server/buddy/PairingService";
 import { BuddyService } from "../server/buddy/BuddyService";
+import { pdf } from "./support/pdf";
 
 for (const hostname of ["127.0.0.1", "localhost"]) {
   test(`real companion serves settings, saves setup and pairs on ${hostname}`, async ({ page }, testInfo) => {
@@ -87,8 +88,11 @@ for (const hostname of ["127.0.0.1", "localhost"]) {
       // This server uses an isolated temporary vault, never the user's profile.
       await page.goto(origin + "/profile");
       await page.getByRole("button", { name: "Import resume", exact: true }).click();
-      await page.getByLabel("Paste resume text").fill("Alex Chen\nalex@example.com\nEDUCATION\nExample University\nBachelor of Science, Computing\nSep 2020 - Jun 2024\nEXPERIENCE\nEngineer | Example Labs\nJul 2024 - Present\nBuilt payment APIs.\nSKILLS\nTypeScript, SQL");
-      await page.getByRole("button", { name: "Review extracted details" }).click();
+      await page.getByLabel("Choose resume file").setInputFiles({
+        name: "synthetic-resume.pdf", mimeType: "application/pdf",
+        buffer: pdf(["Alex Chen", "alex@example.com", "EDUCATION", "Example University", "Bachelor of Science, Computing", "Sep 2020 - Jun 2024", "EXPERIENCE", "Engineer | Example Labs", "Jul 2024 - Present", "Built payment APIs.", "SKILLS", "TypeScript, SQL"]),
+      });
+      await expect(page.getByRole("checkbox", { name: "Include Experience", exact: true })).toBeChecked();
       await page.getByRole("button", { name: "Apply selected details" }).click();
       await page.getByRole("button", { name: "Save profile", exact: true }).click();
       const saved = page.locator("footer").getByRole("status");

@@ -136,8 +136,10 @@ describe("createCompanionServer", () => {
     const browserHeaders = { host: "127.0.0.1:5173", "sec-fetch-site": "same-origin", "sec-fetch-mode": "cors", "sec-fetch-dest": "empty" };
     expect(await status("/api/buddy/status", browserHeaders)).toBe(200);
     expect(await status("/api/buddy/preferences", browserHeaders)).toBe(200);
+    expect(await status("/api/gmail/status", browserHeaders)).toBe(200);
     for (const headers of [{}, { ...browserHeaders, "sec-fetch-site": "cross-site" }, { ...browserHeaders, host: "evil.example" }, { ...browserHeaders, origin: "https://evil.example" }, { ...browserHeaders, "sec-fetch-mode": "navigate" }]) {
       expect(await status("/api/buddy/status", headers)).toBe(403);
+      expect(await status("/api/gmail/status", headers)).toBe(403);
     }
     expect(await status("/api/buddy/pairing/start", { ...browserHeaders, "content-type": "application/json" }, "POST")).toBe(403);
   });

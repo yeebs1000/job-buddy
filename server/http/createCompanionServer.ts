@@ -213,7 +213,7 @@ async function serveStatic(request: IncomingMessage, response: ServerResponse, s
   if (requested !== root && !requested.startsWith(`${root}${sep}`)) return false;
   try {
     const body = await readFile(requested);
-    const contentTypes: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml" };
+    const contentTypes: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml" };
     applySecurityHeaders(response);
     response.statusCode = 200;
     response.setHeader("content-type", contentTypes[extname(requested)] ?? "application/octet-stream");
@@ -261,6 +261,7 @@ export function createCompanionServer(options: CompanionServerOptions) {
       }
 
       if (request.method === "GET" && url.pathname === "/api/gmail/status") {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
         const status = await options.services.connection.status();
         json(response, 200, {
           state: status.state,
