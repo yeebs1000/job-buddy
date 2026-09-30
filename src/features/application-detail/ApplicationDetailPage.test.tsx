@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
@@ -8,6 +8,7 @@ import { jobBuddyDb } from "../../db/database";
 import { sampleApplications } from "../../fixtures/sampleApplications";
 import { appRoutes } from "../../app/routes";
 import { ApplicationDetailPage } from "./ApplicationDetailPage";
+import * as detailsService from "./applicationDetails";
 
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); await jobBuddyDb.delete(); await jobBuddyDb.open(); });
 async function createApplication() {
@@ -21,6 +22,107 @@ function renderDetail(path = "/applications/a1", routes: RouteObject[] = [{ path
   render(<RouterProvider router={router} />);
   return router;
 }
+
+it("edits contact, notes, follow-up and deadlines and reloads the saved values", async () => {
+  await createApplication(); const user = userEvent.setup(); renderDetail();
+  await user.click(await screen.findByRole("button", { name: "Edit details" }));
+  await user.clear(await screen.findByLabelText("Contact / recruiter"));
+  await user.paste("Sam, sam@example.com");
+  await user.clear(screen.getByLabelText("Notes"));
+  await user.paste("Ask about team structure.");
+  fireEvent.change(screen.getByLabelText("Follow-up time"), { target: { value: "2026-10-01T14:30" } });
+  await user.click(screen.getByRole("button", { name: "Add deadline" }));
+  const labels = screen.getAllByLabelText(/Deadline label/);
+  const dates = screen.getAllByLabelText(/Deadline time/);
+  await user.click(labels.at(-1)!); await user.paste("Send portfolio");
+  fireEvent.change(dates.at(-1)!, { target: { value: "2026-10-02T09:00" } });
+  await user.click(screen.getAllByLabelText(/Completed deadline/)[0]);
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(await screen.findByText("Details saved.")).toBeVisible();
+  const saved = await applicationRepository.get("a1");
+  expect(saved).toMatchObject({ recruiter: "Sam, sam@example.com", notes: "Ask about team structure.", followUpAt: "2026-10-01T06:30:00.000Z" });
+  expect(saved?.deadlines[0].completed).toBe(true);
+  expect(saved?.deadlines.at(-1)).toMatchObject({ label: "Send portfolio", at: "2026-10-02T01:00:00.000Z", completed: false });
+  expect(saved?.stageEvents).toHaveLength(2);
+  cleanup(); renderDetail();
+  await user.click(await screen.findByRole("button", { name: "Edit details" }));
+  expect(await screen.findByLabelText("Contact / recruiter")).toHaveValue("Sam, sam@example.com");
+  expect(screen.getByLabelText("Notes")).toHaveValue("Ask about team structure.");
+  expect(screen.getByLabelText("Follow-up time")).toHaveValue("2026-10-01T14:30");
+});
+
+it("cancels an unsaved draft without changing the persisted record", async () => {
+  await createApplication(); const original = await applicationRepository.get("a1");
+  const user = userEvent.setup(); renderDetail();
+  await user.click(await screen.findByRole("button", { name: "Edit details" }));
+  await user.type(await screen.findByLabelText("Notes"), "Unsaved text");
+  await user.click(screen.getByRole("button", { name: "Remove deadline 1" }));
+  expect(await applicationRepository.get("a1")).toEqual(original);
+  await user.click(screen.getByRole("button", { name: "Add deadline" }));
+  await user.click(screen.getByRole("button", { name: "Cancel edits" }));
+  expect(screen.queryByLabelText("Notes")).not.toBeInTheDocument();
+  expect(await applicationRepository.get("a1")).toEqual(original);
+  await user.click(screen.getByRole("button", { name: "Edit details" }));
+  expect(await screen.findByLabelText("Deadline label 1")).toHaveValue("Follow up");
+  await user.click(screen.getByRole("button", { name: "Remove deadline 1" }));
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  await screen.findByText("Details saved.");
+  expect((await applicationRepository.get("a1"))?.deadlines).toEqual([]);
+});
+
+it.each(["open", "save"])("does not replace another application's page when an old editor %s finishes after navigation", async operation => {
+  await createApplication();
+  await applicationRepository.create({ ...sampleApplications[1], id: "a2", stageEvents: [] });
+  const original = (await applicationRepository.get("a1"))!;
+  const user = userEvent.setup(); const router = renderDetail();
+  const edit = await screen.findByRole("button", { name: "Edit details" });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  if (operation === "open") {
+    const get = applicationRepository.get;
+    vi.spyOn(applicationRepository, "get").mockImplementation(id => id === "a1" ? gate.then(() => original) : get(id));
+    await user.click(edit);
+  } else {
+    await user.click(edit);
+    await user.clear(await screen.findByLabelText("Notes"));
+    await user.type(screen.getByLabelText("Notes"), "Saved before navigation");
+    const save = detailsService.saveApplicationDetails;
+    vi.spyOn(detailsService, "saveApplicationDetails").mockImplementation(async (...args) => {
+      const result = await save(...args); await gate; return result;
+    });
+    await user.click(screen.getByRole("button", { name: "Save details" }));
+    await waitFor(async () => expect((await applicationRepository.get("a1"))?.notes).toBe("Saved before navigation"));
+  }
+  await act(async () => { await router.navigate("/applications/a2"); });
+  await screen.findByRole("heading", { name: "Software Engineer" });
+  await act(async () => { release(); await gate; });
+  expect(screen.getByRole("heading", { name: "Software Engineer" })).toBeVisible();
+  expect(screen.queryByLabelText("Notes")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Edit details" }));
+  expect(await screen.findByLabelText("Contact / recruiter")).toHaveValue("Taylor Ng");
+});
+
+it("retains a draft on storage failure, supports retry and shows a conflict with explicit reload", async () => {
+  await createApplication(); const user = userEvent.setup(); renderDetail();
+  await user.click(await screen.findByRole("button", { name: "Edit details" }));
+  await user.clear(await screen.findByLabelText("Notes"));
+  await user.type(screen.getByLabelText("Notes"), "My draft");
+  vi.spyOn(applicationRepository, "update").mockRejectedValueOnce(new Error("Storage is full"));
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Storage is full");
+  expect(screen.getByLabelText("Notes")).toHaveValue("My draft");
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(await screen.findByText("Details saved.")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Edit details" }));
+  await user.type(await screen.findByLabelText("Notes"), " new draft");
+  await applicationRepository.update("a1", { notes: "Newer saved note" });
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(/changed/);
+  expect(screen.getByLabelText("Notes")).toHaveValue("My draft new draft");
+  expect((await applicationRepository.get("a1"))?.notes).toBe("Newer saved note");
+  await user.click(screen.getByRole("button", { name: "Discard draft and load latest" }));
+  await waitFor(() => expect(screen.getByLabelText("Notes")).toHaveValue("Newer saved note"));
+});
 
 it("records a manual stage event and exposes undo", async () => {
   await createApplication(); const user = userEvent.setup(); render(<ApplicationDetailPage applicationId="a1" />);

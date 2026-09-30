@@ -8,6 +8,22 @@ import { createCompanionServer, type CompanionServerServices } from "./createCom
 const openServers: Array<ReturnType<typeof createCompanionServer>> = [];
 const pairedToken = "paired-token-abcdefghijklmnopqrstuvwxyz";
 
+it("keeps Tavily settings secret and requires exact protected routes", async () => {
+  let configured = false;
+  const status = async () => ({ configured, platformSupported: true, usage: { month: "2026-09", used: 0, limit: 1000 as const } });
+  const base = await start(services({ webSalary: { status, configure: async () => { configured = true; }, removeKey: async () => { configured = false; }, search: vi.fn() } }));
+  const request = (method: string, body?: unknown, origin: string | null = "http://127.0.0.1:5173", path = "key") => fetch(`${base}/api/research/web-salary/${path}`, { method, headers: { ...(origin === null ? {} : { origin }), "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  for (const origin of [null, "null", "https://evil.example"]) expect((await request("POST", { apiKey: "tvly-synthetic-only" }, origin)).status).toBe(403);
+  expect((await request("POST", { apiKey: "tvly-synthetic-only", extra: true })).status).toBe(400);
+  expect((await request("POST", { apiKey: "x".repeat(3000) })).status).toBe(413);
+  const saved = await request("POST", { apiKey: "tvly-synthetic-only" });
+  expect(saved.status).toBe(200); expect(saved.headers.get("cache-control")).toBe("no-store");
+  expect(await saved.json()).toEqual(await status());
+  expect(configured).toBe(true);
+  expect((await request("GET", undefined, "http://127.0.0.1:5173", "other/status")).status).not.toBe(200);
+  expect((await request("DELETE")).status).toBe(200); expect(configured).toBe(false);
+});
+
 it("allows extension preference reads by POST only with extension origin and bearer token", async () => {
   const service = services(); const base = await start(service);
   const origin = `chrome-extension://${"a".repeat(32)}`;
@@ -496,4 +512,24 @@ describe("createCompanionServer", () => {
     expect(dashboardList.status).toBe(200);
     expect(await dashboardList.json()).toEqual({ activity: [] });
   });
+});
+it("protects web search with origin and strict public-field validation and hides provider errors", async () => {
+  const search = vi.fn().mockResolvedValue({ results: [], searchedAt: "2026-09-19T00:00:00.000Z" });
+  const base = await start(services({ webSalary: { status: () => ({ configured: true }), search } }));
+  const query = { company: "Test Employer", role: "Analyst", location: "Hong Kong" };
+  const post = (body: unknown, origin = "http://127.0.0.1:5173") => fetch(`${base}/api/research/web-salary/search`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) });
+  expect((await post(query, "https://evil.example")).status).toBe(403);
+  expect((await post({ ...query, resume: "private" })).status).toBe(400);
+  expect(search).not.toHaveBeenCalled();
+  expect((await post(query)).status).toBe(200);
+  expect(search).toHaveBeenCalledExactlyOnceWith(query);
+  search.mockRejectedValue(new Error("secret-provider-detail"));
+  const failed = await post(query);
+  expect(await failed.json()).toEqual({ error: { code: "web-search-failed" } });
+  for (const code of ["web-search-unavailable", "web-search-invalid-key", "web-search-storage-unavailable"]) {
+    search.mockRejectedValue(new Error(code));
+    const actionable = await post(query);
+    expect(actionable.status).toBe(503);
+    expect(await actionable.json()).toEqual({ error: { code } });
+  }
 });

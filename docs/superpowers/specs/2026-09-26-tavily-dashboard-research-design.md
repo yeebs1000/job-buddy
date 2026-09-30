@@ -1,7 +1,7 @@
 # Tavily research and dashboard-first information
 
 Date: 2026-09-26
-Status: Draft for written-spec review; implementation not started.
+Status: Approved by the user on 2026-09-26 ("lets build"); implementation plan awaiting review.
 
 ## Intent and agreed direction
 

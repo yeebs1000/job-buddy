@@ -55,6 +55,19 @@ interface IdentifiedRecord {
   id: string;
 }
 
+export interface BrowserProfileRecord {
+  id: "candidate";
+  version: 1;
+  revision: string;
+  iv: Uint8Array<ArrayBuffer>;
+  ciphertext: ArrayBuffer;
+}
+
+export interface BrowserProfileKey {
+  id: "candidate";
+  key: CryptoKey;
+}
+
 class JobBuddyDb extends Dexie {
   applications!: EntityTable<StoredApplication, "id">;
   stageEvents!: EntityTable<StageEvent, "id">;
@@ -70,6 +83,8 @@ class JobBuddyDb extends Dexie {
   profileFields!: EntityTable<IdentifiedRecord, "id">;
   activityEntries!: EntityTable<ActivityEntry, "id">;
   metadata!: EntityTable<MetadataRecord, "key">;
+  browserProfiles!: EntityTable<BrowserProfileRecord, "id">;
+  profileKeys!: EntityTable<BrowserProfileKey, "id">;
 
   constructor() {
     super("job-buddy");
@@ -102,6 +117,7 @@ class JobBuddyDb extends Dexie {
       activityEntries: "id",
       metadata: "key",
     });
+    this.version(3).stores({ browserProfiles: "id", profileKeys: "id" });
   }
 }
 

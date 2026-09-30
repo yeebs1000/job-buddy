@@ -2,6 +2,28 @@ import { describe, expect, it, vi } from "vitest";
 import { BuddyPanel } from "./BuddyPanel";
 
 describe("BuddyPanel", () => {
+  it("replaces a stale pairing error with progress and prevents duplicate attempts while retrying", async () => {
+    let finish!: () => void;
+    const pending = new Promise<void>(resolve => { finish = resolve; });
+    const onPair = vi.fn(async () => { await pending; });
+    const panel = new BuddyPanel(document.body, { onPair });
+    panel.render({ state: "unpaired", message: "Previous code expired" });
+    panel.expand();
+    panel.shadowRoot.querySelector<HTMLInputElement>('[name="pairing-code"]')!.value = "ABCDE-FGHJK";
+    panel.shadowRoot.querySelector<HTMLButtonElement>('[type="submit"]')!.click();
+    try {
+      expect(panel.shadowRoot.querySelector('[role="alert"]')).toBeNull();
+      expect(panel.shadowRoot.querySelector('[role="status"]')?.textContent).toMatch(/connecting/i);
+      // Collapsing and reopening must not enable a duplicate use of the one-time code.
+      panel.collapse(); panel.expand();
+      expect(panel.shadowRoot.querySelector<HTMLInputElement>('[name="pairing-code"]')!.disabled).toBe(true);
+      expect(panel.shadowRoot.querySelector<HTMLButtonElement>('[type="submit"]')!.disabled).toBe(true);
+      panel.shadowRoot.querySelector<HTMLFormElement>("form")!.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+      expect(onPair).toHaveBeenCalledOnce();
+    } finally { finish(); }
+    await vi.waitFor(() => expect(panel.shadowRoot.querySelector<HTMLButtonElement>('[type="submit"]')!.disabled).toBe(false));
+    panel.host.remove();
+  });
   it("selects only empty safe fields with the bulk action and labels overwrites", () => {
     const panel = new BuddyPanel(document.body);
     panel.render({ state: "review", mode: "approval", matched: 3, manual: 0, autoFilled: 0, fields: [

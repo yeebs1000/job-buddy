@@ -6,7 +6,7 @@ import { jobBuddyDb } from "../db/database";
 import { seedDemoData } from "../db/seed";
 
 const routes = [
-  ["/", "Your application journey"],
+  ["/", "Application command center"],
   ["/applications", "Applications"],
   ["/applications/app-aurora-applied", "Investment Analyst"],
   ["/updates", "Updates"],
@@ -17,16 +17,11 @@ const routes = [
 
 afterEach(async () => { cleanup(); await jobBuddyDb.delete(); await jobBuddyDb.open(); });
 
-it("resolves every application route inside semantic shell navigation", async () => {
+it.each(routes)("opens %s inside semantic shell navigation", async (path, heading) => {
   await seedDemoData();
-  for (const [path, heading] of routes) {
-    const router = createMemoryRouter(appRoutes, { initialEntries: [path] });
-    const view = render(<RouterProvider router={router} />);
-
-    expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
-
-    view.unmount();
-    cleanup();
-  }
+  const router = createMemoryRouter(appRoutes, { initialEntries: [path] });
+  render(<RouterProvider router={router} />);
+  expect(screen.getByRole("navigation", { name: "Primary navigation" })).toBeInTheDocument();
+  // Cold lazy imports are transformed on demand by the test runner.
+  expect(await screen.findByRole("heading", { name: heading }, { timeout: 5_000 })).toBeInTheDocument();
 });

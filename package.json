@@ -1,14 +1,20 @@
 {
   "name": "job-buddy",
   "private": true,
-  "version": "1.0.0-beta.16",
+  "version": "1.0.0-beta.18",
   "engines": {
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "type": "module",
   "scripts": {
+    "searxng:start": "node scripts/searxng.mjs start",
+    "searxng:stop": "node scripts/searxng.mjs stop",
+    "searxng:status": "node scripts/searxng.mjs status",
     "dev": "node --env-file-if-exists=.env.local scripts/dev.mjs",
     "dev:web": "vite",
+    "dev:browser": "vite --mode web --port 5174",
+    "build:web": "tsc -b && vite build --mode web",
+    "preview:web": "vite preview --mode web --port 4174",
     "dev:server": "tsx watch server/start.ts",
     "start": "node --env-file-if-exists=.env.local --import tsx server/start.ts",
     "preview": "vite preview",
@@ -19,10 +25,12 @@
     "verify:client-secrets": "node --env-file-if-exists=.env.local scripts/verify-client-secrets.mjs dist dist-extension",
     "verify:research-sources": "node scripts/verify-research-sources.mjs dist dist-extension",
     "check": "npm test && npm run verify:public-tree && npm run typecheck && npm run build && npm run build:extension && npm run verify:client-secrets && npm run verify:research-sources && npm run test:e2e && npm run test:e2e:extension",
+    "check:web": "npm run test:e2e:web && node --env-file-if-exists=.env.local scripts/verify-client-secrets.mjs dist-web && node scripts/verify-research-sources.mjs dist-web",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:web": "playwright test --config playwright.web.config.ts",
     "test:e2e:extension": "playwright test --config playwright.extension.config.ts"
   },
   "dependencies": {

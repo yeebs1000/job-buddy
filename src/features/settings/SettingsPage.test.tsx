@@ -8,8 +8,19 @@ import type { MailAdapter } from "../../integrations/mail/MailAdapter";
 import type { GmailConnectionStatus } from "../../domain/mail";
 import { SettingsPage, type GmailSettingsClient } from "./SettingsPage";
 import { defaultGmailPreferences, gmailPreferences, type GmailPreferencesStore } from "./gmailPreferences";
+import { updateRepository } from "../updates/updateRepository";
 
 const adapter: MailAdapter = { source: "gmail", scan: vi.fn() };
+
+it("shows the saved interruption after returning to Settings with a resume action", async () => {
+  await updateRepository.saveScanState("gmail", { cursor: "prior", error: "private raw failure", errorCode: "gmail-network-error",
+    rechecking: true, progress: { processed: 125, total: 500 }, continuationToken: `${"a".repeat(32)}:125` });
+  render(<MemoryRouter><SettingsPage client={client({ state: "connected", platformSupported: true })} preferences={preferenceStore({ initialSyncCompleted: true })} /></MemoryRouter>);
+  expect(await screen.findByText(/lost its connection to Google/)).toHaveAttribute("role", "alert");
+  expect(screen.getByRole("button", { name: "Resume Gmail scan" })).toBeEnabled();
+  expect(screen.getByText(/Scan interrupted/)).toHaveTextContent("125 of 500");
+  expect(screen.queryByText("private raw failure")).not.toBeInTheDocument();
+});
 
 it("lets connected users set daily scans before initial sync without starting a scan", async () => {
   const preferences = preferenceStore();

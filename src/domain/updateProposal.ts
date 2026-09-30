@@ -56,6 +56,7 @@ export interface UpdateProposalClassificationInput extends UpdateProposalClassif
 }
 
 interface UpdateProposalFields<TClassification> {
+  demoHidden?: boolean;
   id: string;
   status: UpdateProposalStatus;
   mailSource: MailSource;
@@ -65,6 +66,7 @@ interface UpdateProposalFields<TClassification> {
   createdAt: string;
   reviewedAt?: string;
   relevanceOverride?: "manual-review";
+  opportunity?: { title: string; company: string; location: string; savedAt: string };
 }
 
 export type UpdateProposal =

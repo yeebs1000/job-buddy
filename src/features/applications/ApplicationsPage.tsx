@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { isWebMode } from "../../app/runtimeMode";
 import type { SortingState } from "@tanstack/react-table";
 import { applicationRepository } from "../../db/applicationRepository";
 import { jobBuddyDb, type SavedView } from "../../db/database";
-import { seedDemoData } from "../../db/seed";
 import { savedViewRepository } from "../../db/viewRepository";
 import { priorities, roleFamilies, workArrangements, type Application } from "../../domain/application";
 import type { Market } from "../../domain/research";
@@ -23,11 +23,16 @@ const defaultViews: SavedView[] = [
 ];
 
 async function initialize() {
-  await seedDemoData();
+  if (isWebMode) return { applications: await applicationRepository.list(), views: await listViews() };
   await jobBuddyDb.transaction("rw", jobBuddyDb.savedViews, async () => {
     for (const view of defaultViews) if (!await savedViewRepository.get(view.id)) await savedViewRepository.save(view);
   });
   return { applications: await applicationRepository.list(), views: await savedViewRepository.list() };
+}
+
+async function listViews() {
+  const saved = await savedViewRepository.list();
+  return isWebMode ? [...defaultViews.filter(view => !saved.some(item => item.id === view.id)), ...saved] : saved;
 }
 
 function NewApplication({ onSave, onCancel, busy }: { onSave: (application: Application) => Promise<void>; onCancel: () => void; busy: boolean }) {
@@ -118,7 +123,7 @@ export function ApplicationsPage() {
   const closeCreate = () => { const next = new URLSearchParams(params); next.delete("new"); setParams(next, { replace: true }); };
   async function saveView() {
     if (!viewName.trim()) return;
-    if (await run(async () => { await savedViewRepository.save({ id: crypto.randomUUID(), name: viewName.trim(), filters, sort: sorting, visibleColumns }); setViews(await savedViewRepository.list()); }, "View saved.")) setViewName("");
+    if (await run(async () => { await savedViewRepository.save({ id: crypto.randomUUID(), name: viewName.trim(), filters, sort: sorting, visibleColumns }); setViews(await listViews()); }, "View saved.")) setViewName("");
   }
   function restoreView(id: string) {
     setViewId(id); setSelected([]);

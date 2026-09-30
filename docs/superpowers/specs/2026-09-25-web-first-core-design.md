@@ -1,5 +1,7 @@
 # Job Buddy: website-first direction and browser-core migration
 
+> Distribution direction superseded on 2026-09-30: the owner chose downloadable Windows/macOS apps, local Gmail/research, and packaging after V1 feature acceptance. See [current roadmap](../../../ROADMAP.md). This preserves the earlier design, not authorization for hosted deployment. The browser core remains an engineering preview.
+
 Date: 2026-09-25
 Status: Direction and hosted-Gmail privacy choice approved in conversation; this written browser-core design awaits review.
 
@@ -103,6 +105,10 @@ Hosted SearXNG is private infrastructure behind a bounded, rate-limited public r
 No real inbox access, real profile transfer, public deployment or provider purchase is part of these tests. Use synthetic fixtures.
 
 ## Review and release boundary
+
+### User correction after testing, 2026-09-25
+
+Gmail scanning and reviewed email updates are the primary product workflow. The tracker is a supporting view, not a replacement for the connected dashboard. Keep the Gmail-enabled companion dashboard as the normal local entry point until hosted Gmail reaches feature parity. The standalone browser-core preview is engineering-only; never switch the user's main experience to it or imply their existing Gmail connection has been removed. Preserve both browser-origin records and the existing credential vault during migration.
 
 Self-review: scope is limited to a browser profile adapter, explicit mode selection and safe transfer; later hosted integrations are not implicitly included. The browser-key security tradeoff and fresh-destination-only restore are explicit review points. Existing uncommitted feature work is preserved.
 

@@ -12,6 +12,9 @@ import { z } from "zod";
 import { currencySchema, marketSchema, type Market, type Currency } from "../../src/domain/research";
 import { boardSchema, type JobBoard, type DiscoveryResult, type PostingPay } from "../../src/domain/discovery";
 import type { FxQuote } from "../../src/domain/fx";
+import { webSalaryQuerySchema, type WebSalaryQuery, type WebSalaryResponse } from "../../src/domain/webSalary";
+import { tavilyKeySchema, type ResearchSearchStatus } from "../../src/domain/researchSearch";
+import { searchErrorCodes } from "../research/TavilySearchService";
 
 interface ConnectionServicePort {
   configureDesktopClient?(clientId: string, clientSecret?: string): Promise<void>;
@@ -67,6 +70,7 @@ export interface CompanionServerServices {
   profile: ProfileServicePort;
   buddy: BuddyServicePort;
   research?: ResearchServicePort;
+  webSalary?: { status(): { configured: boolean } | Promise<ResearchSearchStatus>; configure?(key: string): Promise<void>; removeKey?(): Promise<void>; search(query: WebSalaryQuery): Promise<WebSalaryResponse> };
   discovery?: { list(board: JobBoard): Promise<DiscoveryResult>; salary(input: { board: JobBoard; postingId: string }): Promise<PostingPay[]> };
   fx?: { quote(base: Currency, quote: Currency): Promise<FxQuote> };
 }
@@ -293,6 +297,36 @@ export function createCompanionServer(options: CompanionServerOptions) {
           return;
         }
         throw new HttpInputError(404, "not-found");
+      }
+      if (url.pathname.startsWith("/api/research/web-salary/")) {
+        if (!origin) throw new HttpInputError(403, "origin-not-allowed");
+        const service = options.services.webSalary;
+        if (request.method === "GET" && url.pathname === "/api/research/web-salary/status") {
+          try { json(response, 200, await service?.status() ?? { configured: false }); }
+          catch { throw new HttpInputError(503, "web-search-storage-unavailable"); }
+          return;
+        }
+        if (url.pathname === "/api/research/web-salary/key") {
+          if (!service?.configure || !service.removeKey) throw new HttpInputError(503, "web-search-unconfigured");
+          if (request.method !== "POST" && request.method !== "DELETE") throw new HttpInputError(405, "method-not-allowed");
+          const parsed = request.method === "POST" ? z.object({ apiKey: tavilyKeySchema }).strict().safeParse(await readJson(request, 2048)) : undefined;
+          if (parsed && !parsed.success) throw new HttpInputError(400, "invalid-research-key");
+          try {
+            if (parsed?.success) await service.configure(parsed.data.apiKey); else await service.removeKey();
+            json(response, 200, await service.status());
+          } catch { throw new HttpInputError(503, "web-search-storage-unavailable"); }
+          return;
+        }
+        if (request.method !== "POST" || url.pathname !== "/api/research/web-salary/search") throw new HttpInputError(405, "method-not-allowed");
+        const query = webSalaryQuerySchema.safeParse(await readJson(request));
+        if (!query.success) throw new HttpInputError(400, "invalid-research-query");
+        if (!service) throw new HttpInputError(503, "web-search-unconfigured");
+        try { json(response, 200, await service.search(query.data)); }
+        catch (error) {
+          const code = error instanceof Error ? error.message : "";
+          throw new HttpInputError(code === "web-search-rate-limited" || code === "web-search-budget-exhausted" ? 429 : 503, searchErrorCodes.includes(code) ? code : "web-search-failed");
+        }
+        return;
       }
       if (url.pathname.startsWith("/api/research/")) {
         if (!origin) throw new HttpInputError(403, "origin-not-allowed");

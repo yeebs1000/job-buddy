@@ -1,0 +1,50 @@
+import { expect, test } from "@playwright/test";
+import { FakeGmailApi, liveInterviewScan } from "./support/FakeGmailApi";
+
+test("reviews an application receipt into the tracker and saves outreach separately", async ({ page }, testInfo) => {
+  const gmail = new FakeGmailApi(page);
+  await gmail.install();
+  gmail.setStatus({ state: "connected", accountEmail: "user@example.com", platformSupported: true });
+  const receipt = { ...liveInterviewScan.messages[0], providerMessageId: "new-receipt", threadId: "receipt-thread", fromName: "Workday", fromAddress: "ms@myworkday.com",
+    subject: "Thank You for Your Application!", excerpt: "Thank you for your interest in the Equity Research – Analyst/Associate, Greater China Technology Hardware (Hong Kong) position. We will give careful consideration to your application by reviewing the details you provided against the position criteria. Kind Regards, Morgan Stanley Talent Acquisition.", links: [] };
+  const outreach = { ...receipt, providerMessageId: "new-outreach", threadId: "outreach-thread", subject: "Senior Consultant opportunity - Shanghai", fromName: "Alex Recruiter", fromAddress: "alex@talent.example",
+    excerpt: "I am reaching out regarding a Senior Consultant opportunity. Your profile could be a strong fit." };
+  gmail.queueScan({ ...liveInterviewScan, messages: [receipt, outreach] });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Start your tracker" })).toBeVisible();
+  await page.getByRole("link", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Scan last 90 days" }).click();
+  await expect(page.locator(".settings-page__message")).toContainText("recent updates were checked");
+  await page.getByRole("link", { name: /Updates/ }).click();
+  const confirmation = page.getByRole("article").filter({ hasText: receipt.subject });
+  await expect(confirmation.getByRole("button", { name: "Approve update", exact: true })).toBeDisabled();
+  await confirmation.getByRole("button", { name: "Create application & review", exact: true }).click();
+  await expect(confirmation.getByLabel("Job title")).toHaveValue("Equity Research – Analyst/Associate, Greater China Technology Hardware");
+  await expect(confirmation.getByLabel("Company", { exact: true })).toHaveValue("Morgan Stanley");
+  await expect(confirmation.getByLabel("Country / market")).toHaveValue("Hong Kong");
+  await expect(confirmation.getByLabel("City", { exact: true })).toHaveValue("Hong Kong");
+  await expect(confirmation.getByLabel("Role discipline")).toHaveValue("finance");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await confirmation.locator("form").scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath("create-from-mail-mobile.png") });
+  await confirmation.getByRole("button", { name: "Save application & review update" }).click();
+  await expect(confirmation.getByRole("button", { name: "Approve update", exact: true })).toBeEnabled();
+  await confirmation.getByRole("button", { name: "Approve update", exact: true }).click();
+  await expect(confirmation).toContainText("Review result: Update applied.");
+  const opportunity = page.getByRole("article").filter({ hasText: outreach.subject });
+  await opportunity.getByRole("button", { name: "Save to Command Center" }).click();
+  await opportunity.getByLabel("Opportunity location").fill("Shanghai, China");
+  await opportunity.getByRole("button", { name: "Save opportunity", exact: true }).click();
+  await opportunity.getByRole("link", { name: "Command Center opportunities" }).click();
+  await expect(page.getByRole("heading", { name: "Opportunities — not applied" })).toBeVisible();
+  await expect(page.getByText("Shanghai, China", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Morgan Stanley", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Opportunities — not applied" })).toBeVisible();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.screenshot({ path: testInfo.outputPath("email-to-command-center.png") });
+  const savedApplication = page.getByRole("article").filter({ hasText: "Morgan Stanley" });
+  await expect(savedApplication).toContainText("Applied");
+  expect(gmail.scanRequests).toBe(1);
+});

@@ -120,8 +120,10 @@ export class GmailTransport {
 
   private async request(url: URL, operation: "profile" | "list" | "history" | "message"): Promise<Record<string, unknown>> {
     for (let attempt = 0; ; attempt++) {
-      const delay = Math.max(0, this.nextRequestAt - Date.now());
-      if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+      // A peer can extend the shared cooldown while this request is waiting.
+      while (this.nextRequestAt > Date.now()) {
+        await new Promise(resolve => setTimeout(resolve, this.nextRequestAt - Date.now()));
+      }
       const accessToken = await this.tokens.getAccessToken();
       let response: Response;
       let payload: Record<string, unknown> | null;
@@ -135,8 +137,8 @@ export class GmailTransport {
         await new Promise(resolve => setTimeout(resolve, 1000 * 2 ** attempt + Math.floor(Math.random() * 1000)));
         continue;
       }
-      // Serial scans plus a short pause avoid bursts, including between scans.
-      this.nextRequestAt = Date.now() + 250;
+      // Bound groups in the scanner and pause between them; success cannot erase a quota cooldown.
+      this.nextRequestAt = Math.max(this.nextRequestAt, Date.now() + 250);
       if (response.ok) {
         if (!payload) throw new GmailTransportError(502, "gmail-response-invalid", operation);
         return payload;
@@ -153,7 +155,7 @@ export class GmailTransport {
       // Do not retry earlier than Google's requested window or wait indefinitely.
       if (requestedWait > 60_000) throw new GmailTransportError(response.status, code, operation);
       const backoff = Math.max(1000 * 2 ** attempt + Math.floor(Math.random() * 1000), requestedWait || 0);
-      await new Promise(resolve => setTimeout(resolve, backoff));
+      this.nextRequestAt = Math.max(this.nextRequestAt, Date.now() + backoff);
     }
   }
 }

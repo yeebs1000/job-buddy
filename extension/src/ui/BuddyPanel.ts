@@ -26,6 +26,7 @@ export class BuddyPanel {
   readonly host: HTMLDivElement;
   readonly shadowRoot: ShadowRoot;
   expanded = false;
+  private pairing = false;
   private model: BuddyPanelModel = { state: "idle" };
   private readonly onPair: (code: string) => Promise<void> | void;
   private readonly onFillApproved: (fieldIds: string[]) => Promise<void> | void;
@@ -109,13 +110,24 @@ export class BuddyPanel {
     if (this.model.state === "unpaired") {
       const heading = doc.createElement("h2"); heading.textContent = "Pair this browser";
       const copy = doc.createElement("p"); copy.textContent = "Create a one-time code in Job Buddy Settings, then enter it here.";
-      if (this.model.message) { copy.textContent = this.model.message; copy.setAttribute("role", "alert"); }
+      if (this.pairing) { copy.textContent = "Connecting to Job Buddy and loading your saved profile…"; copy.setAttribute("role", "status"); }
+      else if (this.model.message) { copy.textContent = this.model.message; copy.setAttribute("role", "alert"); }
       const form = doc.createElement("form");
       const label = doc.createElement("label"); label.textContent = "Pairing code";
       const input = doc.createElement("input"); input.name = "pairing-code"; input.autocomplete = "off"; input.maxLength = 12;
       const submit = doc.createElement("button"); submit.className = "primary"; submit.type = "submit"; submit.textContent = "Pair Buddy";
+      input.disabled = this.pairing;
+      submit.disabled = this.pairing;
+      if (this.pairing) submit.textContent = "Pairing…";
       label.append(input); form.append(label, submit);
-      form.addEventListener("submit", (event) => { event.preventDefault(); const code = input.value.trim(); if (code) void this.onPair(code); });
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const code = input.value.trim();
+        if (!code || this.pairing) return;
+        this.pairing = true; this.draw();
+        try { await this.onPair(code); }
+        finally { this.pairing = false; this.draw(); }
+      });
       body.append(heading, copy, form);
       return;
     }

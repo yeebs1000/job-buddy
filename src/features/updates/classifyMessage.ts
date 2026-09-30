@@ -50,7 +50,22 @@ const stageSignals: readonly StageSignal[] = [
     confidence: 0.8,
     matches: (text) => /\b(?:application|applications|candidacy|roles?)\b.{0,120}\b(?:is|are|remain) under review\b/i.test(text),
   },
+  {
+    stage: "applied",
+    reason: "application-confirmation",
+    confidence: 0.9,
+    matches: applicationConfirmation,
+  },
 ];
+
+function applicationConfirmation(text: string): boolean {
+  if (/\b(?:not|never|yet to|haven't|hasn't|isn't|wasn't)\b.{0,45}\b(?:receiv|submit)/i.test(text)) return false;
+  // Match the type being applied for, not an employer (Visa) or role (Credit Card Analyst).
+  if (/\b(?:application|applying)\s+for\s+(?:(?:a|an|the|your)\s+)?(?:loan|mortgage|credit card|visa|admission|scholarship|grant|membership|rental)(?=\s*(?:[.!?,;:]|$)|\s+(?:at|with|to|from)\b)|\b(?:loan|mortgage|credit card|visa|admission|scholarship|grant|membership|rental)\s+application\b/i.test(text)) return false;
+  // Acknowledges submitted details, not a promise that review has already begun.
+  if (/\bwe will give (?:careful )?consideration to your application by reviewing the details you provided against the (?:position|role|job) criteria\b/i.test(text)) return true;
+  return /\bthank(?:s| you) for applying\b.{1,160}\bat\b|\bthank(?:s| you) for taking the time to apply\b.{0,160}\b(?:position|role|job)\b|\b(?:we have |we've |we )?received your (?:job |employment )?application\b|\byour (?:job |employment )?application (?:has been |was |is )?(?:received|submitted successfully)\b/i.test(text);
+}
 
 const terminalSignals: readonly { outcome: ApplicationOutcome; reason: string; matches: (text: string) => boolean }[] = [
   { outcome: "rejected", reason: "rejection-language", matches: (text) => /\b(?:will not be progressing|not progressing|application (?:has been )?rejected)\b|\byou (?:were not|have not been|were not being) selected\b.{0,100}\b(?:next stage|position|role|job)\b|\bnot (?:to |be )?(?:proceed|proceeding|moving forward) with your (?:application|candidacy)\b/i.test(text) },
@@ -160,7 +175,7 @@ function extractTime(text: string, messageId: string, label: string, suffix: str
 function stageMentions(contexts: readonly MessageSentence[]): Set<ApplicationStage> {
   const mentions = new Set<ApplicationStage>();
   for (const context of contexts) {
-    if (/\binterview\b/i.test(context.text)) mentions.add("interview");
+    if (/\binterview\b/i.test(context.text.replace(/\bpre[- ]interview\s+assessment\b/gi, "assessment"))) mentions.add("interview");
     if (/\b(?:application|applications|candidacy|roles?)\b.{0,120}\b(?:is|are|remain) under review\b/i.test(context.text)) mentions.add("review");
     if (/\b(?:online |numerical )?assessment\b/i.test(context.text)) mentions.add("assessment");
     if (employmentOffer(context.text)) mentions.add("offer");
@@ -225,7 +240,7 @@ export function classifyMessage(message: MailEnvelope): MessageClassification | 
   const selectedMatch = findStageSignal(stageSignals.filter((signal) => signal.stage === proposedStage), contexts) ?? stageMatch;
   const selectedSignal = selectedMatch?.signal;
   const isOffer = proposedStage === "offer";
-  const requiresApproval = Boolean(terminalMatch || isOffer || contradictory || message.forwarded || /^\s*(?:fw|fwd):/i.test(message.subject));
+  const requiresApproval = Boolean(terminalMatch || isOffer || proposedStage === "applied" || contradictory || message.forwarded || /^\s*(?:fw|fwd):/i.test(message.subject));
   const subtype = proposedStage === "interview" ? interviewSubtype(selectedMatch?.evidenceExcerpt ?? "") : undefined;
   const label = proposedStage === "interview" ? `${subtype ? `${subtype[0].toUpperCase()}${subtype.slice(1)} ` : ""}interview` : proposedStage === "assessment" ? (selectedSignal?.reason === "numerical-assessment-deadline" ? "Numerical assessment deadline" : "Assessment") : "Application update";
   const evidenceExcerpt = terminalMatch?.evidenceExcerpt ?? selectedMatch?.evidenceExcerpt ?? "";

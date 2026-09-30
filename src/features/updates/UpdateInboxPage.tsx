@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { Link } from "react-router-dom";
+import { isWebMode } from "../../app/runtimeMode";
 import { applicationRepository } from "../../db/applicationRepository";
 import { EmptyState } from "../../components/EmptyState";
 import { Button } from "../../components/Button";
@@ -44,12 +45,12 @@ export function UpdateInboxPage() {
   const proposals = data?.proposals.filter(proposal => !proposalFilterReason(proposal)).sort((a, b) => order[a.status] - order[b.status] || b.source.receivedAt.localeCompare(a.source.receivedAt));
 
   return <div className="updates">
-    <header className="updates__header"><h1>Updates</h1><p>Review recruiter evidence before it changes your application tracker.</p><Link to="/">Open scan controls</Link></header>
+    <header className="updates__header"><h1>Updates</h1><p>Review recruiter evidence before it changes your application tracker.</p>{!isWebMode && <Link to="/">Open scan controls</Link>}</header>
     <p role="status" className="updates__feedback">{feedback}</p>
     {filtered.length > 0 && <div className="updates__filter-controls"><p>{filtered.length} saved item{filtered.length === 1 ? "" : "s"} filtered as unrelated or outdated. Nothing was deleted.</p><Button variant="secondary" aria-expanded={showFiltered} aria-controls="filtered-updates" onClick={() => setShowFiltered(!showFiltered)}>{showFiltered ? "Hide" : "Show"} filtered ({filtered.length})</Button></div>}
     {!data ? <section aria-label="Loading updates" aria-busy="true" className="updates__list">{[0, 1, 2].map((id) => <div className="updates__skeleton" data-testid="update-skeleton" key={id}><span /><span /><span /></div>)}</section>
       : data.error ? <section><p role="alert">Updates could not be loaded. Please try again.</p><Button onClick={() => setAttempt(attempt + 1)}>Retry loading updates</Button></section>
-      : !proposals?.length ? <EmptyState title={filtered.length ? "No recruiting updates to review" : "No updates yet"}>{filtered.length ? "Saved items that did not pass the current relevance checks are available under Show filtered." : "Run a Gmail or demo scan from the command center to review message evidence here."}</EmptyState>
+      : !proposals?.length ? <EmptyState title={filtered.length ? "No recruiting updates to review" : "No updates yet"}>{filtered.length ? "Saved items that did not pass the current relevance checks are available under Show filtered." : isWebMode ? "Gmail scanning is not available in this web build yet. Previously saved email evidence can be transferred with your workspace backup." : "Connect Gmail and scan from the command center to review real message evidence here."}</EmptyState>
       : <><p className="updates__summary">{proposals.filter((proposal) => proposal.status === "pending").length} pending · {proposals.filter((proposal) => proposal.status === "deferred").length} deferred</p><section className="updates__list" aria-label="Mail update proposals">{proposals.map((proposal) => <UpdateProposalRow key={proposal.id} proposal={proposal} applications={data.applications} onReviewed={setFeedback} />)}</section></>}
     {showFiltered && filtered.length > 0 && <section id="filtered-updates" aria-label="Filtered saved updates" className="updates__list">{filtered.map(proposal => <FilteredProposal key={proposal.id} proposal={proposal} onRestored={setFeedback} />)}</section>}
   </div>;

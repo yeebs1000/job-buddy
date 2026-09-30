@@ -20,6 +20,7 @@ function rules(canaries) {
   const configuredValues = [
     ["configured Google OAuth client ID", process.env.GOOGLE_OAUTH_CLIENT_ID],
     ["configured Google OAuth client secret", process.env.GOOGLE_OAUTH_CLIENT_SECRET],
+    ["configured Brave Search API key", process.env.JOB_BUDDY_BRAVE_SEARCH_API_KEY],
   ].filter(([, value]) => typeof value === "string" && value.trim().length >= 8);
   return [
     ...builtInCanaries.map((value) => ["token test canary", value]),

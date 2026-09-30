@@ -46,6 +46,7 @@ test("recovers from a failed board lookup without inventing results", async ({ p
 });
 
 test("keeps user-confirmed company postings separate from the regional estimate", async ({ page }) => {
+  await seedTracker(page);
   await page.route("**/api/discovery/jobs", (route) => route.fulfill({ json: { retrievedAt, truncated: false, jobs: [
     { id: "greenhouse:global:example:123", board, title: "Software Engineer", location: "Singapore", market: "SG", url: "https://job-boards.greenhouse.io/example/jobs/123", salary: [], retrievedAt },
   ] } }));
@@ -66,3 +67,4 @@ test("keeps user-confirmed company postings separate from the regional estimate"
   await expect(page.getByRole("region", { name: "Salary estimate" })).toHaveCount(0);
   await page.screenshot({ path: "test-results/company-salary-desktop.png", fullPage: true });
 });
+import { seedTracker } from "./support/seedTracker";

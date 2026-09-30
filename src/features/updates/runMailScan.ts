@@ -28,7 +28,7 @@ async function scan({ adapter, mode, now = new Date().toISOString(), initialSync
     prior = await jobBuddyDb.transaction("rw", jobBuddyDb.metadata, async () => {
       const state = await updateRepository.getScanState(source);
       prior = state;
-      const attempted = { ...state, ...(recheck ? { rechecking: true as const, continuationToken: undefined, progress: undefined } : {}), attemptId, lastAttemptedScanAt: now };
+      const attempted = { ...state, error: undefined, errorCode: undefined, ...(recheck ? { rechecking: true as const, continuationToken: undefined, progress: undefined } : {}), attemptId, lastAttemptedScanAt: now };
       await updateRepository.saveScanState(source, attempted);
       return attempted;
     });

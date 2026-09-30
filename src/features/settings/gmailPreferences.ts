@@ -14,7 +14,7 @@ export interface GmailPreferencesStore {
 }
 
 export const defaultGmailPreferences: GmailPreferences = {
-  selectedSource: "simulated",
+  selectedSource: "gmail",
   initialSyncCompleted: false,
   dailyActiveScanEnabled: false,
   automationMode: "approval",

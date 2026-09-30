@@ -80,11 +80,7 @@ export function GmailSettingsPanel(props: GmailSettingsPanelProps) {
     </fieldset>
 
     <div className="gmail-settings__row">
-      <div><h3>Inbox source</h3><p>Switch to fictional messages anytime. Live scan failures never fall back automatically.</p></div>
-      <div className="gmail-settings__source" role="group" aria-label="Inbox source">
-        <Button disabled={Boolean(busy)} variant={preferences.selectedSource === "simulated" ? "primary" : "secondary"} onClick={() => props.onSourceChange("simulated")}>Use demo inbox</Button>
-        {connected && preferences.initialSyncCompleted && <Button disabled={Boolean(busy)} variant={preferences.selectedSource === "gmail" ? "primary" : "secondary"} onClick={() => props.onSourceChange("gmail")}>Use live Gmail</Button>}
-      </div>
+      <div><h3>Real mail only</h3><p>Your inbox contains Gmail updates only. Demo messages are excluded; disconnecting never substitutes fictional data.</p></div>
     </div>
   </section>;
 }

@@ -18,6 +18,9 @@ import { HongKongCsdAdapter } from "./research/adapters/HongKongCsdAdapter";
 import { UnitedStatesBlsAdapter } from "./research/adapters/UnitedStatesBlsAdapter";
 import { DiscoveryService } from "./discovery/DiscoveryService";
 import { FxService } from "./research/FxService";
+import { TavilySearchService } from "./research/TavilySearchService";
+import { TavilyKeyStore } from "./research/TavilyKeyStore";
+import { SearchBudgetStore } from "./research/SearchBudgetStore";
 import { DesktopClientStore } from "./gmail/DesktopClientStore";
 import { companionListenError, companionRuntimeError } from "./startup";
 
@@ -41,7 +44,7 @@ const research = new ResearchService({
   sources: [new SingaporeMomAdapter(), new HongKongCsdAdapter(), new UnitedStatesBlsAdapter()],
 });
 const server = createCompanionServer({
-  services: { connection, sync, profile, buddy, research, discovery: new DiscoveryService(), fx: new FxService() },
+  services: { connection, sync, profile, buddy, research, discovery: new DiscoveryService(), fx: new FxService(), webSalary: new TavilySearchService({ keys: new TavilyKeyStore(), budget: new SearchBudgetStore() }) },
   allowedOrigins: config.uiOrigins,
   uiOrigin,
   ...(uiOrigin === productionOrigin ? { staticDir: resolve("dist") } : {}),

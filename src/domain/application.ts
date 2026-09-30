@@ -28,6 +28,7 @@ export interface ResearchSnapshot {
 }
 
 export interface Application {
+  demoState?: "hidden" | "retained";
   id: string;
   company: string;
   role: string;

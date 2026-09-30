@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: Version or commit
-      placeholder: 1.0.0-beta.16 or commit hash
+      placeholder: 1.0.0-beta.18 or commit hash
     validations:
       required: true
   - type: dropdown
@@ -38,7 +38,7 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Windows version, Node/npm version, browser/version, and relevant command. Redact personal paths.
+      description: OS/version, browser/version, source build or package version, and Node/npm/command if relevant. Full macOS support is still planned. Redact personal paths.
   - type: checkboxes
     id: privacy
     attributes:

@@ -1,5 +1,5 @@
 import type ExcelJSTypes from "exceljs";
-import { readBoundedZip } from "../../lib/boundedZip";
+import { readBoundedZip, validatedZipBuffer } from "../../lib/boundedZip";
 
 export interface TrackerWorksheet { name: string; rows: unknown[][] }
 export interface TrackerWorkbook { worksheets: TrackerWorksheet[]; date1904: boolean }
@@ -14,7 +14,7 @@ export async function readTrackerWorkbook(bytes: Uint8Array): Promise<TrackerWor
   if (entryNames.some((name) => name.includes("/externallinks/"))) throw new Error("Workbook external links are not supported.");
   const { default: ExcelJS } = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const arrayBuffer = validatedZipBuffer(entries);
   try { await workbook.xlsx.load(arrayBuffer); }
   catch (error) { throw new Error("Could not read this .xlsx workbook; it may be invalid or encrypted.", { cause: error }); }
   if (workbook.worksheets.length > 20) throw new Error("Use at most 20 worksheets per workbook.");

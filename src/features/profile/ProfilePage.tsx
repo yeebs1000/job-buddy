@@ -6,6 +6,7 @@ import {
 } from "../../domain/profile";
 import { profileClient, type ProfileClient } from "./profileClient";
 import { ResumeImport } from "./ResumeImport";
+import { isWebMode } from "../../app/runtimeMode";
 import "./profile.css";
 
 interface ProfilePageProps {
@@ -124,8 +125,9 @@ export function ProfilePage({
   return <div className="profile-page">
     <ProfileHeader completeness={completeness} />
 
-    {!supported && <p className="profile-page__message profile-page__message--error" role="alert">Windows profile encryption is required. Job Buddy will not store this profile as plaintext.</p>}
-    {loadFailed && <div className="profile-page__message profile-page__message--error" role="alert"><p>Profile could not be loaded. Your saved profile has not been replaced. Start the local companion, then retry loading before editing.</p><button type="button" className="button button--secondary" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry loading profile</button></div>}
+    {isWebMode && <p className="profile-page__message">Saved only in this browser, not uploaded. Clearing site data removes your profile. Anyone using this unlocked browser can open it; browser-held encryption does not protect against malicious site scripts.</p>}
+    {!supported && <p className="profile-page__message profile-page__message--error" role="alert">{isWebMode ? "Secure browser storage is unavailable. Use an up-to-date browser over HTTPS. Your profile will not be saved as plaintext." : "Windows profile encryption is required. Job Buddy will not store this profile as plaintext."}</p>}
+    {loadFailed && <div className="profile-page__message profile-page__message--error" role="alert"><p>Profile could not be loaded. Your saved profile has not been replaced. {isWebMode ? "Retry loading before editing. If your browser storage is damaged, keep this workspace and restore a backup in a separate fresh browser profile." : "Start the local companion, then retry loading before editing."}</p><button type="button" className="button button--secondary" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry loading profile</button></div>}
 
     {importOpen ? <ResumeImport profile={profile} onClose={() => { setImportOpen(false); requestAnimationFrame(() => importButton.current?.focus()); }} onApply={(next) => {
       setProfile(next); setImportOpen(false);
@@ -241,7 +243,7 @@ function profileFieldLabel(path: PropertyKey[]): string {
 
 function ProfileHeader({ completeness }: { completeness: number | null }) {
   return <header className="profile-page__header">
-    <div><h1>Profile</h1><p>Reusable facts for faster applications. Saved data is encrypted for your Windows account.</p></div>
+    <div><h1>Profile</h1><p>{isWebMode ? "Reusable facts for faster applications. Saved on this browser with a browser-held encryption key." : "Reusable facts for faster applications. Saved data is encrypted for your Windows account."}</p></div>
     <span>{completeness === null ? "Loading…" : `${completeness} completed fields`}</span>
   </header>;
 }

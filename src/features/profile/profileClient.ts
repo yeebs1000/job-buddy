@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { candidateProfileSchema, emptyCandidateProfile, type CandidateProfile } from "../../domain/profile";
+import { isWebMode } from "../../app/runtimeMode";
+import { browserProfileClient } from "./browserProfileClient";
 
 const rawProfileResponseSchema = z.object({
   platformSupported: z.boolean(),
@@ -26,7 +28,7 @@ async function readJson(response: Response): Promise<unknown> {
   return response.json();
 }
 
-export const profileClient: ProfileClient = {
+export const companionProfileClient: ProfileClient = {
   async get() {
     const parsed = rawProfileResponseSchema.parse(await readJson(await fetch("/api/profile", {
       headers: { accept: "application/json" },
@@ -51,3 +53,5 @@ export const profileClient: ProfileClient = {
     if (!response.ok) throw new Error("profile-request-failed");
   },
 };
+
+export const profileClient = isWebMode ? browserProfileClient : companionProfileClient;

@@ -2,6 +2,30 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { GmailTransport, GmailTransportError } from "./GmailTransport";
 
 describe("GmailTransport", () => {
+  it("shares quota cooldown with waiting requests even when a concurrent request succeeds", async () => {
+    vi.useFakeTimers();
+    const starts: number[] = [];
+    const start = Date.now();
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => {
+      starts.push(Date.now() - start);
+      if (starts.length === 1) return Response.json({}, { status: 429, headers: { "retry-after": "5" } });
+      if (starts.length === 2) await new Promise(resolve => setTimeout(resolve, 100));
+      return Response.json({ historyId: "123" });
+    });
+    const transport = new GmailTransport({ getAccessToken: async () => "secret" }, fetcher);
+    const limited = transport.getProfile();
+    const inFlight = transport.getProfile();
+    await vi.advanceTimersByTimeAsync(0);
+    const waiting = transport.getProfile();
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(starts).toEqual([0, 0]);
+    await vi.runAllTimersAsync();
+    expect(await Promise.all([limited, inFlight, waiting])).toEqual([
+      { historyId: "123" }, { historyId: "123" }, { historyId: "123" },
+    ]);
+    expect(starts.slice(2).every(time => time >= 5000)).toBe(true);
+  });
+
   it.each(["TimeoutError", "TypeError"])("retries transient %s failures before returning mail", async name => {
     vi.useFakeTimers();
     const fetcher = vi.fn<typeof fetch>().mockRejectedValueOnce(Object.assign(new Error("private"), { name })).mockImplementation(async () => Response.json({ historyId: "123" }));

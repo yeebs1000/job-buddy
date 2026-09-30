@@ -37,6 +37,92 @@ class FakeTransport implements GmailTransportPort {
 }
 
 describe("GmailSyncService", () => {
+  it("recovers transient message failures serially without refetching successful peers", async () => {
+    const transport = new FakeTransport(); transport.messageIds = transport.messageIds.slice(0, 10);
+    const fetched: string[] = []; let active = 0; let serialPeak = 0;
+    transport.getMessage = async id => {
+      fetched.push(id); active++;
+      if (fetched.length > 5) serialPeak = Math.max(serialPeak, active);
+      await Promise.resolve(); active--;
+      if (id === "g-2" && fetched.filter(value => value === id).length === 1) throw new GmailTransportError(503, "gmail-network-error");
+      return { id };
+    };
+    const result = await new GmailSyncService(transport, message => envelope(message.id!)).scan({ cursor: null, initialSyncConfirmed: true, batch: true });
+    expect(result.messages.map(message => message.providerMessageId)).toEqual(transport.messageIds);
+    expect(fetched.filter(id => id === "g-1")).toHaveLength(1);
+    expect(fetched.filter(id => id === "g-2")).toHaveLength(2);
+    expect(serialPeak).toBe(1);
+  });
+
+  it("bounds serial recovery and preserves successful peers for a later resume", async () => {
+    const transport = new FakeTransport(); transport.messageIds = ["g-1", "g-2", "g-3", "g-4", "g-5"];
+    const fetched: string[] = []; let offline = true;
+    transport.getMessage = async id => {
+      fetched.push(id);
+      if (id === "g-2" && offline) throw new GmailTransportError(503, "gmail-timeout");
+      if (id === "g-3") throw new GmailTransportError(404);
+      return { id };
+    };
+    const service = new GmailSyncService(transport, message => envelope(message.id!));
+    const input = { cursor: null, initialSyncConfirmed: true, batch: true };
+    await expect(service.scan(input)).rejects.toMatchObject({ code: "gmail-timeout" });
+    expect(fetched.filter(id => id === "g-2")).toHaveLength(2);
+    offline = false;
+    const result = await service.scan(input);
+    expect(result.messages.map(message => message.providerMessageId)).toEqual(["g-1", "g-2", "g-4", "g-5"]);
+    expect(result.diagnostics.ignoredMessageCount).toBe(1);
+    expect(fetched.filter(id => id === "g-4")).toHaveLength(1);
+    expect(result.nextCursor).toBe("184500");
+  });
+
+  it("fetches bounded parallel groups while preserving message order", async () => {
+    vi.useFakeTimers();
+    try {
+      const transport = new FakeTransport(); transport.messageIds = transport.messageIds.slice(0, 25);
+      let active = 0; let peak = 0;
+      transport.getMessage = async id => {
+        peak = Math.max(peak, ++active);
+        await new Promise(resolve => setTimeout(resolve, id === "g-1" ? 100 : 50));
+        active--;
+        return { id };
+      };
+      const start = Date.now();
+      const pending = new GmailSyncService(transport, message => envelope(message.id!))
+        .scan({ cursor: null, initialSyncConfirmed: true, batch: true });
+      await vi.runAllTimersAsync();
+      const result = await pending;
+      expect(peak).toBe(5);
+      expect(Date.now() - start).toBe(300);
+      expect(result.messages.map(message => message.providerMessageId)).toEqual(transport.messageIds);
+      expect(result.progress).toEqual({ processed: 25, total: 25 });
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("drains a failed group before unlocking and retries without skipping messages", async () => {
+    const transport = new FakeTransport(); transport.messageIds = transport.messageIds.slice(0, 10);
+    let release!: () => void;
+    let fail = true;
+    const fetched: string[] = [];
+    transport.getMessage = async id => {
+      fetched.push(id);
+      if (fail && id === "g-1") throw new GmailTransportError(503);
+      if (fail && id === "g-2") await new Promise<void>(resolve => { release = resolve; });
+      return { id };
+    };
+    const service = new GmailSyncService(transport, message => envelope(message.id!));
+    const input = { cursor: null, initialSyncConfirmed: true, batch: true };
+    const pending = service.scan(input).catch(error => error);
+    await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+    await expect(service.scan(input)).rejects.toMatchObject({ code: "gmail-scan-busy" });
+    expect(fetched).toEqual(["g-1", "g-2", "g-3", "g-4", "g-5"]);
+    release();
+    expect(await pending).toMatchObject({ status: 503 });
+    fail = false;
+    const result = await service.scan(input);
+    expect(result.messages.map(message => message.providerMessageId)).toEqual(transport.messageIds);
+    expect(result.diagnostics.ignoredMessageCount).toBe(0);
+  });
+
   it("expires resume tokens and refuses unissued offsets", async () => {
     const transport = new FakeTransport(); transport.messageIds = transport.messageIds.slice(0, 60);
     const service = new GmailSyncService(transport, message => envelope(message.id!));
@@ -111,12 +197,12 @@ describe("GmailSyncService", () => {
     transport.getProfile = async () => ({ historyId: "124" });
     await expect(service.scan({ cursor: null, initialSyncConfirmed: true })).resolves.toMatchObject({ nextCursor: "124" });
   });
-  it("does not fan out more requests after one message fails", async () => {
+  it("does not start another parallel group after one message fails", async () => {
     const transport = new FakeTransport();
     const fetched: string[] = [];
     transport.getMessage = async id => { fetched.push(id); throw new GmailTransportError(403); };
     await expect(new GmailSyncService(transport).scan({ cursor: null, initialSyncConfirmed: true })).rejects.toBeInstanceOf(GmailTransportError);
-    expect(fetched).toEqual(["g-1"]);
+    expect(fetched).toEqual(["g-1", "g-2", "g-3", "g-4", "g-5"]);
   });
   it("requires consent and caps the 90-day initial scan at 500 newest inbox messages", async () => {
     const transport = new FakeTransport();

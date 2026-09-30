@@ -1,55 +1,63 @@
-# V1 public-beta launch checklist
+# V1 release checklist
 
-Record dates, machine/browser versions, commands, exit codes, and links to synthetic evidence. A local pass never substitutes for an external gate. Do not attach personal screenshots, resumes, email bodies, tokens, tracker exports, or live application answers.
+Current target: **downloadable Windows and macOS apps**, not a hosted backend. Gmail → review → Command Center is primary; Excel/manual tracking and optional Browser Buddy support it. Packaging follows feature acceptance. See [ROADMAP.md](../../ROADMAP.md).
 
-**Decision on 2026-09-18: NOT READY FOR PUBLICATION.** The local release gate passes, but XLSX validation and the downstream Excel parser can interpret the same archive differently. Import safety needs another implementation change and review before publication. Do not use untrusted XLSX files meanwhile.
+Publishing source as a clearly labelled beta is separate from launching a general-user V1 download. Neither local test results nor a GitHub push establish Mac support, Google approval or clean-install acceptance. Record dates, commands, immutable source revisions and synthetic evidence. Never attach private mail, resumes, tokens or real trackers.
 
-## 1. Candidate identity and owner review
+## 1. Source candidate and GitHub hygiene
 
-- [x] Version is `1.0.0-beta.16` in `package.json` and the lockfile; extension `version_name` matches while numeric `version` remains Chrome-valid (`1.0.0`). Checked locally on 2026-09-18.
-- [ ] Owner reviews README, Chinese summary, privacy/security policies, release notes, issue templates, dependency findings, and all known failures.
-- [ ] Owner explicitly authorizes visibility change and publication. Until then the repository and artifacts remain private/unpublished.
+- [x] Candidate version: `1.0.0-beta.18`; no stable V1 release claim.
+- [x] English/Chinese onboarding and roadmap distinguish implemented Windows features from planned macOS/download support.
+- [x] Earlier hosted-website direction is marked superseded; historical verification reports are retained.
+- [x] `npm.cmd run check` and `npm.cmd run check:web` passed on 2026-09-30. The initial unit run failed 3/881; an unchanged full rerun passed 881/881 plus 30 dashboard and 5 extension tests. See the preparation report; flakiness remains disclosed.
+- [x] Production audit ran: exit 0 at high threshold, two moderate ExcelJS/uuid findings. No forced downgrade; final risk acceptance remains with owner review.
+- [x] Publication tree/staged changes and reachable history scanned; public-tree and redacted Gitleaks checks passed, file inventory reviewed, public-facing relative links validated. Repeat after future changes.
+- [x] Candidate runtime source built with clean dependencies from a staged Git export on 2026-09-30; app/extension builds and guards passed. This is not clean packaged installation or a separate machine.
+- [ ] Owner reviews the candidate, known failures and public-facing docs; explicitly authorizes public visibility/release.
+- [ ] Verify private vulnerability reporting for the intended audience or provide a usable private contact. Read-only GitHub API returned 404 while the repository was private on 2026-09-30; availability remains unverified.
 
-## 2. Reproducible local verification
+## 2. Windows feature acceptance
 
-- [x] From a disposable copy, run `npm.cmd ci --no-audit --no-fund` without changing global npm permissions. Clean install, app build, extension build and packaging passed again from Git-exported source `4a521df` on Node 24.19.0/npm 11.17.0. Same machine, isolated dependency tree; not separate-machine acceptance.
-- [x] Run `npm.cmd run check` and preserve the complete result, including warnings or timeouts. At `4a521df`: exit 0, 713 tests/95 files, 21 dashboard E2E and 5 extension E2E; types, builds and all three guards passed. Warnings: large Vite chunks, terminal color settings and test environment overhead. Earlier intermittent extension timeout remains recorded.
-- [x] Run `npm.cmd audit --omit=dev --audit-level=high`; record all findings, including moderate advisories, rather than claiming a zero audit. Exit 0; two moderate ExcelJS/uuid findings, no high/critical findings reported. No forced downgrade.
-- [x] Run `npm.cmd run package:extension`; record the printed SHA-256 and inspect the ZIP file list for only intended runtime files. Private beta.16 ZIP: `manifest.json`, `service-worker.js`, `content.js`; SHA-256 `eff70b12f35ab4a9b551b4281f8b3f62ef6fe4c3295e9094fc931ca8ed7d4955`. This is not publication approval.
-- [x] Run `npm.cmd run verify:public-tree` and a fresh checksum-verified Gitleaks history scan. Source `4a521df`: guards passed, Gitleaks 8.30.1 scanned 92 reachable commits / 2.05 MB with no findings. Rerun after any further changes before publication; a clean scan is not proof of no secrets.
-- [ ] If any check fails or times out, record it under **Failed/open checks** and stop the release decision until triaged.
+- [ ] Test with a separate Windows machine/account without existing Job Buddy state.
+- [ ] Verify startup, shutdown, restart and occupied-port recovery without terminating unrelated listeners.
+- [ ] Import a synthetic tracker, review duplicates, export CSV/XLSX and verify lifecycle history/backup boundaries.
+- [ ] Import a synthetic resume, review conflicts, save/reload/delete the protected profile.
+- [ ] Load the built extension in Chrome and Edge; verify invalid-code recovery, pairing, revocation and re-pairing.
+- [ ] Verify guarded fill, existing-answer review, unsupported-field handling and no final submission on synthetic fixtures.
+- [ ] Confirm profile deletion, browser-data clearing, Gmail disconnect and extension revocation remain separate actions.
 
-## 3. Separate Windows-machine acceptance
+## 3. macOS feature acceptance — not implemented yet
 
-- [ ] Use a supported Node/npm version and a Windows account with no existing Job Buddy state.
-- [ ] Confirm `npm.cmd ci` and `npm.cmd run dev`; verify actionable behavior for ports 5173 and 43117 without terminating unrelated listeners.
-- [ ] Import a synthetic tracker, review duplicates, export CSV/XLSX, and confirm the export cannot restore omitted history, saved views, Gmail state, or shortlists.
-- [ ] Import a synthetic resume, review conflicts, save/reload the DPAPI profile, then delete it and confirm it stays absent after reload.
-- [ ] Extract the packaged ZIP and load the folder in current Chrome and Edge. Pair, revoke, confirm the old token fails, and pair again.
-- [ ] On synthetic/local fixtures, verify supported safe empty fields, existing-value review, manual custom widgets/repeated sections/uploads/legal fields, and the no-Next/no-Submit boundary.
-- [ ] Confirm clearing browser IndexedDB, deleting the profile, disconnecting Gmail, and revoking the extension are distinct actions.
+- [ ] Implement native secure storage for Gmail credentials, desktop-client configuration, profile and Tavily key; no plaintext fallback.
+- [ ] Verify local data paths, permissions, browser launch, loopback OAuth and extension pairing on macOS.
+- [ ] Run relevant unit, browser and native-storage checks on Mac hardware or an appropriate Mac runner.
+- [ ] Run separate-machine end-to-end acceptance with synthetic records and explicitly consented connector tests.
+- [ ] Declare supported OS versions and Apple Silicon/Intel coverage based on actual build/test results, not assumptions.
 
-## 4. Live-mail and Google external gate
+## 4. Real connectors
 
-- [ ] Maintainer-owned Desktop OAuth client and consent screen are configured for the exact loopback redirect.
-- [ ] Google restricted-scope verification/security requirements are complete for the intended audience.
-- [ ] With an explicitly consented test account containing only approved test mail, verify connect, first-scan disclosure, direct and forwarded updates, newsletter exclusion, partial resume, incremental cursor, revoked-token reconnect, and disconnect/revocation.
-- [ ] Confirm raw messages, OAuth values, provider errors, and screenshots containing private mail are not placed in release evidence.
+- [ ] Configure the maintainer-owned Desktop OAuth client and exact loopback redirect.
+- [ ] Complete applicable Google consent/distribution requirements for the intended audience.
+- [ ] With an explicitly consented test account, verify direct and forwarded mail, first scan, incremental scan, rechecks, newsletter exclusion, duplicate/partial-scan handling, revocation and reconnect.
+- [ ] Verify research with an owner-authorized Tavily account: normal search, no results, key errors, limits, cache, save/reload and removal. Do not place real keys/query data in release evidence.
+- [ ] Confirm no search/matching error fabricates evidence, overwrites accepted history or silently substitutes demo mail.
 
-## 5. Failed/open checks
+## 5. Distribution — after V1 features pass
 
-| Check | Date/environment | Observed result | Owner and disposition |
-| --- | --- | --- | --- |
-| Final risk-focused code review | 2026-09-18, synthetic reproductions | Gmail disconnect race fixed and re-reviewed; archive guard improved, but downstream XLSX parser can choose a different archive interpretation | **Important blocker remains**: ensure downstream parsing consumes only the validated representation, then regression-test and review |
-| Earlier whole installed-extension suite | 2026-09-18, current Windows checkout | 60-second timeout occurred earlier; final full gate passed 5/5, installed lifecycle 28.8s | No recurrence in final gate, but durable flake elimination is not proven |
-| Separate Windows/Edge acceptance | Not run | Open | Required before public claim |
-| Google approval/live-mail acceptance | Not run | Open external gate | Required before public Gmail claim |
-| Full gate and production audit | 2026-09-18, source `4a521df` | Passed with warnings and two moderate advisories | Does not override the archive review blocker |
+- [ ] Bundle the runtime and local services: no end-user Node, Docker or terminal setup.
+- [ ] Build Windows and macOS packages with automatic local startup and orderly shutdown.
+- [ ] Complete applicable platform signing/notarization and test first-launch trust prompts.
+- [ ] Verify clean install, upgrade preserving data, repair/recovery and documented uninstall/data retention.
+- [ ] Publish only verified artifacts with version, source commit, checksum and installation instructions.
+- [ ] Test the published downloads on clean Windows/Mac machines; source tests alone are insufficient.
 
-## 6. Publication decision
+## Verification record
 
-- [ ] Verify the private vulnerability-reporting link works for the intended public audience, or provide a usable private contact. The read-only API check on the private repository returned 404 on 2026-09-18; reporting availability is unverified, not confirmed disabled.
-- [ ] Review all recorded failures and limitations; explicitly accept, defer, or block each.
-- [ ] Confirm release notes say **candidate** until the actual artifact/repository publication succeeds.
-- [ ] Publish only after owner approval; record the immutable commit, artifact checksum, destination, and publication time.
-- [ ] Recheck public pages for accidental personal data or secrets, then test the published installation instructions from the published source.
+| Evidence | Scope and limitations |
+| --- | --- |
+| [2026-09-30 hardening](2026-09-30-release-hardening.md) | Earlier same-machine run: 881 unit tests, 30 dashboard tests, 5 extension tests, 3 pairing repeats and web-core check passed in the documented sequence; not one uninterrupted final gate |
+| [2026-09-30 repository preparation](2026-09-30-repository-preparation.md) | Fresh checks for the GitHub cleanup; includes failures and subsequent results without replacing the earlier record |
+| [2026-09-24 lean verification](v1-lean-verification.md) | Historical XLSX fix and acceptance boundaries |
+| [Earlier public-tree audit](public-tree-audit.md) | Historical clean-install and secrets evidence; must be refreshed for the final candidate |
+
+Outstanding items are not made green by a documentation update. Hosted Gmail/search is no longer a launch prerequisite; local Mac support, connectors and downloadable distribution are.

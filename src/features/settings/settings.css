@@ -101,3 +101,10 @@
   .buddy-settings__choices { flex-direction: column; width: 100%; }
   .buddy-settings__activity li { grid-template-columns: 1fr; }
 }
+.research-settings__body { padding: 1.5rem; }
+.research-settings__body form { max-width: 44rem; }
+.research-settings__body label { display: grid; gap: .5rem; }
+.research-settings__actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin-top: 1rem; }
+.research-settings__help { color: var(--color-muted); max-width: 72ch; font-size: .9rem; }
+.settings-advanced { padding: 1.25rem; border: 1px solid var(--border); border-radius: 1rem; }
+.settings-advanced > summary { cursor: pointer; font-weight: 600; }

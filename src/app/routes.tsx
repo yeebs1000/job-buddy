@@ -1,13 +1,14 @@
 import type { RouteObject } from "react-router-dom";
+import { lazy } from "react";
 import { AppShell } from "../components/AppShell";
 import { CommandCenterPage } from "../features/command-center/CommandCenterPage";
-import { ApplicationsPage } from "../features/applications/ApplicationsPage";
-import { ApplicationDetailPage } from "../features/application-detail/ApplicationDetailPage";
-import { ImportTrackerPage } from "../features/import-export/ImportTrackerPage";
-import { UpdateInboxPage } from "../features/updates/UpdateInboxPage";
-import { SettingsPage } from "../features/settings/SettingsPage";
-import { ProfilePage } from "../features/profile/ProfilePage";
-import { DiscoveryPage } from "../features/discovery/DiscoveryPage";
+const ApplicationsPage = lazy(() => import("../features/applications/ApplicationsPage").then(module => ({ default: module.ApplicationsPage })));
+const ApplicationDetailPage = lazy(() => import("../features/application-detail/ApplicationDetailPage").then(module => ({ default: module.ApplicationDetailPage })));
+const ImportTrackerPage = lazy(() => import("../features/import-export/ImportTrackerPage").then(module => ({ default: module.ImportTrackerPage })));
+const UpdateInboxPage = lazy(() => import("../features/updates/UpdateInboxPage").then(module => ({ default: module.UpdateInboxPage })));
+const SettingsPage = lazy(() => import("../features/settings/SettingsPage").then(module => ({ default: module.SettingsPage })));
+const ProfilePage = lazy(() => import("../features/profile/ProfilePage").then(module => ({ default: module.ProfilePage })));
+const DiscoveryPage = lazy(() => import("../features/discovery/DiscoveryPage").then(module => ({ default: module.DiscoveryPage })));
 
 function Page({ title }: { title: string }) {
   return <section><h1>{title}</h1><p>Interview preparation is planned for V2. For now, save interview details and notes with each application.</p></section>;

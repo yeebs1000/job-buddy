@@ -5,6 +5,15 @@ import { readBoundedZip } from "./boundedZip";
 
 const limits = { compressed: 4096, uncompressed: 64, entries: 3, ratio: 100 };
 
+it("rejects prototype-reserved entry names before rebuilding the validated archive", () => {
+  const bytes = zipSync({ "entry.bin": strToU8("safe") });
+  const view = new DataView(bytes.buffer);
+  const central = view.getUint32(bytes.length - 6, true);
+  bytes.set(strToU8("__proto__"), 30);
+  bytes.set(strToU8("__proto__"), central + 46);
+  expect(() => readBoundedZip(bytes, limits)).toThrow("zip-path-not-allowed");
+});
+
 it("enforces total output budget and fixed-buffer overflow with small fixtures", () => {
   const bytes = zipSync({ "a": strToU8("a".repeat(40)), "b": strToU8("b".repeat(40)) });
   expect(() => readBoundedZip(bytes, limits)).toThrow("zip-uncompressed-too-large");

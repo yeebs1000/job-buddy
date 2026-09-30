@@ -6,6 +6,7 @@ Thank you for helping make job-application tracking calmer, safer, and easier to
 
 - Open an issue before large features or changes to privacy, Gmail, salary research, or Browser Buddy boundaries.
 - Keep the beta local-first. Do not add hosted accounts, telemetry, scraping, or automatic final submission without an approved design.
+- Follow [ROADMAP.md](ROADMAP.md): target downloadable Windows/macOS apps, keep Gmail central, and defer packaging until V1 functions pass acceptance. Current secure storage is Windows-specific; browser-core tests do not establish Mac parity.
 - Use fictional data in fixtures, screenshots, bug reports, and tests. Never commit personal trackers, recruiter messages, credentials, tokens, or exports.
 
 ## Local setup

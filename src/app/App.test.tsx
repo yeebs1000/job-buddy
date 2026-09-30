@@ -6,9 +6,9 @@ import { jobBuddyDb } from "../db/database";
 
 afterEach(async () => { cleanup(); await jobBuddyDb.delete(); await jobBuddyDb.open(); });
 
-it("renders the Job Buddy command center", async () => {
+it("opens a live-only empty tracker without seeding samples", async () => {
   render(<App />);
-  expect(screen.getByRole("heading", { name: /application journey/i })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Start your tracker" })).toBeInTheDocument();
   expect(within(screen.getByRole("navigation", { name: "Primary navigation" })).getByRole("link", { name: "Applications" })).toBeInTheDocument();
-  expect(await screen.findByText("8 applications")).toBeInTheDocument();
+  expect(await jobBuddyDb.applications.count()).toBe(0);
 });

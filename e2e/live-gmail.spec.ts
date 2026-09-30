@@ -1,15 +1,27 @@
 import { expect, test, type Page } from "@playwright/test";
 import { FakeGmailApi, liveInterviewScan } from "./support/FakeGmailApi";
+import { seedTracker } from "./support/seedTracker";
+
+test("an empty dashboard starts from connected Gmail, with manual tracking secondary", async ({ page }) => {
+  const gmail = new FakeGmailApi(page); await gmail.install();
+  await page.route("**/api/buddy/**", route => route.abort());
+  gmail.setStatus({ state: "connected", accountEmail: "fixture@example.com", platformSupported: true });
+  gmail.queueScan(liveInterviewScan);
+  await page.goto("/");
+  const scan = page.getByRole("region", { name: "Live Gmail scan" });
+  await expect(scan).toBeVisible();
+  const manual = page.getByRole("link", { name: "Add application", exact: true });
+  expect((await scan.boundingBox())!.y).toBeLessThan((await manual.boundingBox())!.y);
+  await page.getByRole("button", { name: "Scan last 90 days" }).click();
+  await expect(scan).not.toContainText("Last successful scan: Never");
+  await expect(scan.getByRole("link", { name: "Review 1 pending update" })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/gmail-first-mobile.png", fullPage: true });
+});
 
 async function clearJobBuddyDatabase(page: Page) {
-  await page.goto("/");
-  await page.evaluate(() => new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase("job-buddy");
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error("The test browser could not clear Job Buddy storage."));
-  }));
-  await page.reload();
+  await seedTracker(page);
   await expect(page.getByRole("heading", { name: "Circuit Harbour Ltd" })).toBeVisible();
 }
 
@@ -101,7 +113,7 @@ test("saves partial Gmail progress, survives reload, and resumes without duplica
   expect(requestNumber).toBe(3);
 });
 
-test("connects, scans, survives revoked Gmail, and returns to demo", async ({ page }) => {
+test("connects, scans, survives revoked Gmail, and never returns to demo", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-09-12T00:00:00.000Z") });
   const gmail = new FakeGmailApi(page);
   await gmail.install();
@@ -115,7 +127,7 @@ test("connects, scans, survives revoked Gmail, and returns to demo", async ({ pa
   await page.goto("/settings?gmail=connected");
   await expect(page.getByText("user@example.com")).toBeVisible();
   await page.getByRole("button", { name: "Scan last 90 days" }).click();
-  await expect(page.getByRole("status")).toContainText(/recent updates were checked/i);
+  await expect(page.getByRole("status").filter({ hasText: /recent updates were checked/i })).toBeVisible();
 
   await page.getByRole("link", { name: /Updates/ }).click();
   const interview = page.getByRole("article").filter({ hasText: "Technical interview invitation — Software Engineer" });
@@ -138,11 +150,12 @@ test("connects, scans, survives revoked Gmail, and returns to demo", async ({ pa
   await page.goto("/settings");
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Disconnect" }).click();
-  await expect(page.getByRole("status")).toContainText(/evidence was kept/i);
+  await expect(page.getByRole("status").filter({ hasText: /evidence was kept/i })).toBeVisible();
   expect(gmail.disconnected).toBe(true);
-  await page.getByRole("button", { name: "Use demo inbox" }).click();
+  await expect(page.getByRole("button", { name: "Use demo inbox" })).toHaveCount(0);
   await page.getByRole("link", { name: "Overview" }).click();
-  await expect(page.getByText("Demo inbox", { exact: true })).toBeVisible();
+  await expect(page.getByText("Live Gmail", { exact: true })).toBeVisible();
+  await expect(page.getByText("Demo inbox", { exact: true })).toHaveCount(0);
 });
 
 test("connects through a popup and scans without navigating the dashboard", async ({ page }) => {
@@ -165,7 +178,7 @@ test("connects through a popup and scans without navigating the dashboard", asyn
     await route.fulfill({ contentType: "text/html", body: '<script>history.replaceState(null,"","/api/gmail/oauth/callback");window.close();</script>' });
   });
   await popup.goto(new URL("/api/gmail/oauth/callback?state=fake&code=fake", page.url()).href, { waitUntil: "commit" });
-  await expect(page.getByRole("status")).toContainText("New updates are ready in Updates");
+  await expect(page.getByRole("status").filter({ hasText: "New updates are ready in Updates" })).toBeVisible();
   await expect(page.getByRole("checkbox", { name: /Daily active-session scan/i })).toBeChecked();
   await expect.poll(() => popup.isClosed()).toBe(true);
   expect(gmail.scanRequests).toBe(1);

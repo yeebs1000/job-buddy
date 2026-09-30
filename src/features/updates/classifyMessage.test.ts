@@ -10,6 +10,48 @@ const offerMail = fixtureMessages[3];
 const conflictingStatusMail = fixtureMessages[4];
 const marketingMail = fixtureMessages[5];
 
+it("recognizes consideration of submitted application details without claiming review progress", () => {
+  expect(classifyMessage(mail({ subject: "Thank You for Your Application!", excerpt: "Thank you for your interest in the Equity Research – Analyst/Associate, Greater China Technology Hardware (Hong Kong) position. We will give careful consideration to your application by reviewing the details you provided against the position criteria. Kind Regards, Morgan Stanley Talent Acquisition." }))).toMatchObject({ proposedStage: "applied", requiresApproval: true, deadlines: [] });
+});
+
+it("does not mistake a pre-interview assessment reminder for an interview or invent its deadline", () => {
+  const result = classifyMessage(mail({ subject: "BlackRock | Action Required: Complete Your Application", excerpt: "We noticed that you have not yet completed your application for 2027 Full-Time Analyst Program - Investments - Portfolio Management - Singapore. As a reminder, to complete your application you must submit your pre-interview assessment within 5 calendar days of receiving the invitation in order to be considered for this role." }));
+  expect(result).toMatchObject({ proposedStage: "assessment", deadlines: [] });
+  expect(result?.reasons).not.toContain("contradictory-stage-language");
+});
+
+it.each([
+  "We have not yet received your application. Please apply by Friday.",
+  "We have received your application for a credit card.",
+  "Thank you for applying for a visa at the Singapore Embassy",
+])("does not propose Applied for negated or non-employment evidence: %s", excerpt => {
+  expect(classifyMessage(mail({ subject: "Application update", excerpt }))?.proposedStage).not.toBe("applied");
+});
+
+it("does not treat interest in a role as proof of an application", () => {
+  expect(classifyMessage(mail({ subject: "Research Analyst role", excerpt: "Thank you for your interest in our Research Analyst role. Please submit your application on our careers site." }))?.proposedStage).not.toBe("applied");
+});
+
+it.each(["Software Engineer at Visa", "Credit Card Analyst at Example Bank"])("retains an employment confirmation for %s", role => {
+  expect(classifyMessage(mail({ subject: `Thank you for applying for ${role}`, excerpt: "" }))).toMatchObject({ proposedStage: "applied", requiresApproval: true });
+});
+
+it.each([false, true])("recognizes a Workday-style confirmation (forwarded: %s) without inventing review progress", forwarded => {
+  const subject = "Thank you for applying for Associate, APAC ETF Platform at Example Asset Management";
+  const result = classifyMessage(mail({ subject: forwarded ? `Fwd: ${subject}` : subject,
+    fromAddress: forwarded ? "candidate@example.test" : "employer@myworkday.com",
+    excerpt: "Thanks for taking the time to apply for our Associate, APAC ETF Platform position! Our team will take a close look at the applicants for this role.",
+    ...(forwarded ? { forwarded: { fromAddress: "employer@myworkday.com", subject } } : {}),
+  }));
+  expect(result).toMatchObject({ proposedStage: "applied", deadlines: [] });
+  expect(result?.kind).toBeUndefined();
+  if (forwarded) expect(result?.requiresApproval).toBe(true);
+});
+
+it.each(["Your loan application has been received", "Thank you for applying for a visa", "Job alert: Thank you for applying tips"])("does not classify non-job confirmation: %s", subject => {
+  expect(classifyMessage(mail({ subject, excerpt: "" }))).toBeNull();
+});
+
 function mail(overrides: Partial<MailEnvelope>): MailEnvelope {
   return {
     providerMessageId: "mail-test-001",
@@ -144,10 +186,9 @@ describe("classifyMessage", () => {
     });
   });
 
-  it("returns no proposal for marketing mail or a generic acknowledgement", () => {
-    // Catches broad acknowledgement matching that turns non-updates into application proposals.
+  it("excludes marketing but retains an application acknowledgement for explicit review", () => {
     expect(classifyMessage(marketingMail)).toBeNull();
-    expect(classifyMessage(mail({ subject: "Thank you for applying", excerpt: "We have received your application and will be in touch." }))).toBeNull();
+    expect(classifyMessage(mail({ subject: "Thank you for applying", excerpt: "We have received your application and will be in touch." }))).toMatchObject({ proposedStage: "applied", requiresApproval: true });
   });
 
   it("keeps only HTTPS links and does not guess an unknown or missing timezone", () => {

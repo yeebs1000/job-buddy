@@ -1,25 +1,19 @@
-import { expect, test, type Page } from "@playwright/test";
-
-async function clearJobBuddyDatabase(page: Page) {
-  await page.goto("/");
-  await page.evaluate(() => new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase("job-buddy");
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error("The test browser could not clear Job Buddy storage."));
-  }));
-  await page.reload();
-}
+import { expect, test } from "@playwright/test";
+import { seedTracker } from "./support/seedTracker";
+import { FakeGmailApi, liveInterviewScan } from "./support/FakeGmailApi";
 
 test.beforeEach(async ({ page }) => {
   await page.clock.install({ time: new Date("2026-09-12T00:00:00.000Z") });
-  await clearJobBuddyDatabase(page);
+  const gmail = new FakeGmailApi(page); await gmail.install();
+  gmail.setStatus({ state: "connected", accountEmail: "test@example.com", platformSupported: true });
+  gmail.queueScan(liveInterviewScan);
+  await seedTracker(page);
 });
 
 test("scans fixture mail, reviews evidence, and updates an interview deadline", async ({ page }) => {
-  // Catches default demo fixtures that cannot match the Review-stage Circuit application, or a Command Center that hides the extracted appointment time.
+  // Mock Gmail transport exercises the real production mail path with explicit fixture applications.
   await expect(page.getByRole("heading", { name: "Application command center" })).toBeVisible();
-  await page.getByRole("button", { name: "Scan demo inbox" }).click();
+  await page.getByRole("button", { name: "Scan last 90 days" }).click();
   await page.getByRole("link", { name: /review .*pending update/i }).click();
 
   const technicalInterview = page.getByRole("article").filter({ hasText: "Technical interview invitation — Software Engineer" });

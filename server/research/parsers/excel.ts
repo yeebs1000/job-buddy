@@ -1,13 +1,13 @@
 import ExcelJS from "exceljs";
-import { readBoundedZip } from "../../../src/lib/boundedZip";
+import { readBoundedZip, validatedZipBuffer } from "../../../src/lib/boundedZip";
 
 export interface ValuesWorksheet { name: string; rows: unknown[][] }
 
 export async function readValuesOnlyWorkbook(bytes: Uint8Array): Promise<ValuesWorksheet[]> {
   if (bytes.byteLength > 25 * 1024 * 1024) throw new Error("workbook-too-large");
-  readBoundedZip(bytes, { compressed: 25 * 1024 * 1024, uncompressed: 100 * 1024 * 1024, entries: 1000, ratio: 100, ratioMinimum: 1_000_000 });
+  const entries = readBoundedZip(bytes, { compressed: 25 * 1024 * 1024, uncompressed: 100 * 1024 * 1024, entries: 1000, ratio: 100, ratioMinimum: 1_000_000 });
   const workbook = new ExcelJS.Workbook();
-  const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  const arrayBuffer = validatedZipBuffer(entries);
   try { await workbook.xlsx.load(arrayBuffer); }
   catch (error) { throw new Error("invalid-or-encrypted-workbook", { cause: error }); }
   if (workbook.worksheets.length > 20) throw new Error("workbook-too-large");

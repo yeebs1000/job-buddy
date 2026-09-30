@@ -19,7 +19,7 @@ Use the repository's **Security → Report a vulnerability** private-advisory fl
 
 ## External-source processing
 
-**Private beta.16 release blocker:** the bounded XLSX validator and the downstream Excel parser can interpret the same archive differently. The limits described below are intended protections, not yet a verified end-to-end boundary for XLSX. Do not import untrusted XLSX files; public release remains blocked pending a fix and review. See `docs/releases/v1-launch-checklist.md`.
+**XLSX archive-interpretation fix:** both workbook readers now rebuild the archive exclusively from bounded, validated entries before passing it to ExcelJS. The adversarial regression demonstrates the original parser disagreement and verifies that neither reader consumes a second archive hidden in a ZIP comment. This regression and the bounded-ZIP tests passed again on 2026-09-30. This closes that specific blocker, not the whole security review or public-release gates. See [the launch checklist](docs/releases/v1-launch-checklist.md).
 
 Official salary downloads are restricted to allowlisted MOM/SingStat, Hong Kong C&SD, and BLS hosts. Downloads have time, redirect, and body-size limits; releases are parsed into strict schemas, checksummed, staged, and quarantined on failure before promotion. The last known good release remains available when a refresh fails.
 
@@ -31,7 +31,9 @@ Workbook import is values-only. Inputs are limited to 5 MB compressed and 25 MB 
 
 Company discovery constructs GET URLs only on fixed Greenhouse/Lever API origins from validated board tokens; arbitrary URLs, redirects, oversized responses and malformed records are rejected. Board lists are cached for five minutes with bounded concurrency/cache size. FX reads only the ECB provider through Frankfurter, with pair/date validation and a seven-day maximum data age. Neither integration receives candidate profiles or mail. Employer links are external and should be checked before applying. Shortlists are browser-local and are not included in standard application exports.
 
-The distributed Google desktop client ID is public configuration, not a confidential secret. Real Google registration, restricted-scope review and acceptance checks remain release gates. Web-client secrets and tokens must never be packaged with the app. Windows DPAPI storage remains required for persistent Gmail/profile access.
+The distributed Google desktop client ID is public configuration, not a confidential secret. Real Google registration, restricted-scope review and acceptance checks remain release gates. Web-client secrets and tokens must never be packaged with the app. In companion mode, Windows DPAPI protects persistent Gmail credentials and the saved profile. Browser-core mode stores its profile locally using Web Crypto; it does not yet provide hosted Gmail, research, or extension pairing. Browser-held encryption is not protection against malicious same-origin code or someone using the unlocked browser. Do not expose the single-user companion publicly.
+
+The V1 distribution target is downloadable Windows/macOS apps, not hosted integrations. macOS credential/profile protection is not implemented or verified yet and must not fall back to plaintext. Browser-core checks are not Mac security acceptance.
 
 Job Buddy is local-first, not a hardened multi-user vault. Anyone with access to the same Windows account or browser profile may be able to access local data. Standard CSV/XLSX exports intentionally omit lifecycle evidence and are not full backups. Never commit `.env.local`, local companion data, real exports, or personal fixtures.
 

@@ -1,6 +1,13 @@
-import { inflateSync } from "fflate";
+import { inflateSync, zipSync } from "fflate";
 
 export interface ZipLimits { compressed: number; uncompressed: number; entries: number; ratio: number; ratioMinimum?: number }
+
+// Downstream ZIP readers must never re-interpret untrusted original bytes.
+// Stored entries avoid a second compression pass; comments/extra records are gone.
+export function validatedZipBuffer(entries: Map<string, Uint8Array>): ArrayBuffer {
+  const bytes = zipSync(Object.fromEntries(entries), { level: 0 });
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+}
 
 // Parse one canonical single-disk directory, then decode into fixed-size buffers.
 // Never trust advertised lengths to let a decompressor grow its output buffer.
@@ -43,7 +50,7 @@ export function readBoundedZip(bytes: Uint8Array, limits: ZipLimits): Map<string
     const rawName = bytes.subarray(at + 46, at + 46 + nameLength);
     if (!rawName.every((value, j) => value === bytes[local + 30 + j])) fail();
     const name = new TextDecoder("utf-8", { fatal: true }).decode(rawName).replaceAll("\\", "/");
-    if (!name || name.includes("\0") || name.startsWith("/") || name.split("/").includes("..") || /^[A-Za-z]:/.test(name)) fail("zip-path-not-allowed");
+    if (!name || name === "__proto__" || name.includes("\0") || name.startsWith("/") || name.split("/").includes("..") || /^[A-Za-z]:/.test(name)) fail("zip-path-not-allowed");
     if (names.has(name)) fail();
     names.add(name);
     localEnd = start + compressed;

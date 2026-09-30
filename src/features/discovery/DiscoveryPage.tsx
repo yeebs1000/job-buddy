@@ -6,6 +6,8 @@ import { shortlistRepository } from "./shortlistRepository";
 import { PostingSalary } from "./PostingSalary";
 import { jobBuddyDb } from "../../db/database";
 import "./discovery.css";
+import { isWebMode } from "../../app/runtimeMode";
+import { WebIntegrationNotice } from "../../components/WebIntegrationNotice";
 
 export function DiscoveryPage() {
   const [boardUrl, setBoardUrl] = useState("");
@@ -15,10 +17,11 @@ export function DiscoveryPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [savedOnly, setSavedOnly] = useState(false);
+  const [savedOnly, setSavedOnly] = useState(isWebMode);
   const saved = useLiveQuery(() => shortlistRepository.list().catch(() => { setError("Saved jobs could not be loaded. Your stored shortlist has not been replaced."); return []; }), []);
   useEffect(() => { void jobBuddyDb.metadata.get("discovery-board:v1").then((row) => { if (row) setBoardUrl(row.value); }).catch(() => setError("Could not restore the last company link. You can enter it again.")); }, []);
   async function search(event: React.FormEvent) {
+    if (isWebMode) { event.preventDefault(); return; }
     event.preventDefault(); setError(""); setMessage(""); setBusy(true); setResult(undefined); setSavedOnly(false);
     try {
       const board = parseBoardUrl(boardUrl);
@@ -31,9 +34,10 @@ export function DiscoveryPage() {
   const jobs = (savedOnly ? saved ?? [] : result?.jobs ?? []).filter((job) => (!market || (market === "unknown" ? !job.market : job.market === market)) && `${job.title} ${job.location}`.toLowerCase().includes(query.toLowerCase().trim()));
   return <div className="discovery-page">
     <header><h1>Discover jobs</h1><p>Explore a company’s open roles. Save the ones worth applying to.</p></header>
+    {isWebMode && <WebIntegrationNotice name="Job search" />}
     <form className="discovery-search" onSubmit={(event) => void search(event)}>
       <label>Company careers link<input required type="url" value={boardUrl} onChange={(event) => setBoardUrl(event.target.value)} placeholder="https://job-boards.greenhouse.io/company" /></label>
-      <button className="button button--primary" disabled={busy}>{busy ? "Loading jobs…" : "Find open roles"}</button>
+      <button className="button button--primary" disabled={busy || isWebMode}>{busy ? "Loading jobs…" : "Find open roles"}</button>
     </form>
     <p className="research-help">Supports public Greenhouse and Lever boards, including Lever EU. This searches a company board, not every job on the internet. Listings and availability can change.</p>
     <div className="discovery-toolbar">

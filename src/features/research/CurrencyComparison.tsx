@@ -3,6 +3,7 @@ import type { Currency } from "../../domain/research";
 import { validFxDate, type FxQuote } from "../../domain/fx";
 import { discoveryClient } from "../discovery/discoveryClient";
 import { roundSalaryDown } from "./roundSalary";
+import { isWebMode } from "../../app/runtimeMode";
 
 export function CurrencyComparison({ currency, minimum, maximum, period }: {
   currency: Currency; minimum: number; maximum: number; period: "annual" | "monthly" | "hourly" | "unspecified";
@@ -14,7 +15,7 @@ export function CurrencyComparison({ currency, minimum, maximum, period }: {
   useEffect(() => {
     let active = true;
     setQuote(undefined); setError("");
-    if (target === currency) { setBusy(false); return; }
+    if (isWebMode || target === currency) { setBusy(false); return; }
     setBusy(true);
     discoveryClient.fx(currency, target).then((value) => {
       if (!active) return;
@@ -27,7 +28,8 @@ export function CurrencyComparison({ currency, minimum, maximum, period }: {
     return (period === "annual" || period === "monthly" ? roundSalaryDown(value, target, period) : Math.floor(value * 100) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
   }
   return <div className="currency-comparison">
-    <label>Compare currency<select value={target} onChange={(event) => setTarget(event.target.value as Currency)}>{(["SGD", "HKD", "USD"] as const).map((code) => <option key={code}>{code}</option>)}</select></label>
+    <label>Compare currency<select disabled={isWebMode} value={target} onChange={(event) => setTarget(event.target.value as Currency)}>{(["SGD", "HKD", "USD"] as const).map((code) => <option key={code}>{code}</option>)}</select></label>
+    {isWebMode && <p className="research-help">Live exchange rates are not available in this web build yet.</p>}
     {busy && <p role="status">Getting reference exchange rate…</p>}
     {error && <p role="status">{error}</p>}
     {quote && quote.base === currency && quote.quote === target && target !== currency && <div aria-label="Converted salary">

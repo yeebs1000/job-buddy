@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
+import { seedTracker } from "./support/seedTracker";
 
 test("researches SG, HK, and US software applications without crossing markets", async ({ page }) => {
+  await seedTracker(page);
   await page.route("**/api/buddy/salary-evidence", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ evidence: [] }) }));
   await page.route("**/api/research/lookup", async (route) => {
     const query = route.request().postDataJSON() as { market: "SG" | "HK" | "US"; canonicalRole: string };

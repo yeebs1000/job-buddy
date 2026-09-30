@@ -176,8 +176,8 @@ async function restoreForManualReview(id: string): Promise<void> {
 export const updateRepository = {
   getScanState, saveScanState, create,
   get: (id: string) => jobBuddyDb.updateProposals.get(id),
-  list: () => jobBuddyDb.updateProposals.toArray(),
-  listPending: async () => (await jobBuddyDb.updateProposals.where("state").equals("pending").toArray()).filter(proposal => !proposalFilterReason(proposal)),
+  list: () => jobBuddyDb.updateProposals.filter(proposal => !proposal.demoHidden).toArray(),
+  listPending: async () => (await jobBuddyDb.updateProposals.where("state").equals("pending").toArray()).filter(proposal => !proposal.demoHidden && !proposalFilterReason(proposal)),
   restoreForManualReview,
   approveProposal: (id: string, edits: ProposalEdits = {}) => approve(id, edits, new Date().toISOString(), false),
   autoApproveProposal: (id: string, at: string) => approve(id, {}, at, true),

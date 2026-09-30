@@ -31,7 +31,7 @@ it("offers a bounded recheck that fetches older mail without resetting increment
     return { source: "gmail", messages: [], nextCursor: "latest-history", scannedAt: "2026-09-17T00:00:00Z", diagnostics: { truncated: false, recoverySync: false, ignoredMessageCount: 0 } };
   });
   render(<MemoryRouter><CommandCenterPage gmailAdapter={gmailAdapter} gmailStatus={{ state: "connected", platformSupported: true }} initialPreferences={{ ...defaultGmailPreferences, selectedSource: "gmail", initialSyncCompleted: true }} /></MemoryRouter>);
-  await userEvent.click(await screen.findByText("Missing an older email?"));
+  await userEvent.click(await screen.findByText("Missing an email or application update?"));
   await userEvent.click(screen.getByRole("button", { name: "Recheck recent emails" }));
   await waitFor(() => expect(requests).toEqual([null]));
   await waitFor(async () => expect((await updateRepository.getScanState("gmail")).lastSuccessfulScanAt).toBeDefined());
@@ -44,14 +44,28 @@ beforeEach(() => {
   seedDemoData.mockResolvedValue(undefined);
 });
 
-it("directs an empty tracker toward import, adding an application, or sample data", async () => {
+it("directs an empty tracker toward real records without sample seeding", async () => {
   list.mockResolvedValue([]);
   renderPage();
 
   expect(await screen.findByRole("heading", { name: "Start your tracker" })).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Import tracker" })).toHaveAttribute("href", "/import");
+  expect(screen.getByRole("button", { name: "Import Excel" })).toBeEnabled();
   expect(screen.getByRole("link", { name: "Add application" })).toHaveAttribute("href", "/applications?new=1");
-  expect(screen.getByRole("button", { name: "Load sample data" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Load sample data" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "Connect Gmail" })).toHaveAttribute("href", "/settings");
+  expect(screen.queryByLabelText("Scan mode")).not.toBeInTheDocument();
+});
+
+it("puts a connected inbox before manual tracker setup even with no applications", async () => {
+  list.mockResolvedValue([]);
+  const adapter = new GmailMailAdapter(async () => ({ source: "gmail", messages: [], nextCursor: "after-scan", scannedAt: "2026-09-25T00:00:00Z", diagnostics: { truncated: false, recoverySync: false, ignoredMessageCount: 0 } }));
+  render(<MemoryRouter><CommandCenterPage gmailAdapter={adapter} gmailStatus={{ state: "connected", platformSupported: true }} initialPreferences={{ ...defaultGmailPreferences }} /></MemoryRouter>);
+  const scan = await screen.findByRole("region", { name: "Live Gmail scan" });
+  const manual = screen.getByRole("link", { name: "Add application" });
+  expect(scan.compareDocumentPosition(manual) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await userEvent.click(screen.getByRole("button", { name: "Scan last 90 days" }));
+  await waitFor(async () => expect((await updateRepository.getScanState("gmail")).lastSuccessfulScanAt).toBeDefined());
+  expect(screen.getByRole("link", { name: /Review .* pending update/ })).toHaveAttribute("href", "/updates");
 });
 
 it("shows source labels and rejected row semantics", async () => {
@@ -64,15 +78,15 @@ it("shows source labels and rejected row semantics", async () => {
   expect(screen.getByLabelText(/rejected during review/i)).toBeInTheDocument();
   expect(screen.getByText("Stage: Applied")).toBeVisible();
   expect(screen.getByText("Rejected at Review")).toBeVisible();
-  expect(screen.getByRole("link", { name: "Open preparation" })).toHaveAttribute("href", "/prepare");
+  expect(screen.getAllByRole("button", { name: "Refresh research" })).toHaveLength(sampleApplications.length);
 });
 
-it("seeds once before reading the tracker", async () => {
+it("does not seed demo records while reading the tracker", async () => {
   list.mockResolvedValue([]);
   renderPage();
 
   await waitFor(() => expect(list).toHaveBeenCalled());
-  expect(seedDemoData.mock.invocationCallOrder[0]).toBeLessThan(list.mock.invocationCallOrder[0]);
+  expect(seedDemoData).not.toHaveBeenCalled();
 });
 
 it("keeps three stable skeleton rows visible while applications load", () => {
@@ -83,10 +97,10 @@ it("keeps three stable skeleton rows visible while applications load", () => {
   expect(screen.getAllByTestId("loading-skeleton")).toHaveLength(3);
 });
 
-it("shows unavailable research for a new manual application", async () => {
+it("offers inline research for a new manual application", async () => {
   list.mockResolvedValue([{ ...sampleApplications[0], research: undefined }]);
   renderPage();
-  expect(await screen.findByText("Research unavailable")).toBeVisible();
+  expect(await screen.findByRole("button", { name: "Review sources" })).toHaveAttribute("aria-expanded", "false");
 });
 
 it("renders a safe meeting link for the next deadline", async () => {
@@ -171,8 +185,8 @@ it("uses canonical state for an unsorted rejection history and labels other term
 it.each([
   { research: { salary: { minimum: 4000, currency: "SGD" as const, period: "monthly" as const } }, available: /4,000.*monthly/, absent: "Company rating unavailable" },
   { research: { companyRating: { score: 4.2, outOf: 5, source: "Graduate survey" } }, available: /4.2\/5/, absent: "Salary unavailable" },
-])("renders independently optional salary and rating observations", async ({ research, available, absent }) => {
+])("labels imported research as unverified", async ({ research }) => {
   list.mockResolvedValue([{ ...sampleApplications[0], research }]);
   renderPage();
-  expect(await screen.findByText(available)).toHaveTextContent(absent);
+  expect(await screen.findByText(/Imported \/ unverified/)).toBeVisible();
 });

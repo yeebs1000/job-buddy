@@ -17,12 +17,12 @@ async function materialize(application: StoredApplication): Promise<PersistedApp
 
 export const applicationRepository = {
   async list(): Promise<PersistedApplication[]> {
-    return Promise.all((await jobBuddyDb.applications.orderBy("updatedAt").reverse().toArray()).map(materialize));
+    return Promise.all((await jobBuddyDb.applications.orderBy("updatedAt").reverse().toArray()).filter(app => app.demoState !== "hidden").map(materialize));
   },
 
   async get(id: string): Promise<PersistedApplication | undefined> {
     const application = await jobBuddyDb.applications.get(id);
-    return application && materialize(application);
+    return application?.demoState !== "hidden" && application ? materialize(application) : undefined;
   },
 
   async findByCanonicalJob(input: { company: string; role: string; jobUrl?: string }): Promise<PersistedApplication | undefined> {
@@ -30,7 +30,7 @@ export const applicationRepository = {
     const role = canonicalText(input.role);
     const jobUrl = canonicalJobUrl(input.jobUrl);
     const applications = await jobBuddyDb.applications.toArray();
-    const match = applications.find((application) => canonicalText(application.company) === company
+    const match = applications.find((application) => application.demoState !== "hidden" && canonicalText(application.company) === company
       && canonicalText(application.role) === role
       && (!jobUrl || canonicalJobUrl(application.jobUrl) === jobUrl));
     return match && materialize(match);

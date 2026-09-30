@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { trackerColumns } from "../src/features/import-export/trackerColumns";
+import { seedTracker } from "./support/seedTracker";
 
 type DownloadCapture = { mediaType: string; byteLength: number; text?: string };
 
@@ -27,14 +28,7 @@ function parseCsv(csv: string): string[][] {
 }
 
 async function clearTrackerDatabase(page: import("@playwright/test").Page) {
-  await page.goto("/");
-  await page.evaluate(() => new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase("job-buddy");
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error("The test browser could not clear Job Buddy storage."));
-  }));
-  await page.reload();
+  await seedTracker(page);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -56,12 +50,13 @@ test.beforeEach(async ({ page }) => {
 
 test("imports, filters, updates, undoes, and exports an application", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Application command center" })).toBeVisible();
-  await page.getByRole("link", { name: "Import tracker" }).click();
+  await page.getByRole("button", { name: "Import Excel" }).click();
   await page.getByLabel("Tracker file").setInputFiles("e2e/fixtures/fresh-grad-tracker.csv");
   await expect(page.getByText("Cedarline Systems")).toBeVisible();
   await expect(page.getByRole("row", { name: /Cedarline Systems.*review/i })).toBeVisible();
   await page.getByRole("button", { name: /Confirm import/ }).click();
   await expect(page.getByRole("status")).toContainText("1 imported");
+  await page.getByRole("button", { name: "Close import" }).click();
 
   await page.getByRole("link", { name: "Applications", exact: true }).click();
   await expect(page.getByRole("link", { name: "Graduate Software Engineer" })).toBeVisible();
@@ -119,7 +114,7 @@ test("keeps Command Center attention actions readable without horizontal page ov
   for (const width of [390, 768, 800, 820, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Applications requiring attention" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Applications", exact: true })).toBeVisible();
     await expect(page.locator(".command-center__next-action").first()).toBeVisible();
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

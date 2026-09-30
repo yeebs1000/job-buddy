@@ -21,6 +21,7 @@ test("installed extension keeps pairing lifecycle and approved fill reliable", a
   const forbidden = async (): Promise<never> => { throw new Error("No Gmail calls allowed in pairing test"); };
   const dashboardOrigin = "http://127.0.0.1:5173";
   const trace: Array<{ phase: "start" | "finish"; method?: string; path?: string; origin: "dashboard" | "extension" | "other"; status?: number; elapsedMs?: number }> = [];
+  const browserTrace: Array<{ phase: string; path: string; at: number; status?: number }> = [];
   let buddy = createBuddy();
   let server = createServer();
   let context: Awaited<ReturnType<typeof chromium.launchPersistentContext>> | undefined;
@@ -36,6 +37,9 @@ test("installed extension keeps pairing lifecycle and approved fill reliable", a
       const workerPath = join(extensionPath, "service-worker.js");
       await writeFile(workerPath, (await readFile(workerPath, "utf8")).replaceAll("http://127.0.0.1:43117", baseUrl));
       context = await chromium.launchPersistentContext(join(root, "browser"), { channel: process.platform === "win32" ? "msedge" : "chromium", headless: true, ignoreDefaultArgs: ["--disable-extensions"], args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`] });
+      context.on("request", request => { if (request.url().startsWith(baseUrl)) browserTrace.push({ phase: "request", path: new URL(request.url()).pathname, at: Date.now() }); });
+      context.on("response", response => { if (response.url().startsWith(baseUrl)) browserTrace.push({ phase: "response", path: new URL(response.url()).pathname, status: response.status(), at: Date.now() }); });
+      context.on("requestfinished", request => { if (request.url().startsWith(baseUrl)) browserTrace.push({ phase: "finished", path: new URL(request.url()).pathname, at: Date.now() }); });
       await context.route("https://jobs.fixture.test/**", (route) => route.fulfill({ contentType: "text/html", body: '<h1>Test application</h1><label>First name<input autocomplete="given-name" id="first"></label>' }));
     });
 
@@ -54,8 +58,18 @@ test("installed extension keeps pairing lifecycle and approved fill reliable", a
       await expect(panel.getByRole("alert")).toContainText("code expired, was replaced");
       await panel.getByLabel("Pairing code").fill(code);
       const validFinished = nextFinished("/api/buddy/pairing/complete", 200);
-      await panel.getByRole("button", { name: "Pair Buddy", exact: true }).click();
-      await validFinished;
+      // Pairing also saves the token, reads preferences, and fetches the profile
+      // through the installed service worker. Server finish is not browser receipt.
+      const profileReceived = context!.waitForEvent("requestfinished", {
+        predicate: request => request.url() === baseUrl + "/api/buddy/profile/select",
+        timeout: 15_000,
+      });
+      const [, , profileRequest] = await Promise.all([
+        panel.getByRole("button", { name: "Pair Buddy", exact: true }).click(),
+        validFinished,
+        profileReceived,
+      ]);
+      expect((await profileRequest.response())?.status()).toBe(200);
       await expect(panel.getByRole("heading", { name: "Choose fields to fill" })).toBeVisible();
     });
 
@@ -98,7 +112,9 @@ test("installed extension keeps pairing lifecycle and approved fill reliable", a
       await expect(page.locator("#first")).toHaveValue("");
     });
   } catch (error) {
-    await testInfo.attach("companion-request-phases.json", { body: JSON.stringify(trace, null, 2), contentType: "application/json" });
+    const path = testInfo.outputPath("companion-request-phases.json");
+    await writeFile(path, JSON.stringify({ server: trace, browser: browserTrace }, null, 2));
+    await testInfo.attach("companion-request-phases.json", { path, contentType: "application/json" });
     throw error;
   } finally {
     await context?.close();

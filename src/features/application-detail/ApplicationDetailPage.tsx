@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Button } from "../../components/Button";
 import { StageRail } from "../../components/StageRail";
@@ -10,11 +10,17 @@ import { isSafeExternalHttpsUrl, isSafeExternalJobUrl } from "../../domain/jobUr
 import { ManualStageUpdate, type ManualUpdate } from "./ManualStageUpdate";
 import { formatDate, outcomeLabels, stageLabels, StageHistory } from "./StageHistory";
 import { ResearchPanel } from "../research/ResearchPanel";
+import { ApplicationDetailsEditor } from "./ApplicationDetailsEditor";
 import "./application-detail.css";
 
 export function ApplicationDetailPage({ applicationId }: { applicationId?: string }) {
   const params = useParams();
   const id = applicationId ?? params.id ?? "";
+  // Each record owns its async work and drafts; a late result cannot replace another route.
+  return <ApplicationDetailContent key={id} id={id} />;
+}
+
+function ApplicationDetailContent({ id }: { id: string }) {
   const [application, setApplication] = useState<PersistedApplication>();
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -22,9 +28,16 @@ export function ApplicationDetailPage({ applicationId }: { applicationId?: strin
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [editing, setEditing] = useState(false);
+  const editAction = useRef<HTMLDivElement>(null);
+  const wasEditing = useRef(false);
+  useEffect(() => {
+    if (wasEditing.current && !editing) editAction.current?.querySelector("button")?.focus();
+    wasEditing.current = editing;
+  }, [editing]);
   useEffect(() => {
     let active = true;
-    setLoading(true); setLoadError(false); setApplication(undefined); setError(""); setMessage("");
+    setLoading(true); setLoadError(false); setApplication(undefined); setError(""); setMessage(""); setEditing(false);
     void seedDemoData().then(() => applicationRepository.get(id)).then(result => { if (active) setApplication(result); }, () => { if (active) setLoadError(true); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [id, attempt]);
@@ -33,6 +46,15 @@ export function ApplicationDetailPage({ applicationId }: { applicationId?: strin
     setBusy(true); setError(""); setMessage("");
     try { await action(); setApplication(await applicationRepository.get(id)); setMessage(success); return true; }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Could not save this change. Try again."); return false; }
+    finally { setBusy(false); }
+  }
+  async function openEditor() {
+    setBusy(true); setError(""); setMessage("");
+    try {
+      const latest = await applicationRepository.get(id);
+      if (!latest) throw new Error("This application no longer exists. Return to applications to continue.");
+      setApplication(latest); setEditing(true);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not load details. Try again."); }
     finally { setBusy(false); }
   }
   async function update(change: ManualUpdate) {
@@ -55,7 +77,7 @@ export function ApplicationDetailPage({ applicationId }: { applicationId?: strin
   const accepted = application.stageEvents.filter(event => event.accepted && (event.toStage || event.outcome)).sort(compareStageEvents);
   const latest = accepted.at(-1);
   const canUndo = Boolean(latest);
-  const rating = application.research?.companyRating;
+  const rating = application.research?.companyRating?.source === "Fictional Reviews" ? undefined : application.research?.companyRating;
   const evidence = application.stageEvents.filter(event => event.evidenceId).sort(compareStageEvents);
   async function undo() {
     if (!latest) return;
@@ -73,18 +95,20 @@ export function ApplicationDetailPage({ applicationId }: { applicationId?: strin
     <section className="detail-progress" aria-label="Current progress"><p><strong>{application.outcome ? outcomeLabels[application.outcome] : "Active"}</strong> · {application.stage ? `${application.outcome ? "Reached" : "Current stage:"} ${stageLabels[application.stage]}` : "No stage recorded"}</p><StageRail stage={application.stage} outcome={application.outcome} rejectedAtStage={application.outcome === "rejected" ? application.stage ?? undefined : undefined} /></section>
     <p role="status" className="detail-status">{busy ? "Saving changes…" : message}</p>
     {error && <p className="detail-error" role="alert">{error}</p>}
+    <div ref={editAction} className="detail-edit-action" hidden={editing}><Button variant="secondary" disabled={busy} onClick={() => void openEditor()}>Edit details</Button><span className="detail-meta">Contacts, notes, follow-ups and deadlines</span></div>
+    {editing && <ApplicationDetailsEditor key={id} application={application} onCancel={() => setEditing(false)} onSaved={saved => { setApplication(saved); setEditing(false); setMessage("Details saved."); }} />}
     <div className="detail-layout"><div>
       <section className="detail-section" aria-labelledby="overview-title"><h2 id="overview-title">Overview</h2><dl className="detail-facts"><div><dt>Applied</dt><dd>{formatDate(application.appliedAt)}</dd></div><div><dt>Source</dt><dd>{application.source || "Unavailable"}{jobUrl && <> · <a href={jobUrl} target="_blank" rel="noopener noreferrer">Open job posting</a></>}</dd></div><div><dt>Industry</dt><dd>{application.industry ?? "Unavailable"}</dd></div><div><dt>Priority</dt><dd>{application.priority ?? "normal"}</dd></div></dl><p className="detail-meta">Tags: {application.tags.length ? application.tags.join(" · ") : "None"}</p></section>
-      <ManualStageUpdate key={`${id}-${application.updatedAt}`} stage={application.stage} outcome={application.outcome} busy={busy} onUpdate={update} />
-      <section className="detail-section" aria-labelledby="activity-title"><div className="detail-section-heading"><h2 id="activity-title">Activity</h2><Button variant="secondary" disabled={busy || !canUndo} onClick={() => void undo()}>Undo change</Button></div><p className="detail-meta">Oldest to newest. Undo reverts the latest applied change and preserves its record.</p><StageHistory events={application.stageEvents} /></section>
+      <ManualStageUpdate key={`${id}-${application.updatedAt}`} stage={application.stage} outcome={application.outcome} busy={busy || editing} onUpdate={update} />
+      <section className="detail-section" aria-labelledby="activity-title"><div className="detail-section-heading"><h2 id="activity-title">Activity</h2><Button variant="secondary" disabled={busy || editing || !canUndo} onClick={() => void undo()}>Undo change</Button></div><p className="detail-meta">Oldest to newest. Undo reverts the latest applied change and preserves its record.</p><StageHistory events={application.stageEvents} /></section>
     </div><aside aria-label="Application context">
       <section className="detail-section" aria-labelledby="deadlines-title"><h2 id="deadlines-title">Deadlines & interviews</h2>{application.interviewSubtype && <p>Interview format: {application.interviewSubtype}</p>}{application.deadlines.length ? <ul className="detail-deadlines">{[...application.deadlines].sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id)).map(deadline => <li key={deadline.id}><strong>{deadline.label}</strong><span className="detail-meta"><time dateTime={deadline.at}>{formatDate(deadline.at)}</time> · {deadline.completed ? "Completed" : "Open"}</span>{deadline.links?.filter(isSafeExternalHttpsUrl).map((link) => <a key={link} href={link} target="_blank" rel="noopener noreferrer">Open meeting link</a>)}</li>)}</ul> : <p className="detail-meta">No deadlines recorded.</p>}{application.followUpAt && <p>Follow up: <time dateTime={application.followUpAt}>{formatDate(application.followUpAt)}</time></p>}</section>
-      <section className="detail-section" aria-labelledby="research-title"><h2 id="research-title">Salary & company</h2><ResearchPanel application={application} />{rating ? <p>Company rating: <strong>{rating.score} / {rating.outOf}</strong><span className="detail-meta"> · {rating.source}</span></p> : <p className="detail-meta">Company rating unavailable.</p>}</section>
       <section className="detail-section" aria-labelledby="contacts-title"><h2 id="contacts-title">Contacts</h2><p>{application.recruiter || "No contact recorded."}</p></section>
       <details className="detail-disclosure"><summary>Job description</summary><p>No job description is stored for this application.</p></details>
       <details className="detail-disclosure"><summary>Notes & documents</summary><p className="detail-note">{application.notes || "No notes recorded."}</p><p className="detail-meta">No documents attached.</p></details>
       <details className="detail-disclosure"><summary>Evidence</summary>{evidence.length ? evidence.map(event => <p className="detail-meta" key={event.id}>{event.evidenceId} · {formatDate(event.at)}</p>) : <p>No linked evidence. Manual updates keep their source and note in Activity.</p>}</details>
       <details className="detail-disclosure"><summary>Preparation</summary><p>No preparation sessions recorded for this application.</p></details>
     </aside></div>
+    <section id="research" className="detail-section" aria-labelledby="research-title"><h2 id="research-title">Salary & company</h2><ResearchPanel application={application} />{rating ? <p>Company rating: <strong>{rating.score} / {rating.outOf}</strong><span className="detail-meta"> · {rating.source}</span></p> : <p className="detail-meta">No sourced company rating saved.</p>}</section>
   </article>;
 }

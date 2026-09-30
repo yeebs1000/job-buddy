@@ -17,6 +17,36 @@ import { vi } from "vitest";
 
 const now = "2026-09-14T09:00:00.000Z";
 
+it("clears a saved interruption when retrying without dropping resume progress", async () => {
+  await updateRepository.saveScanState("gmail", { cursor: "old", error: "previous failure", errorCode: "gmail-timeout",
+    continuationToken: "session:25", progress: { processed: 25, total: 50 } });
+  const retry: MailAdapter = { source: "gmail", scan: async () => {
+    const state = await updateRepository.getScanState("gmail");
+    expect(state.error).toBeUndefined();
+    expect(state.errorCode).toBeUndefined();
+    expect(state.continuationToken).toBe("session:25");
+    expect(state.progress?.processed).toBe(25);
+    return { messages: [], nextCursor: "new", scannedAt: now };
+  } };
+  expect((await runMailScan({ adapter: retry, mode: "approval", now })).error).toBeUndefined();
+});
+
+it("recovers a previously ignored application receipt only on recheck and never creates an application automatically", async () => {
+  const receipt = { ...mail, providerMessageId: "ignored-receipt", subject: "Thank You for Your Application!",
+    excerpt: "Thank you for your interest in the Equity Research position. We will give careful consideration to your application by reviewing the details you provided against the position criteria.", fromAddress: "example@myworkday.com" };
+  await jobBuddyDb.processedMessages.put({ id: receipt.providerMessageId, processedAt: now });
+  await updateRepository.saveScanState("simulated", { cursor: "existing-cursor" });
+  await runMailScan({ adapter: adapter([receipt]), mode: "unrestricted", now });
+  expect(await updateRepository.list()).toHaveLength(0);
+  const cursor = (await updateRepository.getScanState("simulated")).cursor;
+  await runMailScan({ adapter: adapter([receipt]), mode: "unrestricted", recheck: true, now });
+  expect(await updateRepository.list()).toMatchObject([{ status: "pending", classification: { proposedStage: "applied", requiresApproval: true } }]);
+  expect(await jobBuddyDb.applications.count()).toBe(0);
+  expect((await updateRepository.getScanState("simulated")).cursor).toBe(cursor);
+  await runMailScan({ adapter: adapter([receipt]), mode: "unrestricted", recheck: true, now });
+  expect(await updateRepository.list()).toHaveLength(1);
+});
+
 it("keeps matched recruiter outreach informational even in automatic mode and blocks stage approval", async () => {
   await applicationRepository.create(application());
   await runMailScan({ adapter: adapter([{ ...mail, subject: "Senior Consultant opportunity", excerpt: "I am reaching out regarding a Senior Consultant opportunity. Your profile could be a strong fit." }]), mode: "unrestricted", now });

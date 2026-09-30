@@ -15,6 +15,9 @@ import { buddyClient } from "../buddy/buddyClient";
 import "./research.css";
 import { CompanyResearchPanel } from "./CompanyResearchPanel";
 import { CurrencyComparison } from "./CurrencyComparison";
+import { WebSalaryPanel } from "./WebSalaryPanel";
+import { isWebMode } from "../../app/runtimeMode";
+import { WebIntegrationNotice } from "../../components/WebIntegrationNotice";
 
 interface SalaryEvidenceClient {
   listSalaryEvidence(): Promise<PendingSalaryEvidence[]>;
@@ -53,6 +56,7 @@ export function ResearchPanel({ application, client = researchClient, salaryEvid
   }, [application.id]);
 
   useEffect(() => {
+    if (isWebMode) return;
     let active = true;
     salaryEvidenceClient.listSalaryEvidence()
       .then((items) => { if (active) setPendingEvidence(items.filter((item) => item.market === market)); })
@@ -141,10 +145,11 @@ export function ResearchPanel({ application, client = researchClient, salaryEvid
     maximum: roundSalaryDown(estimate.exactNominalRange.maximum, estimate.currency, estimate.period),
   };
   return <div className="research-panel">
-    <CompanyResearchPanel key={application.id} application={application} />
+    <WebSalaryPanel key={`web-${application.id}`} application={application} />
+    {isWebMode ? <WebIntegrationNotice name="Live salary research" /> : <CompanyResearchPanel key={application.id} application={application} />}
     {!estimate && !snapshots.length && legacy && <p className="research-legacy"><strong>{legacy.currency} {legacy.minimum.toLocaleString("en-US")}{legacy.maximum !== undefined ? `–${legacy.maximum.toLocaleString("en-US")}` : ""} / {legacy.period === "annual" ? "year" : "month"}</strong><span>Legacy saved salary — source unavailable</span></p>}
     <RoleMatchForm title={application.role} market={market} overrides={roleAliases} onConfirm={confirmRole} />
-    {roleMatch && <div className="research-actions"><button disabled={busy} onClick={() => void researchSalary()}>Research salary</button><button disabled={busy} onClick={() => void refresh()}>Refresh official sources</button></div>}
+    {roleMatch && !isWebMode && <div className="research-actions"><button disabled={busy} onClick={() => void researchSalary()}>Research salary</button><button disabled={busy} onClick={() => void refresh()}>Refresh official sources</button></div>}
     <p role="status" className="research-status">{busy ? "Researching official salary data…" : message}</p>
     {error && <p role="alert" className="research-error">{error}</p>}
     {roleMatch && pendingEvidence.length > 0 && <section aria-label="Pending browser salary evidence" className="research-result">

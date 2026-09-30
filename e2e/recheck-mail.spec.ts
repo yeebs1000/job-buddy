@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { normalizeGmailMessage } from "../server/gmail/GmailMessageNormalizer";
 import { FakeGmailApi, liveInterviewScan } from "./support/FakeGmailApi";
+import { seedTracker } from "./support/seedTracker";
 
 test("recovers forwarded rejection and outreach, preserving reviewed evidence on repeated rechecks", async ({ page }, testInfo) => {
   const gmail = new FakeGmailApi(page); await gmail.install();
@@ -16,8 +17,7 @@ test("recovers forwarded rejection and outreach, preserving reviewed evidence on
     expect(route.request().postDataJSON()).toMatchObject({ cursor: null, initialSyncConfirmed: true });
     return route.fulfill({ json: requests === 1 ? liveInterviewScan : { ...liveInterviewScan, nextCursor: "recheck-new-history", messages: [...liveInterviewScan.messages, rejection, outreach] } });
   });
-  await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Circuit Harbour Ltd" })).toBeVisible();
+  await seedTracker(page);
   await page.goto("/settings");
   await page.getByRole("button", { name: "Scan last 90 days" }).click();
   await expect(page.locator(".settings-page__message")).toContainText("recent updates were checked");
@@ -36,7 +36,7 @@ test("recovers forwarded rejection and outreach, preserving reviewed evidence on
     };
   }));
   await page.getByRole("link", { name: "Overview" }).click();
-  await page.getByText("Missing an older email?", { exact: true }).click();
+  await page.getByText("Missing an email or application update?", { exact: true }).click();
   await page.getByRole("button", { name: "Recheck recent emails" }).click();
   await expect(page.getByRole("link", { name: "Review 2 pending updates" })).toBeVisible();
   await page.getByRole("link", { name: /Updates/, exact: false }).first().click();
@@ -56,7 +56,7 @@ test("recovers forwarded rejection and outreach, preserving reviewed evidence on
   await approached.getByRole("button", { name: "Dismiss outreach" }).click();
   await expect(approached).toContainText("Status: dismissed");
   await page.getByRole("link", { name: "Settings" }).click();
-  await page.getByText("Missing an older email?", { exact: true }).click();
+  await page.getByText("Missing an email or application update?", { exact: true }).click();
   await page.getByRole("button", { name: "Recheck recent emails" }).click();
   await expect(page.locator(".settings-page__message")).toContainText("recent updates were checked");
   await page.getByRole("link", { name: /Updates/ }).click();

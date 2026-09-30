@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 // @ts-expect-error The production verifier is intentionally a directly runnable ESM script.
 import { verifyClientArtifacts } from "./verify-client-secrets.mjs";
 
@@ -15,7 +15,16 @@ async function fixture(): Promise<string> {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
+});
+
+it("detects a configured Brave key in client artifacts without echoing it", async () => {
+  const directory = await fixture();
+  vi.stubEnv("JOB_BUDDY_BRAVE_SEARCH_API_KEY", "synthetic-brave-secret-canary");
+  await writeFile(join(directory, "assets", "app.js"), "window.key='synthetic-brave-secret-canary'", "utf8");
+  try { await verifyClientArtifacts(directory); throw new Error("expected-guard-failure"); }
+  catch (error) { expect(String(error)).toContain("configured Brave Search API key"); expect(String(error)).not.toContain("synthetic-brave-secret-canary"); }
 });
 
 it("fails without echoing a secret when a client bundle contains a canary", async () => {

@@ -5,6 +5,6 @@ export function MailScanProgress({ state }: { state?: MailScanState }) {
   const { processed, total } = state.progress;
   return <div role="status" className="mail-scan-progress">
     <progress aria-label="Gmail messages checked" value={processed} max={Math.max(total, 1)} />
-    <span>{state.rechecking ? "Rechecking older mail · " : ""}Checked {processed} of {total} messages{state.continuationToken ? " · Progress saved locally" : ""}.</span>
+    <span>{state.error ? "Scan interrupted · " : state.rechecking ? "Rechecking older mail · " : ""}Checked {processed} of {total} messages{state.continuationToken ? " · Progress saved locally" : ""}.</span>
   </div>;
 }

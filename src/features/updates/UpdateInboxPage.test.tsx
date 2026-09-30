@@ -49,6 +49,65 @@ async function proposal(overrides: Partial<UpdateProposalInput> = {}) {
 }
 function inbox() { return render(<MemoryRouter><UpdateInboxPage /></MemoryRouter>); }
 
+it("explains unmatched approval and creates a reviewed draft without applying the email until approved", async () => {
+  await proposal({ match: { applicationId: null, confidence: 0, reasons: ["unmatched"], conflicts: [] } });
+  const user = userEvent.setup(); inbox();
+  expect(await screen.findByText(/select an application or create one/i)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Approve update" })).toBeDisabled();
+  await user.click(screen.getByRole("button", { name: "Create application & review" }));
+  await user.type(screen.getByLabelText("Company"), "Example Analytics");
+  await user.type(screen.getByLabelText("Job title"), "Research Analyst");
+  await user.selectOptions(screen.getByLabelText("Country / market"), "Singapore");
+  await user.type(screen.getByLabelText("City"), "Singapore");
+  await user.selectOptions(screen.getByLabelText("Role discipline"), "finance");
+  await user.click(screen.getByRole("button", { name: "Save application & review update" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Approve update" })).toBeEnabled());
+  const saved = (await applicationRepository.list()).find(app => app.company === "Example Analytics")!;
+  expect(saved.stage).toBeNull();
+  expect((await updateRepository.get("proposal-1"))?.status).toBe("pending");
+  await user.click(screen.getByRole("button", { name: "Approve update" }));
+  await waitFor(async () => expect((await applicationRepository.get(saved.id))?.stage).toBe("interview"));
+});
+
+it("creates the screenshot application from prefilled email details without retyping them", async () => {
+  await proposal({ match: { applicationId: null, confidence: 0, reasons: ["unmatched"], conflicts: [] },
+    source: { ...technicalInterviewMail, subject: "BlackRock | Action Required: Complete Your Application", excerpt: "We noticed that you have not yet completed your application for 2027 Full-Time Analyst Program - Investments - Portfolio Management - Singapore. To complete your application you must submit your pre-interview assessment within 5 calendar days of receiving the invitation." },
+    classification: { confidence: .85, reasons: ["assessment-invitation"], evidenceExcerpt: "Complete your pre-interview assessment", proposedStage: "assessment", requiresApproval: true, deadlines: [], links: [] } });
+  const user = userEvent.setup(); inbox();
+  await user.click(await screen.findByRole("button", { name: "Create application & review" }));
+  expect(screen.getByLabelText("Company")).toHaveValue("BlackRock");
+  expect(screen.getByLabelText("Job title")).toHaveValue("2027 Full-Time Analyst Program - Investments - Portfolio Management");
+  expect(screen.getByLabelText("Country / market")).toHaveValue("Singapore");
+  expect(screen.getByLabelText("City")).toHaveValue("Singapore");
+  expect(screen.getByLabelText("Role discipline")).toHaveValue("finance");
+  await user.click(screen.getByRole("button", { name: "Save application & review update" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Approve update" })).toBeEnabled());
+  await user.click(screen.getByRole("button", { name: "Approve update" }));
+  await waitFor(async () => expect((await applicationRepository.list()).find(app => app.company === "BlackRock")).toMatchObject({ stage: "assessment", location: { city: "Singapore", country: "Singapore" } }));
+});
+
+it("saves outreach as an opportunity visible in Command Center without creating an application", async () => {
+  await proposal({ match: { applicationId: null, confidence: 0, reasons: ["unmatched"], conflicts: [] },
+    source: { ...technicalInterviewMail, subject: "Senior Consultant opportunity - Shanghai", excerpt: "I am reaching out regarding a Senior Consultant opportunity. Your profile could be a strong fit." },
+    classification: { kind: "recruiter-outreach", confidence: .7, reasons: ["personal-recruiter-outreach"], evidenceExcerpt: "Opportunity", deadlines: [], links: [], requiresApproval: true } });
+  const user = userEvent.setup(); const view = inbox();
+  await user.click(await screen.findByRole("button", { name: "Save to Command Center" }));
+  await user.type(screen.getByLabelText("Opportunity location"), "Shanghai, China");
+  await user.click(screen.getByRole("button", { name: "Save opportunity" }));
+  expect(await screen.findByRole("link", { name: "Command Center opportunities" })).toBeVisible();
+  expect(await applicationRepository.list()).toHaveLength(1);
+  expect(await updateRepository.listPending()).toHaveLength(0);
+  // Opportunities must also remain reachable for a new user with no applications.
+  await jobBuddyDb.applications.clear();
+  view.unmount();
+  render(<MemoryRouter><CommandCenterPage mailAdapter={new FixtureMailAdapter([])} /></MemoryRouter>);
+  expect(await screen.findByRole("heading", { name: "Opportunities — not applied" })).toBeVisible();
+  expect(await screen.findByText("Shanghai, China")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Remove from Command Center" }));
+  await waitFor(() => expect(screen.queryByText("Shanghai, China")).not.toBeInTheDocument());
+  expect((await updateRepository.get("proposal-1"))?.status).toBe("deferred");
+});
+
 it("shows recruiter outreach without application stage controls and lets users dismiss it", async () => {
   await proposal({ source: { ...technicalInterviewMail, subject: "Senior Consultant opportunity", excerpt: "I am reaching out regarding a Senior Consultant opportunity. Your background could be a strong fit." },
     classification: { kind: "recruiter-outreach", confidence: 0.7, reasons: ["personal-recruiter-outreach"], evidenceExcerpt: "A potential role", deadlines: [], links: [], requiresApproval: true } });
@@ -216,7 +275,7 @@ it("keeps keyboard focus on the reviewed row result after multi-row actions reor
   reject.focus(); await user.keyboard("{Enter}");
   const rejected = await within(rejectRow).findByText("Review result: Update rejected.");
   expect(rejected).toHaveAttribute("role", "status");
-  expect(document.activeElement).toBe(rejected);
+  await waitFor(() => expect(document.activeElement).toBe(rejected));
   await waitFor(() => expect(Array.from(list.querySelectorAll("article")).at(-1)).toBe(rejectRow));
 
   const deferRow = within(list).getByRole("article", { name: /Defer message/ });
@@ -224,14 +283,14 @@ it("keeps keyboard focus on the reviewed row result after multi-row actions reor
   defer.focus(); await user.keyboard("{Enter}");
   const deferred = await within(deferRow).findByText("Review result: Update deferred. You can review it later.");
   expect(deferred).toHaveAttribute("role", "status");
-  expect(document.activeElement).toBe(deferred);
+  await waitFor(() => expect(document.activeElement).toBe(deferred));
 
   const approveRow = within(list).getByRole("article", { name: /Approve message/ });
   const approve = within(approveRow).getByRole("button", { name: "Approve update" });
   approve.focus(); await user.keyboard("{Enter}");
   const approved = await within(approveRow).findByText("Review result: Update applied.");
   expect(approved).toHaveAttribute("role", "status");
-  expect(document.activeElement).toBe(approved);
+  await waitFor(() => expect(document.activeElement).toBe(approved));
 });
 
 it("requires an explicit approve confirmation before applying an edited terminal outcome", async () => {
@@ -294,7 +353,7 @@ it("shows stable skeletons before the empty inbox and links to a simulated scan"
   expect(screen.getAllByTestId("update-skeleton")).toHaveLength(3);
   expect(await screen.findByRole("heading", { name: "No updates yet" })).toBeVisible();
   expect(screen.getByRole("link", { name: "Open scan controls" })).toHaveAttribute("href", "/");
-  expect(screen.getByText(/Gmail or demo scan/i)).toBeVisible();
+  expect(screen.getByText(/Connect Gmail and scan/i)).toBeVisible();
 });
 
 it("updates the navigation pending badge when a proposal is reviewed", async () => {

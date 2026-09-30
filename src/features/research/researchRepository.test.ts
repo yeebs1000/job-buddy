@@ -109,6 +109,8 @@ describe("researchRepository", () => {
       id: application.id,
       research: application.research,
     });
-    expect(jobBuddyDb.verno).toBe(2);
+    expect(jobBuddyDb.verno).toBe(3);
+    expect(await jobBuddyDb.browserProfiles.count()).toBe(0);
+    expect(await jobBuddyDb.profileKeys.count()).toBe(0);
   });
 });

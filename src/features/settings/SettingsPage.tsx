@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { MailScanProgress } from "../updates/MailScanProgress";
 import { connectGmailPopup, GmailPopupError } from "./gmailPopup";
@@ -14,6 +14,9 @@ import { buddyClient, type BuddyClient } from "../buddy/buddyClient";
 import { gmailClient, type GmailSettingsClient } from "./gmailClient";
 import { defaultGmailPreferences, gmailPreferences, type GmailPreferences, type GmailPreferencesStore } from "./gmailPreferences";
 import "./settings.css";
+import { isWebMode } from "../../app/runtimeMode";
+import { WebIntegrationNotice } from "../../components/WebIntegrationNotice";
+import { ResearchSearchSettings } from "./ResearchSearchSettings";
 
 export type { GmailSettingsClient } from "./gmailClient";
 
@@ -30,6 +33,11 @@ interface SettingsPageProps {
 }
 
 const liveMail = new GmailMailAdapter();
+const BackupControls = lazy(() => import("../backup/BackupControls").then(module => ({ default: module.BackupControls })));
+function BackupSection() {
+  const [opened, setOpened] = useState(false);
+  return <details className="settings-advanced" onToggle={event => { if (event.currentTarget.open) setOpened(true); }}><summary>Advanced · encrypted backup and restore</summary><p>Excel moves application rows. Encrypted backup also preserves profile details and saved email evidence. Clearing browser data can erase local records.</p>{opened && <Suspense fallback={<p role="status">Opening backup tools…</p>}><BackupControls /></Suspense>}</details>;
+}
 const connectIntentKey = "job-buddy-gmail-connect-intent";
 
 function clearConnectionCallback() {
@@ -38,7 +46,19 @@ function clearConnectionCallback() {
   window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
-export function SettingsPage({
+export function SettingsPage(props: SettingsPageProps = {}) {
+  if (!isWebMode) return <CompanionSettingsPage {...props} />;
+  return <div className="settings-page">
+    <header className="settings-page__header"><div><h1>Settings</h1><p>Your tracker and profile stay in this browser. No account is required.</p></div></header>
+    <section className="gmail-settings"><header className="gmail-settings__heading"><h2>Optional connections</h2></header><div className="gmail-settings__row"><div>
+      <WebIntegrationNotice name="Gmail" /><WebIntegrationNotice name="Browser Buddy pairing" />
+    </div>
+    </div></section>
+    <BackupSection />
+  </div>;
+}
+
+function CompanionSettingsPage({
   client = gmailClient,
   preferences: preferenceStore = gmailPreferences,
   mailAdapter = liveMail,
@@ -55,6 +75,8 @@ export function SettingsPage({
   const [message, setMessage] = useState<{ tone: "status" | "error"; text: string } | null>(null);
   const popupAttempt = useRef<AbortController | null>(null);
   const scanState = useLiveQuery(() => updateRepository.getScanState("gmail"), []);
+  const displayMessage = message ?? (status?.state === "connected" && scanState?.error
+    ? { tone: "error", text: gmailScanErrorMessage(scanState.errorCode ?? "gmail-request-failed") } : null);
   useEffect(() => () => popupAttempt.current?.abort(), []);
 
   useEffect(() => {
@@ -146,7 +168,7 @@ export function SettingsPage({
     try {
       await client.disconnect();
       await updateRepository.saveScanState("gmail", { cursor: null });
-      await save({ ...preference, selectedSource: "simulated", initialSyncCompleted: false, dailyActiveScanEnabled: false });
+      await save({ ...preference, selectedSource: "gmail", initialSyncCompleted: false, dailyActiveScanEnabled: false });
       setStatus({ state: "disconnected", platformSupported: status?.platformSupported ?? true });
       setMessage({ tone: "status", text: "Gmail disconnected. Existing tracker evidence was kept." });
     } catch { setMessage({ tone: "error", text: "Gmail could not be disconnected. Try again." }); }
@@ -179,7 +201,7 @@ export function SettingsPage({
 
   return <div className="settings-page">
     <header className="settings-page__header"><div><h1>Settings</h1><p>Control how Job Buddy reads email and updates your tracker.</p></div><span>Stored locally</span></header>
-    {message && <p className={`settings-page__message settings-page__message--${message.tone}`} role={message.tone === "error" ? "alert" : "status"}>{message.text}</p>}
+    {displayMessage && <p className={`settings-page__message settings-page__message--${displayMessage.tone}`} role={displayMessage.tone === "error" ? "alert" : "status"}>{displayMessage.text}</p>}
     {status?.state === "connected" && <MailScanProgress state={scanState} />}
     {busy === "connect" && <button type="button" className="button button--secondary" onClick={() => popupAttempt.current?.abort()}>Stop waiting</button>}
     {!status || !preference
@@ -201,6 +223,8 @@ export function SettingsPage({
           onModeChange={changeMode}
           onSourceChange={(selectedSource) => void changePreference({ selectedSource })}
         />}
+    <ResearchSearchSettings />
     <BuddySettings client={buddy} confirmAutomatic={confirmBuddyAutomatic} confirmRevoke={confirmBuddyRevoke} />
+    <BackupSection />
   </div>;
 }

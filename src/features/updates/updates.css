@@ -1,4 +1,6 @@
 .updates__header { display: grid; gap: .5rem; }
+.update-row__entry-form { border-bottom: 1px solid var(--color-border); margin-bottom: 1rem; padding-bottom: 1rem; }
+.update-row__entry-form legend { font-weight: 650; padding: 0; }
 .updates__header p, .updates__summary { color: var(--color-muted); margin: 0; }
 .updates a { color: #174db5; overflow-wrap: anywhere; }
 .updates__feedback { min-height: 1.5rem; margin: 1rem 0 .5rem; }

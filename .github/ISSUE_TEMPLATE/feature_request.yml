@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Do not include resumes, private emails, real tracker rows, tokens, cookies, candidate profiles, or job-site form answers. AI-generated answers, remote profile processing, cloud sync, and automatic final submission are deferred and require separate product/privacy review.
+        Check ROADMAP.md first. V1 targets lightweight Windows/macOS local downloads; keep Gmail and the dashboard central. Do not include resumes, private emails, real tracker rows, tokens, cookies, candidate profiles, or job-site form answers. Optional AI requires separate opt-in/privacy review; hosted processing, cloud sync and automatic final submission are not current commitments.
   - type: textarea
     id: problem
     attributes:

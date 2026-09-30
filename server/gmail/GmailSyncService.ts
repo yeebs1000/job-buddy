@@ -8,6 +8,7 @@ import type { GmailMessage } from "./gmailTypes";
 export const initialGmailQuery = "in:inbox newer_than:90d -category:promotions -category:social";
 const initialMessageLimit = 500;
 const batchSize = 25;
+const fetchConcurrency = 5;
 const checkpointLifetimeMs = 30 * 60_000;
 
 export type GmailScanResponse = MailScanResult & { source: "gmail"; diagnostics: MailScanDiagnostics };
@@ -29,6 +30,8 @@ interface ScanPlan {
 interface Checkpoint extends ScanPlan {
   id: string; baseCursor: string | null; expiresAt: number;
   results: Array<MailEnvelope | null>;
+  pendingResults: Map<string, MailEnvelope | null>;
+  concurrency: number;
   responses: Map<number, GmailScanResponse>;
 }
 
@@ -58,7 +61,7 @@ export class GmailSyncService {
       } else if (!job || job.baseCursor !== input.cursor || job.results.length === job.ids.length) {
         const plan = await this.plan(input.cursor);
         if (generation !== this.generation) throw new GmailSyncError("gmail-scan-expired");
-        job = { ...plan, id: randomBytes(16).toString("hex"), baseCursor: input.cursor, expiresAt: Date.now() + checkpointLifetimeMs, results: [], responses: new Map() };
+        job = { ...plan, id: randomBytes(16).toString("hex"), baseCursor: input.cursor, expiresAt: Date.now() + checkpointLifetimeMs, results: [], pendingResults: new Map(), concurrency: fetchConcurrency, responses: new Map() };
         if (input.batch) this.checkpoint = job;
       }
       if (!job) throw new GmailSyncError("gmail-scan-expired");
@@ -67,20 +70,37 @@ export class GmailSyncService {
       const end = input.batch ? Math.min(offset + batchSize, job.ids.length) : job.ids.length;
       while (job.results.length < end) {
         if (generation !== this.generation) throw new GmailSyncError("gmail-scan-expired");
-        let message: GmailMessage;
-        try { message = await this.transport.getMessage(job.ids[job.results.length]); }
-        catch (error) {
-          if (error instanceof GmailTransportError && error.status === 404) {
-            job.results.push(null); job.diagnostics.ignoredMessageCount++; continue;
+        // Wait for the entire group before committing or releasing the scan lock.
+        // ponytail: fixed groups can wait on one slow email; use a worker pool only if measured necessary.
+        const ids = job.ids.slice(job.results.length, Math.min(job.results.length + job.concurrency, end));
+        const group = await Promise.allSettled(ids.map(async id => {
+          if (job.pendingResults.has(id)) return job.pendingResults.get(id)!;
+          let message: GmailMessage;
+          try { message = await this.transport.getMessage(id); }
+          catch (error) {
+            if (error instanceof GmailTransportError && error.status === 404) return null;
+            throw error;
           }
-          throw error;
-        }
+          if (generation !== this.generation) throw new GmailSyncError("gmail-scan-expired");
+          try { return job.requireInbox && !message.labelIds?.includes("INBOX") ? null : this.normalize(message); }
+          catch { throw new GmailSyncError("gmail-normalization-failed"); }
+        }));
         if (generation !== this.generation) throw new GmailSyncError("gmail-scan-expired");
-        let normalized: MailEnvelope | null;
-        try { normalized = job.requireInbox && !message.labelIds?.includes("INBOX") ? null : this.normalize(message); }
-        catch { throw new GmailSyncError("gmail-normalization-failed"); }
-        job.results.push(normalized);
-        if (!normalized) job.diagnostics.ignoredMessageCount++;
+        group.forEach((result, index) => { if (result.status === "fulfilled") job.pendingResults.set(ids[index], result.value); });
+        const failures = group.filter(result => result.status === "rejected");
+        if (failures.length) {
+          // Transport retries are already bounded. Fall back once per scan, never skip a failed email.
+          if (job.concurrency > 1 && failures.every(({ reason }) => reason instanceof GmailTransportError && (reason.code === "gmail-network-error" || reason.code === "gmail-timeout"))) {
+            job.concurrency = 1;
+            continue;
+          }
+          throw failures[0].reason;
+        }
+        for (const [index, result] of group.entries()) if (result.status === "fulfilled") {
+          job.results.push(result.value);
+          job.pendingResults.delete(ids[index]);
+          if (!result.value) job.diagnostics.ignoredMessageCount++;
+        }
       }
       if (generation !== this.generation) throw new GmailSyncError("gmail-scan-expired");
       const result: GmailScanResponse = {
