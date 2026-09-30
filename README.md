@@ -9,11 +9,13 @@ A local-first job-application dashboard that replaces the spreadsheet. Turn recr
 
 **Current source candidate: `1.0.0-beta.18`. Windows and macOS end-user downloads are planned, not available yet.**
 
+[Preview the source-beta release notes](docs/releases/v1.0.0-beta.18.md). This preview does not mean the release has been published.
+
 The target is a downloadable app with a web-style dashboard running locally. No Job Buddy account or hosted backend is planned for V1. End users should not need to install Node, Docker, or run terminal commands. Gmail and online research still need internet access.
 
 Today the complete workflow is a developer-run Windows candidate. Persistent Gmail credentials, the profile, and the Tavily key use Windows-only secure storage. macOS needs native secure storage and acceptance testing. Finish V1 functionality first, then build and verify both downloads.
 
-See the [launch checklist](docs/releases/v1-launch-checklist.md) and [dated verification record](docs/releases/2026-09-30-release-hardening.md). Local test results do not establish Google approval, macOS support, or a release-ready installer.
+See the [launch checklist](docs/releases/v1-launch-checklist.md) and [latest production-server audit](docs/releases/2026-09-30-production-audit.md). Local test results do not establish Google approval, macOS support, or a release-ready installer.
 
 ## The main workflow
 
@@ -41,10 +43,10 @@ Search results are not guaranteed salary answers. Missing or incomparable eviden
 
 ## Windows quick start
 
-For developers and private testers—not the intended end-user installation flow. Use a Node version allowed by `package.json`: Node 22.22.2+ within 22, Node 24.15.0+ within 24, or Node 26+.
+For developers and early testers—not the intended end-user installation flow. Use a Node version allowed by `package.json`: Node 22.22.2+ within 22, Node 24.15.0+ within 24, or Node 26+.
 
 ```powershell
-git clone https://github.com/yeebs1000/job-buddy.git
+git clone --branch codex/v1-private-public-repo-launch https://github.com/yeebs1000/job-buddy.git
 cd job-buddy
 npm.cmd ci
 npm.cmd run dev

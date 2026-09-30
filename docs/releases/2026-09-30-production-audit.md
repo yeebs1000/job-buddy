@@ -17,6 +17,12 @@ These changes reuse existing code and add no runtime dependencies. They do not r
 - Redacted Gitleaks scans of the changed HTTP and browser-test directories and tracked diff found no leaks. An initial multi-directory invocation scanned the broader working directory and flagged an ignored local extension-signing key and two examples in ignored audit-tool documentation. All three are untracked and excluded by `.gitignore`; no key contents were printed or published. This is not a claim that arbitrary local files are safe to publish.
 - Existing GitHub Windows CI runs for the base revision both passed: [push check](https://github.com/yeebs1000/job-buddy/actions/runs/36668346335/job/109737781092) and [PR check](https://github.com/yeebs1000/job-buddy/actions/runs/36668475049/job/109738171321). Those runs predate these fixes.
 
+## Private source-beta preview rerun
+
+Before pushing the private preview, `npm.cmd run check` initially finished with 879/881 unit tests passing and two five-second UI timeouts: spreadsheet import confirmation and browser-local profile save/reload. Those two files passed unchanged in isolation (9/9). After the owner closed unused applications, the unchanged full check passed: 881/881 unit tests (412.29 seconds), all build/type/public-tree/artifact guards, 30 dashboard browser tests (2.0 minutes) and 5 extension tests (33.4 seconds). `npm.cmd run check:web` also passed (40.7 seconds) with both artifact guards.
+
+No timeout or assertion was relaxed. Low available memory was observed, but the rerun does not prove the cause or eliminate timing flakiness. The production dependency audit still reports two moderate ExcelJS/uuid findings and no high/critical findings. Redacted staged-diff scanning found no secrets. The GitHub checks for the new push must be assessed separately; the earlier linked runs are not evidence for it.
+
 ## Still not a public V1 download
 
 The [launch checklist](v1-launch-checklist.md) remains open. Native macOS secure storage, packaged launch/shutdown, clean install/upgrade acceptance, real connector acceptance and distribution trust are not implemented or verified by these tests. No stable release, repository visibility change or installer was produced.

@@ -8,6 +8,8 @@
 
 当前源码候选版本为 **`1.0.0-beta.18`**，尚未提供普通用户安装包。
 
+[预览源码测试版发布说明（英文）](docs/releases/v1.0.0-beta.18.md)。预览不代表版本已经发布。
+
 V1 目标是 **Windows 和 macOS 可下载的本地应用**，不是托管 SaaS。用户最终不应需要另外安装 Node、Docker 或输入命令。Gmail 和在线研究仍需联网。先完成并验收 V1 功能，再构建安装包。
 
 目前完整功能以 Windows 开发版为准；Gmail 凭据、候选人资料和 Tavily 密钥依赖 Windows DPAPI。macOS 安全存储、启动和真机验收尚未完成。Google 配置/适用审核、真实账号验收及发布检查仍是独立门槛。详见 [V1 检查表](docs/releases/v1-launch-checklist.md)。
@@ -26,7 +28,7 @@ V1 目标是 **Windows 和 macOS 可下载的本地应用**，不是托管 SaaS�
 在 Windows PowerShell 中：
 
 ```powershell
-git clone https://github.com/yeebs1000/job-buddy.git
+git clone --branch codex/v1-private-public-repo-launch https://github.com/yeebs1000/job-buddy.git
 cd job-buddy
 npm.cmd ci
 npm.cmd run dev
