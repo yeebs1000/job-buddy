@@ -8,6 +8,9 @@ const labels: Record<ApplicationStage, string> = {
   final: "Final",
   offer: "Offer",
 };
+const outcomeLabels: Record<ApplicationOutcome, string> = {
+  rejected: "Rejected", withdrawn: "Withdrawn", expired: "Expired", offer_declined: "Offer declined", offer_accepted: "Offer accepted", hired: "Hired",
+};
 
 interface StageRailProps {
   stage: ApplicationStage | null;
@@ -19,13 +22,15 @@ interface StageRailProps {
 export function StageRail({ stage, outcome, rejectedAtStage, compact = false }: StageRailProps) {
   const currentIndex = stage ? applicationStages.indexOf(stage) : -1;
   const rejected = outcome === "rejected";
+  const terminal = Boolean(outcome);
   const rejectionLabel = rejectedAtStage ? `Rejected during ${labels[rejectedAtStage]}` : "Rejected";
+  const terminalLabel = stage ? `${outcomeLabels[outcome!]} after ${labels[stage]}` : outcomeLabels[outcome!];
 
   return (
     <div
-      aria-label={rejected ? rejectionLabel : "Application progress"}
+      aria-label={rejected ? rejectionLabel : terminal ? terminalLabel : "Application progress"}
       className={`stage-rail${compact ? " stage-rail--compact" : ""}`}
-      data-outcome={rejected ? "rejected" : undefined}
+      data-outcome={outcome ?? undefined}
       role="group"
     >
       <ol>
@@ -34,12 +39,16 @@ export function StageRail({ stage, outcome, rejectedAtStage, compact = false }: 
             ? item === rejectedAtStage
               ? "rejected-at"
               : "rejected"
+            : terminal
+              ? item === stage
+                ? "terminal-at"
+                : "terminal"
             : index < currentIndex
               ? "complete"
               : item === stage
                 ? "current"
                 : "upcoming";
-          const status = state === "rejected-at" ? `Rejected at ${labels[item]}` : {
+          const status = state === "rejected-at" ? `Rejected at ${labels[item]}` : state === "terminal-at" ? `${outcomeLabels[outcome!]} at ${labels[item]}` : state === "terminal" ? outcomeLabels[outcome!] : {
             complete: "Completed",
             current: "Current stage",
             upcoming: "Upcoming",
@@ -49,7 +58,7 @@ export function StageRail({ stage, outcome, rejectedAtStage, compact = false }: 
           return (
             <li data-state={state} key={item} style={{ "--stage-color": `var(--stage-${index + 1})` } as React.CSSProperties}>
               <span aria-hidden="true" className="stage-rail__mark" />
-              <span aria-current={!rejected && item === stage ? "step" : undefined} className="stage-rail__label">
+              <span aria-current={!terminal && item === stage ? "step" : undefined} className="stage-rail__label">
                 {labels[item]}
                 <span className="sr-only">, {status}</span>
               </span>

@@ -46,6 +46,13 @@ it("orders invalid timestamps after valid timestamps by identifier", () => {
   expect(state).toMatchObject({ stage: "interview", outcome: null });
 });
 
+it("ignores accepted manual correction markers when deriving materialized state", () => {
+  expect(deriveApplicationState([
+    { id: "applied", applicationId: "a1", at: "2026-09-01T00:00:00Z", toStage: "applied", origin: "manual", accepted: true },
+    { id: "undo", applicationId: "a1", at: "2026-09-02T00:00:00Z", origin: "manual", accepted: true, revertsEventId: "interview" },
+  ])).toEqual({ stage: "applied", outcome: null });
+});
+
 it("only auto-applies confident non-terminal non-manual events", () => {
   expect(canAutoApply({ id: "e1", applicationId: "a1", at: "2026-09-01T08:00:00Z", toStage: "review", origin: "gmail", accepted: false, confidence: 0.9 })).toBe(true);
   expect(canAutoApply({ id: "e2", applicationId: "a1", at: "2026-09-01T08:00:00Z", outcome: "rejected", origin: "gmail", accepted: false, confidence: 1 })).toBe(false);

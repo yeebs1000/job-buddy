@@ -17,12 +17,23 @@ async function materialize(application: StoredApplication): Promise<PersistedApp
 
 export const applicationRepository = {
   async list(): Promise<PersistedApplication[]> {
-    return Promise.all((await jobBuddyDb.applications.orderBy("updatedAt").reverse().toArray()).map(materialize));
+    return Promise.all((await jobBuddyDb.applications.orderBy("updatedAt").reverse().toArray()).filter(app => app.demoState !== "hidden").map(materialize));
   },
 
   async get(id: string): Promise<PersistedApplication | undefined> {
     const application = await jobBuddyDb.applications.get(id);
-    return application && materialize(application);
+    return application?.demoState !== "hidden" && application ? materialize(application) : undefined;
+  },
+
+  async findByCanonicalJob(input: { company: string; role: string; jobUrl?: string }): Promise<PersistedApplication | undefined> {
+    const company = canonicalText(input.company);
+    const role = canonicalText(input.role);
+    const jobUrl = canonicalJobUrl(input.jobUrl);
+    const applications = await jobBuddyDb.applications.toArray();
+    const match = applications.find((application) => application.demoState !== "hidden" && canonicalText(application.company) === company
+      && canonicalText(application.role) === role
+      && (!jobUrl || canonicalJobUrl(application.jobUrl) === jobUrl));
+    return match && materialize(match);
   },
 
   async create(input: Application): Promise<PersistedApplication> {
@@ -76,10 +87,36 @@ export const applicationRepository = {
       if (!event) return;
       await jobBuddyDb.stageEvents.update(eventId, { accepted: false });
       const events = await jobBuddyDb.stageEvents.where("applicationId").equals(event.applicationId).toArray();
+      const correctionId = JSON.stringify(["manual-correction", eventId]);
+      if (!events.some((candidate) => candidate.id === correctionId)) {
+        await jobBuddyDb.stageEvents.add({
+          id: correctionId,
+          applicationId: event.applicationId,
+          at: new Date().toISOString(),
+          origin: "manual",
+          accepted: true,
+          revertsEventId: eventId,
+          note: "Manual correction: reverted a prior change.",
+        });
+      }
+      const updatedEvents = await jobBuddyDb.stageEvents.where("applicationId").equals(event.applicationId).toArray();
       await jobBuddyDb.applications.update(event.applicationId, {
-        ...deriveApplicationState(events),
+        ...deriveApplicationState(updatedEvents),
         updatedAt: new Date().toISOString(),
       });
     });
   },
 };
+
+function canonicalText(value: string): string {
+  return value.trim().toLocaleLowerCase("en").replace(/\s+/g, " ");
+}
+
+function canonicalJobUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return undefined;
+    return `${url.origin}${url.pathname}`.replace(/\/$/, "");
+  } catch { return undefined; }
+}

@@ -1,4 +1,5 @@
 import type { ApplicationStage, StageEvent } from "./stage";
+import type { Currency, Market, PayPeriod } from "./research";
 
 export const roleFamilies = ["finance", "software", "data", "cybersecurity", "cloud", "IT"] as const;
 export const workArrangements = ["onsite", "hybrid", "remote"] as const;
@@ -9,14 +10,15 @@ export interface Deadline {
   label: string;
   at: string;
   completed: boolean;
+  links?: string[];
 }
 
 export interface ResearchSnapshot {
   salary?: {
     minimum: number;
     maximum?: number;
-    currency: "SGD" | "HKD";
-    period: "monthly" | "annual";
+    currency: Currency;
+    period: PayPeriod;
   };
   companyRating?: {
     score: number;
@@ -26,6 +28,7 @@ export interface ResearchSnapshot {
 }
 
 export interface Application {
+  demoState?: "hidden" | "retained";
   id: string;
   company: string;
   role: string;
@@ -33,7 +36,7 @@ export interface Application {
   // Optional for records created before the standard-column contract.
   industry?: string;
   roleFamily?: (typeof roleFamilies)[number];
-  market?: "SG" | "HK";
+  market?: Market;
   workArrangement?: (typeof workArrangements)[number];
   priority?: (typeof priorities)[number];
   recruiter?: string;
@@ -45,7 +48,9 @@ export interface Application {
   followUpAt?: string;
   location: {
     city: string;
-    country: "Singapore" | "Hong Kong";
+    country: "Singapore" | "Hong Kong" | "United States";
+    state?: string;
+    metroCode?: string;
   };
   source: string;
   appliedAt: string;

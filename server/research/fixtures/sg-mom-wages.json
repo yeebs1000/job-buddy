@@ -1,0 +1,8 @@
+[
+  ["Ministry of Manpower Occupational Wages 2025"],
+  [],
+  ["Occupation Code", "Occupation", "Industry", "25th Percentile", "Median", "75th Percentile", "Reference Period"],
+  ["2512", "Software developers", "Information and communications", 5200, 6800, 8900, "2025-06"],
+  ["2524", "Cybersecurity professionals", "Information and communications", 5400, 7100, 9400, "2025-06"],
+  ["9999", "Unrelated occupation", "Other", 3000, 4000, 5000, "2025-06"]
+]

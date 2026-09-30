@@ -1,0 +1,41 @@
+.research-panel { display: grid; gap: 1rem; }
+.research-panel fieldset { border: 1px solid var(--color-border, #d2d2d7); border-radius: 14px; display: grid; gap: .75rem; padding: 1rem; }
+.research-panel legend { font-weight: 700; padding: 0 .35rem; }
+.research-panel label:not(.research-check) { display: grid; gap: .35rem; font-weight: 600; }
+.research-panel input, .research-panel select, .research-panel textarea { border: 1px solid var(--color-border, #c7c7cc); border-radius: 10px; font: inherit; padding: .65rem .75rem; }
+.research-panel label.research-check { align-items: center; display: flex; flex-direction: row; gap: .5rem; min-height: 44px; }
+.research-panel .research-check input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0; flex: 0 0 18px; }
+.research-grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.research-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.research-panel button { border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 650; padding: .65rem 1rem; }
+.research-panel button:disabled { cursor: not-allowed; opacity: .5; }
+.research-result { background: color-mix(in srgb, #34c759 8%, white); border: 1px solid color-mix(in srgb, #34c759 32%, #d2d2d7); border-radius: 16px; padding: 1rem; }
+.research-range { color: #0d5f2a; font-size: 1.2rem; font-weight: 750; }
+.research-facts { display: grid; gap: .6rem; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.research-facts div { border-top: 1px solid rgba(0,0,0,.1); padding-top: .5rem; }
+.research-facts dt, .research-help, .research-status, .research-legacy span { color: #56565c; font-size: .86rem; }
+.research-facts dd { margin: .2rem 0 0; }
+.research-error { color: #9b1c1c; }
+.research-legacy { display: grid; gap: .25rem; margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .research-result { animation: research-enter .2s ease-out; } }
+@keyframes research-enter { from { opacity: 0; transform: translateY(4px); } }
+.web-salary { border: 1px solid var(--color-border); border-top: 3px solid var(--color-action); border-radius: var(--radius-sm); padding: 1.25rem; display: grid; gap: 1rem; background: white; min-width: 0; }
+.web-salary h3, .web-salary p { margin: 0; }
+.web-salary header { display: grid; gap: .5rem; }
+.web-salary header p, .web-salary small { color: var(--color-muted); max-width: 76ch; }
+.research-eyebrow { color: var(--color-action); font-size: .8125rem; font-weight: 600; }
+.web-salary__query, .web-salary__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .875rem; border: 0; padding: 0; margin: 0; align-items: end; }
+.web-salary label { display: grid; gap: .4rem; font-size: .875rem; min-width: 0; }
+.web-salary input:not([type="checkbox"]), .web-salary select { width: 100%; min-width: 0; padding: .625rem; border: 1px solid var(--color-border); border-radius: .5rem; background: white; color: var(--color-text); font: inherit; }
+.web-salary__source { border-top: 1px solid var(--color-border); padding-top: .875rem; overflow-wrap: anywhere; }
+.web-salary__source summary { cursor: pointer; color: var(--color-action); font-weight: 600; padding-bottom: .75rem; }
+.web-salary__source[open] > *:not(summary) { margin-bottom: .875rem; }
+.web-salary__source legend { padding: .75rem 0; font-weight: 600; }
+.web-salary__excerpt { white-space: pre-line; font-size: .875rem; max-width: 80ch; line-height: 1.6; }
+.web-salary label.web-salary__confirm, .company-rating-panel label.web-salary__confirm, .research-panel label.web-salary__confirm { display: flex; flex-direction: row; align-items: start; gap: .625rem; margin-top: .875rem; }
+.web-salary__confirm input[type="checkbox"] { width: 18px; height: 18px; min-height: 18px; padding: 0; flex: 0 0 18px; }
+.research-panel .web-salary__query { border: 0; padding: 0; }
+.web-salary__notice { background: var(--color-attention-soft); color: var(--color-attention); padding: .875rem; border-radius: .5rem; font-size: .875rem; }
+.web-salary__estimate { padding: 1rem; border-radius: .75rem; background: var(--color-action-soft); display: grid; justify-items: start; gap: .625rem; }
+.web-salary__estimate > strong { font-size: 1.4rem; }
+.web-salary [role="alert"] { color: #a11b28; overflow-wrap: anywhere; }

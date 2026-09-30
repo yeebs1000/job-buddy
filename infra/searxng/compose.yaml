@@ -1,0 +1,27 @@
+name: job-buddy-search
+services:
+  searxng:
+    # Official multi-platform image resolved on 2026-09-20; updates are explicit.
+    image: docker.io/searxng/searxng@sha256:cd8812607ab73730a0b1a0dc4990223fe1b9e383f6f35947114d0bef7f8bb441
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8088:8080"
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?Use npm run searxng:start}
+      SEARXNG_BASE_URL: http://127.0.0.1:8088/
+      SEARXNG_PORT: "8080"
+      GRANIAN_HOST: "0.0.0.0"
+      FORCE_OWNERSHIP: "false"
+    volumes:
+      - ./settings.yml:/etc/searxng/settings.yml:ro
+      - search-cache:/var/cache/searxng
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    logging:
+      driver: local
+      options:
+        max-size: "5m"
+        max-file: "2"
+volumes:
+  search-cache:

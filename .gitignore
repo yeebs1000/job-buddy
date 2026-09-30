@@ -6,7 +6,11 @@ work/
 # Dependencies and builds
 node_modules/
 dist/
+dist-web/
+dist-extension/
 coverage/
+test-results/
+playwright-report/
 *.tsbuildinfo
 
 # Local databases, imports, and exports
@@ -20,9 +24,27 @@ exports/
 .env
 .env.*
 !.env.example
+.env.local
+oauth-response*.json
+gmail-oauth-response*.json
+google-oauth-token*.json
+gmail-refresh-token*
+
+# Local companion data accidentally copied from %LOCALAPPDATA%
+JobBuddy/
+LocalAppData/JobBuddy/
+AppData/Local/JobBuddy/
 
 # Editors and operating systems
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local extension signing material and release packages
+*.pem
+*.key
+*.p12
+*.pfx
+*.crx
+release-artifacts/

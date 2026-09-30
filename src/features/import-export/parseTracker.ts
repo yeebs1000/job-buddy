@@ -1,9 +1,10 @@
-import type { WorkBook } from "xlsx";
 import { z } from "zod";
 import { priorities, roleFamilies, workArrangements, type Application } from "../../domain/application";
 import type { ImportPreview, ImportRow, NormalizedApplication } from "../../domain/import";
 import { applicationStages, type ApplicationOutcome, type ApplicationStage } from "../../domain/stage";
+import { isSafeExternalJobUrl } from "../../domain/jobUrl";
 import { mapHeading, type TrackerField } from "./trackerColumns";
+import { readTrackerWorkbook } from "./excelWorkbook";
 
 const MAX_ROWS = 2000;
 const MAX_COLUMNS = 80;
@@ -56,16 +57,17 @@ function boolean(value: unknown, label: string, errors: string[]): boolean | und
   if (["false", "no", "0", "n"].includes(key(value))) return false;
   errors.push(`${label} must be yes/no or true/false.`); return undefined;
 }
-const schema = z.object({ company: z.string().min(1, "Company is required."), role: z.string().min(1, "Role is required."), source: z.string().min(1, "Source is required."), location: z.object({ city: z.string().min(1, "Location is required.") }), discipline: z.enum(["finance", "software_it"]), market: z.enum(["SG", "HK"]), stage: z.enum(applicationStages).nullable(), roleFamily: z.enum(roleFamilies).optional(), workArrangement: z.enum(workArrangements).optional(), priority: z.enum(priorities).optional() });
+const schema = z.object({ company: z.string().min(1, "Company is required."), role: z.string().min(1, "Role is required."), source: z.string().min(1, "Source is required."), location: z.object({ city: z.string().min(1, "Location is required.") }), discipline: z.enum(["finance", "software_it"]), market: z.enum(["SG", "HK", "US"]), stage: z.enum(applicationStages).nullable(), roleFamily: z.enum(roleFamilies).optional(), workArrangement: z.enum(workArrangements).optional(), priority: z.enum(priorities).optional() });
 function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: number): ImportRow {
   const errors: string[] = [], warnings: string[] = [];
+  const escaped = text(values.escaped).split(";");
   const get = (field: TrackerField) => {
     const raw = String(values[field] ?? "");
-    const restored = values.escaped === "apostrophe-v1" && /^'(?:[\s]*[=+@\-]|[\t\r'])/.test(raw) ? raw.slice(1) : raw;
+    const restored = escaped.includes("apostrophe-v1") && /^'(?:[\s]*[=+@\-]|[\t\r'])/.test(raw) ? raw.slice(1) : raw;
     return field === "notes" ? restored : restored.trim();
   };
   const marketKey = key(values.market || values.city);
-  const market = ["sg", "singapore"].includes(marketKey) ? "SG" : ["hk", "hong kong", "hongkong"].includes(marketKey) ? "HK" : undefined;
+  const market = ["sg", "singapore"].includes(marketKey) ? "SG" : ["hk", "hong kong", "hongkong"].includes(marketKey) ? "HK" : ["us", "usa", "united states", "united states of america"].includes(marketKey) ? "US" : undefined;
   const rawFamily = key(values.roleFamily);
   const roleFamily = (rawFamily === "it" ? "IT" : rawFamily === "software engineering" ? "software" : rawFamily || undefined) as Application["roleFamily"];
   const discipline = (get("discipline") || (roleFamily ? roleFamily === "finance" ? "finance" : "software_it" : "")) as Application["discipline"];
@@ -73,8 +75,12 @@ function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: nu
   const currentOutcome = outcome(values.outcome) ?? outcome(values.stage);
   if (get("outcome") && key(values.outcome) !== "active" && !outcome(values.outcome)) errors.push("Outcome is not recognized.");
   if (!currentStage && key(values.stage) !== "not started") errors.push("Stage is required; use Not started when no stage was reached. Terminal statuses also need the reached stage in a separate Stage column.");
-  const normalized: NormalizedApplication = { company: get("company"), role: get("role"), discipline, market, location: { city: get("city"), country: market === "SG" ? "Singapore" : "Hong Kong" }, source: get("source"), appliedAt: date(values.appliedAt, "Applied date", errors, true) ?? "", stage: currentStage, outcome: currentOutcome, tags: [...new Set(get("tags").split(/[;,]/).map(v => v.trim()).filter(Boolean))], deadlines: [] };
-  if (!market) errors.push("Market is required: SG/Singapore or HK/Hong Kong.");
+  const tags = get("tags").split(escaped.includes("tag-uri-v1") ? ";" : /[;,]/).map(value => value.trim()).filter(Boolean).map(value => {
+    if (!escaped.includes("tag-uri-v1")) return value;
+    try { return decodeURIComponent(value); } catch { return value; }
+  });
+  const normalized: NormalizedApplication = { company: get("company"), role: get("role"), discipline, market, location: { city: get("city"), country: market === "SG" ? "Singapore" : market === "HK" ? "Hong Kong" : "United States" }, source: get("source"), appliedAt: date(values.appliedAt, "Applied date", errors, true) ?? "", stage: currentStage, outcome: currentOutcome, tags: [...new Set(tags)], deadlines: [] };
+  if (!market) errors.push("Market is required: SG/Singapore, HK/Hong Kong or US/United States.");
   if (!discipline) errors.push("Role Family or Discipline is required (finance, software, data, cybersecurity, cloud or IT).");
   if (roleFamily) normalized.roleFamily = roleFamily;
   for (const field of ["industry", "workArrangement", "priority", "recruiter", "notes", "interviewSubtype"] as const) if (get(field)) Object.assign(normalized, { [field]: ["workArrangement", "priority", "interviewSubtype"].includes(field) ? key(get(field)) : get(field) });
@@ -82,16 +88,16 @@ function normalize(values: Partial<Record<TrackerField, unknown>>, sourceRow: nu
   const followUpAt = date(values.followUpAt, "Follow up", errors); if (followUpAt) normalized.followUpAt = followUpAt;
   if (get("targetStage")) { const target = stage(values.targetStage); if (target) normalized.targetStage = target; else errors.push("Target stage is invalid."); }
   if (normalized.interviewSubtype && !["phone", "video", "technical", "case", "onsite", "final"].includes(normalized.interviewSubtype)) errors.push("Interview type is invalid.");
-  if (get("jobUrl")) { try { const url = new URL(get("jobUrl")); if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) throw new Error(); normalized.jobUrl = get("jobUrl"); } catch { warnings.push("Link is not a valid http/https URL and will be omitted."); } }
+  if (get("jobUrl")) { if (isSafeExternalJobUrl(get("jobUrl"))) normalized.jobUrl = get("jobUrl"); else warnings.push("Link is not a valid http/https URL and will be omitted."); }
   const salaryText = get("salary");
   if (["salary", "salaryMax", "currency", "period"].some(f => get(f as TrackerField))) {
-    const range = salaryText.toUpperCase().replace(/SGD|HKD|S\$|HK\$/g, "").replace(/,/g, "").trim().split(/\s*[–—-]\s*/);
+    const range = salaryText.toUpperCase().replace(/SGD|HKD|USD|S\$|HK\$|US\$/g, "").replace(/,/g, "").trim().split(/\s*[–—-]\s*/);
     const minimum = range[0] ? Number(range[0]) : NaN;
     const maxText = get("salaryMax") || range[1]; const maximum = maxText ? Number(maxText.replace(/,/g, "")) : undefined;
-    const currency = (get("currency").toUpperCase() || (salaryText.match(/SGD|HKD/i)?.[0].toUpperCase()) || (salaryText.includes("HK$") ? "HKD" : salaryText.includes("S$") ? "SGD" : "")) as "SGD" | "HKD";
+    const currency = (get("currency").toUpperCase() || (salaryText.match(/SGD|HKD|USD/i)?.[0].toUpperCase()) || (salaryText.includes("HK$") ? "HKD" : salaryText.includes("S$") ? "SGD" : salaryText.includes("US$") ? "USD" : "")) as "SGD" | "HKD" | "USD";
     const periodKey = key(values.period); const period = (["yearly", "year", "per year"].includes(periodKey) ? "annual" : ["month", "per month"].includes(periodKey) ? "monthly" : periodKey) as "monthly" | "annual";
     if (!Number.isFinite(minimum) || minimum < 0 || (maximum !== undefined && (!Number.isFinite(maximum) || maximum < minimum)) || range.length > 2) errors.push("Salary must be a non-negative amount or ascending range.");
-    else if (!["SGD", "HKD"].includes(currency) || !["monthly", "annual"].includes(period)) errors.push("Salary needs an explicit SGD/HKD currency and monthly/annual pay period.");
+    else if (!["SGD", "HKD", "USD"].includes(currency) || !["monthly", "annual"].includes(period)) errors.push("Salary needs an explicit SGD/HKD/USD currency and monthly/annual pay period.");
     else normalized.research = { salary: { minimum, ...(maximum !== undefined ? { maximum } : {}), currency, period } };
   }
   if (["rating", "ratingOutOf", "ratingSource"].some(f => get(f as TrackerField))) {
@@ -123,24 +129,18 @@ export async function parseTracker(file: File, existing: Pick<Application, "comp
     let content: string; try { content = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { throw new Error("CSV must use UTF-8 encoding."); }
     grid = readCsv(content.replace(/^\uFEFF/, ""));
   } else {
-    if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) throw new Error("This is not a valid .xlsx workbook.");
-    const XLSX = await import("xlsx");
-    let book: WorkBook;
-    try { book = XLSX.read(bytes, { type: "array", cellFormula: true, bookVBA: true, cellHTML: false, bookDeps: false }); } catch { throw new Error("Could not read this .xlsx workbook."); }
-    if (book.vbaraw) throw new Error("Macro content is not supported. Export a values-only workbook.");
-    const date1904 = Boolean(book.Workbook?.WBProps?.date1904);
+    const book = await readTrackerWorkbook(bytes);
+    const date1904 = book.date1904;
     serialDate = value => {
-      const parts = XLSX.SSF.parse_date_code(value, { date1904 });
-      return parts ? `${parts.y}-${String(parts.m).padStart(2, "0")}-${String(parts.d).padStart(2, "0")}T${String(parts.H).padStart(2, "0")}:${String(parts.M).padStart(2, "0")}:${String(parts.S).padStart(2, "0")}Z` : value;
+      const offset = date1904 ? 24_107 : 25_569;
+      const result = new Date((value - offset) * 86_400_000);
+      return Number.isFinite(result.getTime()) ? result.toISOString() : value;
     };
-    for (const sheet of Object.values(book.Sheets)) {
-      for (const [address, cell] of Object.entries(sheet)) if (!address.startsWith("!") && cell && typeof cell === "object" && "f" in cell) throw new Error("Workbook formulas are not supported. Export values only.");
-      if (sheet["!ref"]) { const range = XLSX.utils.decode_range(sheet["!ref"]); if (range.e.r >= MAX_ROWS + 1 || range.e.c >= MAX_COLUMNS) throw new Error("Use at most 2,000 rows and 80 columns per sheet."); }
-    }
-    const sheet = book.Sheets[book.SheetNames[0]];
+    for (const sheet of book.worksheets) if (sheet.rows.length > MAX_ROWS + 1 || sheet.rows.some((row) => row.length > MAX_COLUMNS)) throw new Error("Use at most 2,000 rows and 80 columns per sheet.");
+    const sheet = book.worksheets[0];
     if (!sheet) throw new Error("The workbook is empty.");
-    if (book.SheetNames.length > 1) warnings.push(`Only the first worksheet (${book.SheetNames[0]}) is previewed.`);
-    grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: "", blankrows: true, range: 0 });
+    if (book.worksheets.length > 1) warnings.push(`Only the first worksheet (${sheet.name}) is previewed.`);
+    grid = sheet.rows;
   }
   const headerIndex = grid.findIndex(row => row.some(v => text(v)));
   if (headerIndex < 0) throw new Error("The file is empty.");

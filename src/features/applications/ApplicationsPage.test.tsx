@@ -2,7 +2,8 @@ import "fake-indexeddb/auto";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it } from "vitest";
+import { seedDemoData } from "../../db/seed";
 import { jobBuddyDb } from "../../db/database";
 import { applicationRepository } from "../../db/applicationRepository";
 import { savedViewRepository } from "../../db/viewRepository";
@@ -10,6 +11,7 @@ import { ApplicationsPage } from "./ApplicationsPage";
 import { appRoutes } from "../../app/routes";
 
 afterEach(async () => { cleanup(); await jobBuddyDb.delete(); await jobBuddyDb.open(); });
+beforeEach(() => seedDemoData()); // Fixtures are explicit test setup, never production startup.
 function renderPage(path = "/applications") {
   const router = createMemoryRouter([{ path: "/applications", element: <ApplicationsPage /> }], { initialEntries: [path] });
   render(<RouterProvider router={router} />);
@@ -42,24 +44,33 @@ it("persists keyboard-friendly inline stage, priority and tag edits", async () =
   expect(screen.getByLabelText("Stage for Riverbank Partners")).toBeDisabled();
 });
 
-it("applies bulk updates only to selected visible rows and archives them", async () => {
+it.each([
+  { label: "Bulk priority", value: "high", button: "Set priority", expected: { priority: "high" } },
+  { label: "Bulk stage", value: "assessment", button: "Set stage", expected: { stage: "assessment" } },
+  { label: "Bulk tag", value: "shortlist", button: "Add tag", expected: { tags: expect.arrayContaining(["shortlist"]) } },
+])("applies $label only to selected visible rows", async ({ label, value, button, expected }) => {
+  const user = userEvent.setup(); renderPage(); await ready();
+  const untouched = await applicationRepository.get("app-pine-assessment");
+  await user.click(screen.getByLabelText("Select Aurora Ledger Pte Ltd"));
+  await user.click(screen.getByLabelText("Select Circuit Harbour Ltd"));
+  if (label === "Bulk tag") {
+    await user.click(screen.getByLabelText(label)); await user.paste(value);
+  } else await user.selectOptions(screen.getByLabelText(label), value);
+  await user.click(screen.getByRole("button", { name: button }));
+  await waitFor(async () => {
+    for (const id of ["app-aurora-applied", "app-circuit-review"]) expect(await applicationRepository.get(id)).toMatchObject(expected);
+  });
+  expect(await applicationRepository.get("app-pine-assessment")).toEqual(untouched);
+});
+
+it("archives only selected rows and retains access through the archived filter", async () => {
   const user = userEvent.setup(); renderPage(); await ready();
   await user.click(screen.getByLabelText("Select Aurora Ledger Pte Ltd"));
   await user.click(screen.getByLabelText("Select Circuit Harbour Ltd"));
-  await user.selectOptions(screen.getByLabelText("Bulk priority"), "high");
-  await user.click(screen.getByRole("button", { name: "Set priority" }));
-  await waitFor(async () => expect((await applicationRepository.get("app-circuit-review"))?.priority).toBe("high"));
-  await waitFor(() => expect(screen.getByLabelText("Bulk stage")).toBeEnabled());
-  await user.selectOptions(screen.getByLabelText("Bulk stage"), "assessment");
-  await user.click(screen.getByRole("button", { name: "Set stage" }));
-  await waitFor(async () => expect((await applicationRepository.get("app-circuit-review"))?.stage).toBe("assessment"));
-  await waitFor(() => expect(screen.getByLabelText("Bulk tag")).toBeEnabled());
-  await user.type(screen.getByLabelText("Bulk tag"), "shortlist");
-  await user.click(screen.getByRole("button", { name: "Add tag" }));
-  await waitFor(async () => expect((await applicationRepository.get("app-aurora-applied"))?.tags).toContain("shortlist"));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Archive selected" })).toBeEnabled());
   await user.click(screen.getByRole("button", { name: "Archive selected" }));
   await waitFor(() => expect(screen.queryByRole("link", { name: "Investment Analyst" })).not.toBeInTheDocument());
+  expect(screen.queryByRole("link", { name: "Software Engineer" })).not.toBeInTheDocument();
+  for (const id of ["app-aurora-applied", "app-circuit-review"]) expect((await applicationRepository.get(id))?.archived).toBe(true);
   expect((await applicationRepository.get("app-pine-assessment"))?.archived).not.toBe(true);
   await user.click(screen.getByText("More filters"));
   await user.click(screen.getByLabelText("Include archived"));
@@ -88,17 +99,16 @@ it("restores saved filters, sorting and columns without overwriting an edited re
 it("opens the new query form and persists a research-free application and initial event", async () => {
   const user = userEvent.setup(); const router = renderPage("/applications?new=1"); await ready();
   const form = within(screen.getByRole("form", { name: "New application" }));
-  await user.type(form.getByLabelText("Company"), "New Company");
-  await user.type(form.getByLabelText("Role"), "Cloud Graduate");
-  await user.type(form.getByLabelText("Industry"), "Technology");
+  // These test persistence, not keystroke handling; paste through real input events.
+  for (const [label, value] of [["Company", "New Company"], ["Role", "Cloud Graduate"], ["Industry", "Technology"], ["Source", "Referral"], ["Tags", "graduate, cloud"]]) {
+    await user.click(form.getByLabelText(label)); await user.paste(value);
+  }
   await user.selectOptions(form.getByLabelText("Market"), "HK");
   await user.selectOptions(form.getByLabelText("Role family"), "cloud");
   await user.selectOptions(form.getByLabelText("Work arrangement"), "hybrid");
-  await user.type(form.getByLabelText("Source"), "Referral");
   await user.clear(form.getByLabelText("Applied date")); await user.type(form.getByLabelText("Applied date"), "2026-09-10");
   await user.selectOptions(form.getByLabelText("Stage"), "review");
   await user.selectOptions(form.getByLabelText("Priority"), "high");
-  await user.type(form.getByLabelText("Tags"), "graduate, cloud");
   await user.click(form.getByRole("button", { name: "Create application" }));
   expect(await screen.findByRole("link", { name: "Cloud Graduate" })).toBeInTheDocument();
   const created = (await applicationRepository.list()).find(a => a.company === "New Company")!;
@@ -161,8 +171,8 @@ it("removes an archived application from overview counts and attention while ret
   await user.click(screen.getByRole("button", { name: "Archive selected" }));
   await waitFor(() => expect(screen.queryByRole("link", { name: "Investment Analyst" })).not.toBeInTheDocument());
   await user.click(screen.getByRole("link", { name: "Overview" }));
-  const overview = await screen.findByRole("region", { name: "Portfolio overview" });
-  expect(within(overview).getByText("7 applications")).toBeInTheDocument();
+  const overview = await screen.findByRole("region", { name: "Your pipeline" });
+  expect(within(overview).getByText(/7 applications/)).toBeInTheDocument();
   expect(within(overview).getByText("Applied").parentElement).toHaveTextContent("Applied0");
   expect(screen.queryByTestId("application-row-app-aurora-applied")).not.toBeInTheDocument();
   await user.click(screen.getByRole("link", { name: "Applications" }));

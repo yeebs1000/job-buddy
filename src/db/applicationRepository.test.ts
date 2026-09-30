@@ -46,9 +46,19 @@ describe("applicationRepository", () => {
     });
 
     await applicationRepository.undoEvent("event-offer");
+    await applicationRepository.undoEvent("event-offer");
 
     expect(await jobBuddyDb.stageEvents.get("event-offer")).toMatchObject({ accepted: false });
-    expect((await applicationRepository.get(sampleApplications[4].id))?.stage).toBe("final");
+    const application = await applicationRepository.get(sampleApplications[4].id);
+    expect(application?.stage).toBe("final");
+    expect(application?.stageEvents.filter((event) => event.revertsEventId === "event-offer")).toEqual([
+      expect.objectContaining({
+        id: JSON.stringify(["manual-correction", "event-offer"]),
+        origin: "manual",
+        accepted: true,
+        revertsEventId: "event-offer",
+      }),
+    ]);
   });
 
   it("rejects an accepted event whose fromStage conflicts with current state", async () => {
@@ -99,5 +109,21 @@ describe("applicationRepository", () => {
     });
 
     expect(await savedViewRepository.get("interviews")).toMatchObject({ name: "Active Interviews" });
+  });
+
+  it("finds a canonical job despite case, spacing, and private URL parameters", async () => {
+    await applicationRepository.create({
+      ...sampleApplications[1],
+      id: "canonical-job",
+      company: " Summit Pay ",
+      role: "Software   Engineer",
+      jobUrl: "https://jobs.example/roles/42",
+    });
+
+    expect(await applicationRepository.findByCanonicalJob({
+      company: "summit pay",
+      role: " software engineer ",
+      jobUrl: "https://jobs.example/roles/42?candidate=private#apply",
+    })).toMatchObject({ id: "canonical-job" });
   });
 });

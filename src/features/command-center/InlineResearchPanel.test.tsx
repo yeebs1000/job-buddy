@@ -1,0 +1,50 @@
+import "fake-indexeddb/auto";
+import { StrictMode } from "react";
+import { MemoryRouter } from "react-router-dom";
+import { render, screen, cleanup, waitFor, act } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, it, expect, vi } from "vitest";
+import { SalarySummary } from "./SalarySummary";
+import { sampleApplications } from "../../fixtures/sampleApplications";
+import { jobBuddyDb } from "../../db/database";
+import { webSalaryRepository } from "../research/webSalaryRepository";
+afterEach(async () => { cleanup(); vi.unstubAllGlobals(); await jobBuddyDb.delete(); await jobBuddyDb.open(); });
+it("offers one search control and keeps it locked until salary and rating searches finish", async () => {
+  const responses: Array<(response: Response) => void> = [];
+  vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(resolve => responses.push(resolve))));
+  render(<MemoryRouter><SalarySummary application={sampleApplications[0]} /></MemoryRouter>);
+  await userEvent.click(await screen.findByRole("button", { name: "Refresh research" }));
+  await screen.findByRole("heading", { name: "Find a salary range on the web" });
+  expect(screen.queryByRole("button", { name: "Search web salaries" })).not.toBeInTheDocument();
+  await act(async () => { responses[0](Response.json({ results: [], searchedAt: "2026-09-26T00:00:00.000Z" })); });
+  await waitFor(() => expect(responses).toHaveLength(2));
+  expect(screen.getByRole("button", { name: "Researching…" })).toBeDisabled();
+  await act(async () => { responses[1](Response.json({ results: [], searchedAt: "2026-09-26T00:00:00.000Z" })); });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Refresh research" })).toBeEnabled());
+});
+it("refreshes salary and rating inline only after a click, even in StrictMode", async () => {
+  const fetcher = vi.fn().mockImplementation(async () => Response.json({ results: [], searchedAt: "2026-09-26T00:00:00.000Z" }));
+  vi.stubGlobal("fetch", fetcher);
+  render(<StrictMode><MemoryRouter><SalarySummary application={sampleApplications[0]} /></MemoryRouter></StrictMode>);
+  expect(fetcher).not.toHaveBeenCalled();
+  await userEvent.click(await screen.findByRole("button", { name: "Refresh research" }));
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(fetcher.mock.calls.map(call => JSON.parse(call[1].body).purpose)).toEqual(["salary", "company-rating"]);
+  expect(await screen.findByRole("heading", { name: "Company employee rating" })).toBeVisible();
+  expect(screen.queryByRole("link", { name: "Research salary" })).not.toBeInTheDocument();
+});
+it("shows imported values and retains them when refresh fails", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => Response.json({ error: { code: "web-search-invalid-key" } }, { status: 503 })));
+  render(<MemoryRouter><SalarySummary application={{ ...sampleApplications[0], research: { salary: { minimum: 60000, maximum: 90000, currency: "HKD", period: "annual" }, companyRating: { score: 4.2, outOf: 5, source: "Example employee reviews" } } }} /></MemoryRouter>);
+  expect(await screen.findByText(/60,000.*90,000/)).toBeVisible();
+  expect(screen.getByText(/4.2.*5/)).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Refresh research" }));
+  expect((await screen.findAllByRole("alert"))[0]).toHaveTextContent(/did not accept/);
+  expect(screen.getByText(/60,000.*90,000/)).toBeVisible();
+});
+it("flags saved salary from previous application details", async () => {
+  const app = sampleApplications[0];
+  await webSalaryRepository.save({ id: app.id, query: { company: "Previous employer", role: "Analyst", location: "Hong Kong" }, savedAt: "2026-09-26T00:00:00.000Z", currency: "HKD", basis: "base", evidence: [{ title: "Pay", url: "https://example.com/pay", excerpt: "Pay range", retrievedAt: "2026-09-26T00:00:00.000Z", minimum: 60000, maximum: 90000, currency: "HKD", period: "annual", basis: "base", match: "company-role", confirmed: true }] });
+  render(<MemoryRouter><SalarySummary application={app} /></MemoryRouter>);
+  expect(await screen.findByText(/previous application details/i)).toBeVisible();
+});

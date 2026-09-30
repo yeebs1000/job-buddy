@@ -1,0 +1,15 @@
+.backup-controls { display: grid; gap: 1.5rem; padding: 1.5rem; border: 1px solid var(--color-border, #cdd5e1); border-radius: 1rem; background: var(--color-surface, #fff); }
+.backup-controls h2, .backup-controls h3 { margin: 0 0 .5rem; }
+.backup-controls p { max-width: 72ch; line-height: 1.6; }
+.backup-controls fieldset { min-width: 0; margin: 0; padding: 1rem 0; border: 0; border-top: 1px solid var(--color-border, #cdd5e1); display: grid; gap: 1rem; }
+.backup-controls legend { font-weight: 650; padding: 0 .5rem 0 0; }
+.backup-controls label { display: grid; gap: .5rem; min-width: 0; }
+.backup-controls input:not([type=checkbox]) { width: 100%; min-width: 0; box-sizing: border-box; font: inherit; padding: .7rem; border: 1px solid var(--color-border, #cdd5e1); border-radius: .6rem; }
+.backup-controls input[type=checkbox] { justify-self: start; }
+.backup-controls__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.backup-controls__actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+.backup-controls button { justify-self: start; max-width: 100%; white-space: normal; }
+.backup-controls__error { color: #a1192f; }
+.backup-controls dl > div { display: flex; flex-wrap: wrap; gap: 1rem; padding: .25rem 0; }
+.backup-controls dd { margin: 0; }
+@media (max-width: 600px) { .backup-controls { padding: 1rem; } .backup-controls__fields { grid-template-columns: 1fr; } }

@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
@@ -8,6 +8,7 @@ import { jobBuddyDb } from "../../db/database";
 import { sampleApplications } from "../../fixtures/sampleApplications";
 import { appRoutes } from "../../app/routes";
 import { ApplicationDetailPage } from "./ApplicationDetailPage";
+import * as detailsService from "./applicationDetails";
 
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); await jobBuddyDb.delete(); await jobBuddyDb.open(); });
 async function createApplication() {
@@ -22,6 +23,107 @@ function renderDetail(path = "/applications/a1", routes: RouteObject[] = [{ path
   return router;
 }
 
+it("edits contact, notes, follow-up and deadlines and reloads the saved values", async () => {
+  await createApplication(); const user = userEvent.setup(); renderDetail();
+  await user.click(await screen.findByRole("button", { name: "Edit details" }));
+  await user.clear(await screen.findByLabelText("Contact / recruiter"));
+  await user.paste("Sam, sam@example.com");
+  await user.clear(screen.getByLabelText("Notes"));
+  await user.paste("Ask about team structure.");
+  fireEvent.change(screen.getByLabelText("Follow-up time"), { target: { value: "2026-10-01T14:30" } });
+  await user.click(screen.getByRole("button", { name: "Add deadline" }));
+  const labels = screen.getAllByLabelText(/Deadline label/);
+  const dates = screen.getAllByLabelText(/Deadline time/);
+  await user.click(labels.at(-1)!); await user.paste("Send portfolio");
+  fireEvent.change(dates.at(-1)!, { target: { value: "2026-10-02T09:00" } });
+  await user.click(screen.getAllByLabelText(/Completed deadline/)[0]);
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(await screen.findByText("Details saved.")).toBeVisible();
+  const saved = await applicationRepository.get("a1");
+  expect(saved).toMatchObject({ recruiter: "Sam, sam@example.com", notes: "Ask about team structure.", followUpAt: "2026-10-01T06:30:00.000Z" });
+  expect(saved?.deadlines[0].completed).toBe(true);
+  expect(saved?.deadlines.at(-1)).toMatchObject({ label: "Send portfolio", at: "2026-10-02T01:00:00.000Z", completed: false });
+  expect(saved?.stageEvents).toHaveLength(2);
+  cleanup(); renderDetail();
+  await user.click(await screen.findByRole("button", { name: "Edit details" }));
+  expect(await screen.findByLabelText("Contact / recruiter")).toHaveValue("Sam, sam@example.com");
+  expect(screen.getByLabelText("Notes")).toHaveValue("Ask about team structure.");
+  expect(screen.getByLabelText("Follow-up time")).toHaveValue("2026-10-01T14:30");
+});
+
+it("cancels an unsaved draft without changing the persisted record", async () => {
+  await createApplication(); const original = await applicationRepository.get("a1");
+  const user = userEvent.setup(); renderDetail();
+  await user.click(await screen.findByRole("button", { name: "Edit details" }));
+  await user.type(await screen.findByLabelText("Notes"), "Unsaved text");
+  await user.click(screen.getByRole("button", { name: "Remove deadline 1" }));
+  expect(await applicationRepository.get("a1")).toEqual(original);
+  await user.click(screen.getByRole("button", { name: "Add deadline" }));
+  await user.click(screen.getByRole("button", { name: "Cancel edits" }));
+  expect(screen.queryByLabelText("Notes")).not.toBeInTheDocument();
+  expect(await applicationRepository.get("a1")).toEqual(original);
+  await user.click(screen.getByRole("button", { name: "Edit details" }));
+  expect(await screen.findByLabelText("Deadline label 1")).toHaveValue("Follow up");
+  await user.click(screen.getByRole("button", { name: "Remove deadline 1" }));
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  await screen.findByText("Details saved.");
+  expect((await applicationRepository.get("a1"))?.deadlines).toEqual([]);
+});
+
+it.each(["open", "save"])("does not replace another application's page when an old editor %s finishes after navigation", async operation => {
+  await createApplication();
+  await applicationRepository.create({ ...sampleApplications[1], id: "a2", stageEvents: [] });
+  const original = (await applicationRepository.get("a1"))!;
+  const user = userEvent.setup(); const router = renderDetail();
+  const edit = await screen.findByRole("button", { name: "Edit details" });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  if (operation === "open") {
+    const get = applicationRepository.get;
+    vi.spyOn(applicationRepository, "get").mockImplementation(id => id === "a1" ? gate.then(() => original) : get(id));
+    await user.click(edit);
+  } else {
+    await user.click(edit);
+    await user.clear(await screen.findByLabelText("Notes"));
+    await user.type(screen.getByLabelText("Notes"), "Saved before navigation");
+    const save = detailsService.saveApplicationDetails;
+    vi.spyOn(detailsService, "saveApplicationDetails").mockImplementation(async (...args) => {
+      const result = await save(...args); await gate; return result;
+    });
+    await user.click(screen.getByRole("button", { name: "Save details" }));
+    await waitFor(async () => expect((await applicationRepository.get("a1"))?.notes).toBe("Saved before navigation"));
+  }
+  await act(async () => { await router.navigate("/applications/a2"); });
+  await screen.findByRole("heading", { name: "Software Engineer" });
+  await act(async () => { release(); await gate; });
+  expect(screen.getByRole("heading", { name: "Software Engineer" })).toBeVisible();
+  expect(screen.queryByLabelText("Notes")).not.toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Edit details" }));
+  expect(await screen.findByLabelText("Contact / recruiter")).toHaveValue("Taylor Ng");
+});
+
+it("retains a draft on storage failure, supports retry and shows a conflict with explicit reload", async () => {
+  await createApplication(); const user = userEvent.setup(); renderDetail();
+  await user.click(await screen.findByRole("button", { name: "Edit details" }));
+  await user.clear(await screen.findByLabelText("Notes"));
+  await user.type(screen.getByLabelText("Notes"), "My draft");
+  vi.spyOn(applicationRepository, "update").mockRejectedValueOnce(new Error("Storage is full"));
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Storage is full");
+  expect(screen.getByLabelText("Notes")).toHaveValue("My draft");
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(await screen.findByText("Details saved.")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Edit details" }));
+  await user.type(await screen.findByLabelText("Notes"), " new draft");
+  await applicationRepository.update("a1", { notes: "Newer saved note" });
+  await user.click(screen.getByRole("button", { name: "Save details" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(/changed/);
+  expect(screen.getByLabelText("Notes")).toHaveValue("My draft new draft");
+  expect((await applicationRepository.get("a1"))?.notes).toBe("Newer saved note");
+  await user.click(screen.getByRole("button", { name: "Discard draft and load latest" }));
+  await waitFor(() => expect(screen.getByLabelText("Notes")).toHaveValue("Newer saved note"));
+});
+
 it("records a manual stage event and exposes undo", async () => {
   await createApplication(); const user = userEvent.setup(); render(<ApplicationDetailPage applicationId="a1" />);
   await user.selectOptions(await screen.findByLabelText("New stage"), "interview");
@@ -33,8 +135,9 @@ it("records a manual stage event and exposes undo", async () => {
   expect((await applicationRepository.eventsFor("a1"))).toContainEqual(expect.objectContaining({ toStage: "interview", origin: "manual", accepted: true, note: "Recruiter confirmed the interview." }));
   await user.click(screen.getByRole("button", { name: "Undo change" }));
   await waitFor(() => expect(screen.getByLabelText("New stage")).toHaveValue("review"));
-  expect(await applicationRepository.eventsFor("a1")).toHaveLength(3);
+  expect(await applicationRepository.eventsFor("a1")).toHaveLength(4);
   expect(screen.getByText("Changed to Interview").closest("li")).toHaveTextContent("Reverted");
+  expect(screen.getByText("Undo recorded")).toBeVisible();
 });
 
 it("undoes the first manual stage update back to no stage while retaining its history", async () => {
@@ -49,7 +152,10 @@ it("undoes the first manual stage update back to no stage while retaining its hi
   await user.click(screen.getByRole("button", { name: "Undo change" }));
   await waitFor(() => expect(screen.getByText("Changed to Interview").closest("li")).toHaveTextContent("Reverted"));
   expect(await applicationRepository.get("a1")).toMatchObject({ stage: null, outcome: null });
-  expect(await applicationRepository.eventsFor("a1")).toEqual([{ ...original, accepted: false }]);
+  expect(await applicationRepository.eventsFor("a1")).toEqual(expect.arrayContaining([
+    { ...original, accepted: false },
+    expect.objectContaining({ origin: "manual", accepted: true, revertsEventId: original.id }),
+  ]));
   expect(screen.getByRole("group", { name: "Application progress" }).querySelector('[aria-current="step"]')).toBeNull();
   expect(screen.getByRole("button", { name: "Undo change" })).toBeDisabled();
 });
@@ -127,6 +233,39 @@ it("renders the actual route parameter and useful available and unavailable sect
   expect(screen.getByText(/No job description/)).toBeVisible();
   await user.click(screen.getByText("Notes & documents"));
   expect(screen.getByText("Ask about the rotation programme.")).toBeVisible();
+});
+
+it.each(["https://careers.example.com/roles/graduate", "http://careers.example.com/roles/graduate"])("renders a persisted %s job URL as a safe external source link", async jobUrl => {
+  await createApplication();
+  await applicationRepository.update("a1", { jobUrl });
+  renderDetail();
+
+  expect(await screen.findByRole("link", { name: "Open job posting" })).toHaveAttribute("href", jobUrl);
+  expect(screen.getByRole("link", { name: "Open job posting" })).toHaveAttribute("target", "_blank");
+  expect(screen.getByRole("link", { name: "Open job posting" })).toHaveAttribute("rel", "noopener noreferrer");
+});
+
+it("renders a persisted safe meeting link for a deadline", async () => {
+  await createApplication();
+  await applicationRepository.update("a1", {
+    deadlines: [{ id: "meeting", label: "Technical interview", at: "2026-09-20T06:00:00.000Z", completed: false, links: ["https://meet.example/interview"] }],
+  });
+  renderDetail();
+
+  const meeting = await screen.findByRole("link", { name: "Open meeting link" });
+  expect(meeting).toHaveAttribute("href", "https://meet.example/interview");
+  expect(meeting).toHaveAttribute("target", "_blank");
+  expect(meeting).toHaveAttribute("rel", "noopener noreferrer");
+});
+
+it.each(["javascript:alert(1)", "https://user:password@careers.example.com/role", "not a url"])("does not turn an unsafe persisted job URL into an external link: %s", async jobUrl => {
+  await createApplication();
+  await applicationRepository.update("a1", { jobUrl });
+  renderDetail();
+
+  await screen.findByRole("heading", { name: "Investment Analyst" });
+  expect(screen.queryByRole("link", { name: "Open job posting" })).not.toBeInTheDocument();
+  expect(screen.getByText("LinkedIn")).toBeVisible();
 });
 
 it("shows a loading state and a clear not-found state", async () => {

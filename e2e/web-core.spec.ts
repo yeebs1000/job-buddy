@@ -1,0 +1,108 @@
+import { expect, test } from "@playwright/test";
+
+test("web core, resume and encrypted transfer work without any companion", async ({ page, context }) => {
+  test.setTimeout(90_000);
+  const apiCalls: string[] = [];
+  const unexpectedRequests: string[] = [];
+  context.on("request", request => {
+    const target = new URL(request.url());
+    if (["http:", "https:"].includes(target.protocol) && (request.method() !== "GET" || !["http://127.0.0.1:4174", "http://127.0.0.1:4175"].includes(target.origin))) unexpectedRequests.push(`${request.method()} ${target.origin}${target.pathname}`);
+  });
+  const scripts: Promise<number>[] = [];
+  await context.route("**/api/**", route => { apiCalls.push(route.request().url()); return route.abort(); });
+  page.on("response", response => { if (response.request().resourceType() === "script") scripts.push(response.body().then(b => b.length)); });
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Start your tracker" })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  const bytes = (await Promise.all(scripts)).reduce((sum, size) => sum + size, 0);
+  expect(bytes).toBeLessThan(700_000);
+  await test.info().attach("web-startup-bytes", { body: String(bytes), contentType: "text/plain" });
+
+  await page.getByRole("link", { name: "Profile", exact: true }).click();
+  await page.getByLabel("First name", { exact: true }).fill("Synthetic");
+  await page.getByRole("button", { name: "Import resume", exact: true }).click();
+  await page.getByLabel("Paste resume text").fill("Synthetic Candidate\nfixture@example.com");
+  await page.getByRole("button", { name: "Review extracted details" }).click();
+  const includeEmail = page.getByRole("checkbox", { name: "Include Email", exact: true });
+  await includeEmail.check();
+  await page.getByRole("button", { name: "Apply selected details" }).click();
+  await page.getByRole("button", { name: "Save profile", exact: true }).click();
+  await expect(page.getByText("Profile saved locally.").first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByLabel("First name", { exact: true })).toHaveValue("Synthetic");
+  await expect(page.getByLabel("Email", { exact: true })).toHaveValue("fixture@example.com");
+
+  await page.getByRole("link", { name: "Applications", exact: true }).click();
+  await page.getByRole("button", { name: "Add application", exact: true }).click();
+  const form = page.getByRole("form", { name: "New application" });
+  await form.getByLabel("Company", { exact: true }).fill("Synthetic Employer");
+  await form.getByLabel("Role", { exact: true }).fill("Analyst");
+  await form.getByLabel("Industry", { exact: true }).fill("Finance");
+  await form.getByLabel("Source", { exact: true }).fill("Manual");
+  await form.getByRole("button", { name: "Create application" }).click();
+  await expect(page.getByRole("link", { name: "Analyst", exact: true })).toBeVisible();
+  await page.getByLabel("Export format").selectOption("csv");
+  const csvDownload = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download tracker" }).click();
+  expect((await csvDownload).suggestedFilename()).toMatch(/\.csv$/);
+  await page.getByRole("link", { name: "Analyst", exact: true }).click();
+  await page.getByRole("button", { name: "Edit details", exact: true }).click();
+  await page.getByRole("textbox", { name: "Notes", exact: true }).fill("Transfer this note");
+  await page.getByRole("button", { name: "Save details", exact: true }).click();
+  await expect(page.getByText("Details saved.", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByText("Advanced · encrypted backup and restore", { exact: true }).click();
+  await page.getByLabel("Backup passphrase", { exact: true }).fill("synthetic portable password");
+  await page.getByLabel("Confirm passphrase", { exact: true }).fill("synthetic portable password");
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download encrypted backup" }).click();
+  const downloaded = await downloading;
+  const backupPath = await downloaded.path();
+  expect(backupPath).not.toBeNull();
+
+  const destination = await context.newPage();
+  await destination.goto("http://127.0.0.1:4175/applications");
+  await expect(destination.getByRole("option", { name: "Active Interviews" })).toBeAttached();
+  await destination.getByRole("link", { name: "Settings", exact: true }).click();
+  await destination.getByText("Advanced · encrypted backup and restore", { exact: true }).click();
+  await destination.getByLabel("Backup file", { exact: true }).setInputFiles(backupPath!);
+  await destination.getByLabel("Backup file passphrase", { exact: true }).fill("wrong password");
+  await destination.getByRole("button", { name: "Preview backup" }).click();
+  await expect(destination.getByRole("alert")).toContainText("Check the passphrase");
+  await destination.getByLabel("Backup file passphrase", { exact: true }).fill("synthetic portable password");
+  await destination.getByRole("button", { name: "Preview backup" }).click();
+  await expect(destination.getByLabel("Backup preview")).toContainText("1 application");
+  for (const width of [390, 1440]) {
+    await destination.setViewportSize({ width, height: 1000 });
+    expect(await destination.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await destination.screenshot({ path: `test-results/web-backup-${width}.png`, fullPage: true });
+  }
+  await destination.getByRole("button", { name: "Restore workspace", exact: true }).click();
+  await expect(destination.getByRole("status")).toContainText("Workspace restored");
+  await destination.getByRole("link", { name: "Overview", exact: true }).click();
+  await expect(destination.getByRole("link", { name: "Synthetic Employer", exact: true })).toBeVisible();
+  await destination.getByRole("link", { name: "Profile", exact: true }).click();
+  await expect(destination.getByLabel("First name", { exact: true })).toHaveValue("Synthetic");
+  await destination.reload();
+  await expect(destination.getByLabel("Email", { exact: true })).toHaveValue("fixture@example.com");
+  await destination.getByRole("link", { name: "Settings", exact: true }).click();
+  await destination.getByText("Advanced · encrypted backup and restore", { exact: true }).click();
+  await destination.getByLabel("Backup file", { exact: true }).setInputFiles(backupPath!);
+  await destination.getByLabel("Backup file passphrase", { exact: true }).fill("synthetic portable password");
+  await destination.getByRole("button", { name: "Preview backup" }).click();
+  await destination.getByRole("button", { name: "Restore workspace", exact: true }).click();
+  await expect(destination.getByRole("alert")).toContainText("empty workspace");
+  await destination.getByRole("link", { name: "Profile", exact: true }).click();
+  destination.once("dialog", dialog => dialog.accept());
+  await destination.getByRole("button", { name: "Delete local profile", exact: true }).click();
+  await expect(destination.getByText("Local profile deleted.").first()).toBeVisible();
+  await destination.reload();
+  await expect(destination.getByLabel("Email", { exact: true })).toHaveValue("");
+  await destination.getByRole("link", { name: "Overview", exact: true }).click();
+  await expect(destination.getByRole("link", { name: "Synthetic Employer", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Profile", exact: true }).click();
+  await expect(page.getByLabel("Email", { exact: true })).toHaveValue("fixture@example.com");
+  expect(apiCalls).toEqual([]);
+  expect(unexpectedRequests).toEqual([]);
+});

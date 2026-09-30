@@ -1,0 +1,6 @@
+AREA\tAREA_TITLE\tAREA_TYPE\tPRIM_STATE\tOCC_CODE\tOCC_TITLE\tA_PCT25\tA_MEDIAN\tA_PCT75
+99\tU.S.\t1\t\t15-1252\tSoftware Developers\t100000\t130000\t165000
+06\tCalifornia\t2\tCA\t15-1252\tSoftware Developers\t125000\t160000\t200000
+41860\tSan Francisco-Oakland-Berkeley, CA\t4\tCA\t15-1252\tSoftware Developers\t145000\t185000\t230000
+35620\tNew York-Newark-Jersey City, NY-NJ\t4\tNY\t15-1252\tSoftware Developers\t*\t170000\t210000
+99\tU.S.\t1\t\t13-2051\tFinancial Analysts\t75000\t100000\t135000

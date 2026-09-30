@@ -1,0 +1,9 @@
+Consumer Price Index Monthly Report
+Composite CPI (October 2019 - September 2020 = 100)
+Month Index level
+2025 05 106.7
+2025 06 106.9
+2026 08 108.2
+
+CPI(A) year-on-year percentage change
+2026 08 2.5

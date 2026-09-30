@@ -1,160 +1,123 @@
 # Job Buddy
 
-> A local-first workspace for replacing the job-application spreadsheet.
+A local-first job-application dashboard that replaces the spreadsheet. Turn recruiter emails into reviewed tracker updates, see your next steps, and keep salary evidence alongside each application.
 
-[![Built with React](https://img.shields.io/badge/Built_with-React_19-149eca?logo=react&logoColor=white)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Storage](https://img.shields.io/badge/Storage-Local--first-2ea44f)](#privacy-and-security)
-[![Markets](https://img.shields.io/badge/Markets-Singapore_%2B_Hong_Kong-f59e0b)](#project-status)
-[![Preview](https://img.shields.io/badge/Status-Private_preview-6f42c1)](https://github.com/yeebs1000/job-buddy)
+[![CI](https://github.com/yeebs1000/job-buddy/actions/workflows/ci.yml/badge.svg)](https://github.com/yeebs1000/job-buddy/actions/workflows/ci.yml)
+[中文摘要](README.zh-CN.md) · [Roadmap](ROADMAP.md) · [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Contributing](CONTRIBUTING.md)
 
-[中文文档](README.zh-CN.md)
+## Release status
 
-Job Buddy helps anyone looking for work keep every application, stage change, deadline, interview, follow-up, and note in one place. The first release is designed for Singapore and Hong Kong, with a focus on finance, software engineering, data, cybersecurity, cloud, and general IT roles.
+**Current source candidate: `1.0.0-beta.18`. Windows and macOS end-user downloads are planned, not available yet.**
 
-> [!TIP]
-> **Tiny promise:** Job Buddy may be opinionated about stage history, but it will never silently rewrite your past.
+[Preview the source-beta release notes](docs/releases/v1.0.0-beta.18.md). This preview does not mean the release has been published.
 
-<details>
-<summary>✨ The 30-second tour</summary>
+The target is a downloadable app with a web-style dashboard running locally. No Job Buddy account or hosted backend is planned for V1. End users should not need to install Node, Docker, or run terminal commands. Gmail and online research still need internet access.
 
-1. Import an existing CSV/XLSX tracker or add an application manually.
-2. Filter the table by market, industry, role family, stage, priority, tags, deadlines, and more.
-3. Open a role to update its stage, see the full history, and undo a mistaken change without deleting the audit trail.
-4. Export the current view or your complete tracker whenever you need a backup.
+Today the complete workflow is a developer-run Windows candidate. Persistent Gmail credentials, the profile, and the Tavily key use Windows-only secure storage. macOS needs native secure storage and acceptance testing. Finish V1 functionality first, then build and verify both downloads.
 
-</details>
+See the [launch checklist](docs/releases/v1-launch-checklist.md) and [latest production-server audit](docs/releases/2026-09-30-production-audit.md). Local test results do not establish Google approval, macOS support, or a release-ready installer.
 
-## Project status
+## The main workflow
 
-The local-first core tracker is usable today. It does not require an account, a server, Gmail access, or an AI key.
+1. **Connect Gmail** with read-only consent and scan application mail, including supported forwarded messages.
+2. **Review suggested changes.** Match an existing application or review prefilled details to create one. Save recruiter outreach separately as an opportunity, not a submitted application.
+3. **See the Command Center:** stages, outcomes, deadlines, saved salary ranges, evidence confidence, and attributed employee ratings.
+4. **Keep control.** Correct details, preserve stage history, or import/export an Excel tracker.
 
-The repository is intentionally private while the product and data model are being shaped. The core branch is structured so it can be opened to contributors later without rewriting the local data boundary.
+Gmail scan → review → dashboard is the primary experience. Manual tracking and Excel complement it. Approval is the default. Optional safe auto-updates exclude offers, terminal outcomes, ambiguous matches and conflicts. Job Buddy never sends or deletes emails, and failed live scans never fall back to demo data.
 
-## What is shipped
+## Available in the source candidate
 
-- Command Center with a visual six-stage application journey and an explicit rejected state.
-- Active stages progress from light to vivid green; rejected applications use a constant red rail while retaining the stage reached.
-- Spreadsheet-style Applications workspace with search, filters, sorting, saved views, column visibility, inline edits, bulk actions, archive handling, and manual creation.
-- Application detail pages with deadlines, contacts, notes, research snapshots, chronological stage history, terminal-outcome confirmation, and preserved-event undo.
-- Reviewed CSV/XLSX import with column mapping, normalization, row-level validation, duplicate review, include/exclude controls, and no writes before confirmation.
-- UTF-8 CSV and XLSX export for the current filtered set or the full tracker.
-- Fictional Singapore/Hong Kong demo records covering the supported role families and lifecycle states.
+- Six-stage tracking, rejected/withdrawn outcomes, history, deadlines, notes and contacts.
+- Spreadsheet-style filtering, sorting, saved views, inline edits, bulk actions and archiving.
+- Reviewed CSV/XLSX import/export from the dashboard; no automatic demo inbox or sample applications in new workspaces.
+- Gmail incremental checks, bounded retrieval, partial-scan recovery, duplicate protection and explicit rechecks.
+- Inline Tavily research with reviewed, compatible salary blending and evidence confidence. Employee ratings retain their provider and scale.
+- Official salary benchmarks for supported software/IT occupations in Singapore, Hong Kong and the US. Broader roles can use reviewed web evidence; coverage varies.
+- User-selected Greenhouse/Lever company boards and a separate local shortlist.
+- Local profile and reviewed resume import from text-based PDF, DOCX or pasted text.
+- Optional Chrome/Edge Browser Buddy for guarded autofill and user-confirmed application/salary capture. No final submission.
+- Passphrase-encrypted workspace transfer under Settings → Advanced. Excel exports are flattened snapshots, not full backups.
 
-## Information sources and provenance
+Search results are not guaranteed salary answers. Missing or incomparable evidence stays unresolved rather than becoming a fabricated range. No AI model is connected. See [research limitations](docs/local-search.md).
 
-Job Buddy distinguishes information you enter from information a connector may generate later. In the current release, the `Source` field is user-entered or imported; the app does not log in to any platform or scrape the web.
+## Windows quick start
 
-| Source or platform | Current release | Planned use | Boundary |
-| --- | --- | --- | --- |
-| LinkedIn, company career sites, campus portals, referrals, job boards | Stored as a source label when you add/import an application | Keep the original application source and link | Not connected or scraped by V1 |
-| Gmail / Gmail API | Not connected | Read-only daily scans for recruiter/HR replies, proposed stage changes, interview dates, meeting links, deadlines, and follow-up tasks | OAuth and user approval required; messages should remain local unless explicitly exported |
-| Greenhouse, Workday, Oracle Recruiting, Lever and similar ATSs | Not connected | User-approved autofill and application-link capture where the platform and browser context allow it | No unattended submission or bypass of platform controls is promised |
-| Glassdoor, Levels.fyi, official salary postings, and regional salary datasets | Not connected | Region-specific salary ranges and company-review context for Singapore/Hong Kong | Availability, licensing, freshness, and regional coverage must be verified per source |
-| JobSpy and public job listings | Not connected | Optional job-discovery adapters and deduplication inputs | Discovery data is not application-status truth |
-| User-selected AI provider | Not connected | Interview question generation, email classification proposals, and preparation plans | Future versions may support user-supplied API keys and selectable models; V1 stores no AI credentials |
+For developers and early testers—not the intended end-user installation flow. Use a Node version allowed by `package.json`: Node 22.22.2+ within 22, Node 24.15.0+ within 24, or Node 26+.
 
-Future generated facts are intended to carry their source, region, retrieval time, confidence, and user override. A connector may propose a change; the user remains the authority for the final application stage.
-
-## Roadmap
-
-Roadmap items are planned, not promises of current functionality.
-
-### V1.0 — Core tracker (current)
-
-Local persistence, visual stage tracking, filters and saved views, manual updates with history/undo, reviewed spreadsheet migration, and Singapore/Hong Kong coverage.
-
-### V1.1 — Intelligence layer
-
-Read-only Gmail connection with a daily scan, evidence-backed update proposals, interview/deadline extraction, regional salary and review research, and a preparation workspace for recruiter, technical, case, cultural, and final interviews.
-
-### V2.0 — Application assistant
-
-Profile and document vault, configurable approval versus unrestricted automation modes, user-confirmed autofill assistance for Greenhouse/Workday/Oracle and other supported ATS flows, application checklists, and broader finance, engineering, and IT role coverage.
-
-### V3.0 — Portable and collaborative
-
-More regions, optional encrypted sync, backup/restore across devices, provider adapters, accessibility hardening, and carefully scoped multi-user or mentor workflows.
-
-## Privacy and security
-
-V1 is single-user and local-only. Applications, imported records, events, and saved views live in the browser's IndexedDB. There is no hosted database, Gmail connection, background email scan, AI credential, or remote job scraper in this release.
-
-This is a privacy boundary, not a guarantee against someone who can access the same browser profile or device. Export a backup before clearing site data or changing devices. Never commit real trackers, exports, email bodies, API keys, cookies, or personal data.
-
-CSV and XLSX files are parsed locally. XLSX import is deliberately values-only: formulas, macros, oversized sheets, and workbook formatting are rejected or not preserved. The inherited `xlsx` advisory remains a release risk; the parser accepts explicit local files only, limits input size, and loads the spreadsheet library on demand.
-
-## Quick start
-
-Prerequisites: Node.js 22+ and npm. Playwright's browser journey also needs Chromium.
-
-```bash
-git clone -b feature/job-buddy-core https://github.com/yeebs1000/job-buddy.git
+```powershell
+git clone --branch codex/v1-private-public-repo-launch https://github.com/yeebs1000/job-buddy.git
 cd job-buddy
-npm install
-npm run dev
+npm.cmd ci
+npm.cmd run dev
 ```
 
-Vite prints the local URL, normally [http://localhost:5173](http://localhost:5173).
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). This starts the dashboard and companion together; keep the terminal open.
 
-To run the production preview and quality gates:
+- Keep the same browser and address. `localhost`, `127.0.0.1` and different ports have separate browser storage. Changing address can make records appear missing.
+- If port 5173 or 43117 is occupied, stop only an old Job Buddy instance you recognize. The launcher does not terminate unrelated listeners.
+- Never expose the single-user companion to the internet.
 
-```bash
-npm run build
-npm run preview
-npm test
-npm run typecheck
-npm run test:e2e
+### Gmail
+
+Open **Settings → Set up Gmail** for private-test Desktop OAuth configuration, then **Connect Gmail**. A maintainer-configured public connector still needs applicable Google checks and live-account acceptance. See [Gmail setup and consent recovery](docs/gmail-maintainer-setup.md).
+
+The first scan is bounded; read its summary and continue partial scans when offered. Incremental checks handle newer mail; recent-mail rechecks can revisit classification without duplicating provider messages. Daily scans require an active app session, not a cloud worker.
+
+### Research
+
+Save a Tavily key in **Settings → Research search**, then choose **Refresh research** on an application. Only company, role, location and search purpose are sent—not email bodies, resumes or profiles. The key stays in Windows-encrypted companion storage. No Docker or SearXNG is required. [Setup and usage limits](docs/local-search.md).
+
+### Browser Buddy (optional)
+
+```powershell
+npm.cmd run build:extension
 ```
 
-If Chromium is missing, install it once with `npx playwright install chromium`.
+1. Open `chrome://extensions` or `edge://extensions`, enable Developer mode, and choose **Load unpacked**.
+2. Select the generated `dist-extension` folder, not the repository root or ZIP.
+3. In Job Buddy Settings, choose **Pair browser extension** and enter the one-time code in Buddy.
+4. Grant permission only for the desired job site; keep Approval mode on while testing.
 
-## Reset demo data
+After rebuilding, reload the extension and job-site tab. Autofill needs saved profile answers. Existing answers and sensitive supported fields require review; unsupported fields stay manual. Uploads, credentials, demographic/legal fields, CAPTCHA and final Submit are never automated. Pause or revoke Buddy in Settings to stop access.
 
-When the local database is empty, Job Buddy seeds deterministic, fictional applications. To reset the demo and all locally stored applications, export anything you need first, then clear this site's browser storage/IndexedDB and reload the app. The reset cannot be undone from inside Job Buddy.
+## Data and privacy
+
+Tracker records, reviewed email evidence and research live in this browser's IndexedDB. Windows DPAPI protects saved Gmail credentials, profile and Tavily key in the companion. No Job Buddy backend receives them; connectors call their documented external providers.
+
+Local-first does not protect against someone using your unlocked OS/browser session. Gmail disconnect retains reviewed evidence and tracker history. Profile deletion, extension revocation and clearing browser data are separate actions. Export before clearing site data. Never put real exports, credentials, mail or resumes in GitHub issues.
+
+[Data-flow and deletion map](PRIVACY.md) · [Security reporting](SECURITY.md)
+
+## Development and verification
+
+```powershell
+npx.cmd playwright install chromium msedge
+npm.cmd run check
+npm.cmd run check:web
+npm.cmd audit --omit=dev --audit-level=high
+```
+
+`check` runs unit tests, public-tree checks, TypeScript, builds, client-secret/source guards, and dashboard/extension browser tests. Tests use synthetic records and isolated storage, not your live inbox. Some native credential/browser tests are Windows-specific.
+
+`dev:browser` / `build:web` remains a **core-only engineering preview** on port 5174. It lacks live Gmail, research and extension pairing; it is not the release entry point. Earlier hosted plans are superseded by [the downloadable-app roadmap](ROADMAP.md). Do not switch previews to troubleshoot Gmail.
 
 ## Repository map
 
-```text
-src/domain/                  lifecycle, filters, import contracts
-src/db/                      Dexie schema, migrations, repositories
-src/features/                Command Center, Applications, detail, import/export
-src/components/              shared shell, controls, stage rail
-e2e/                          core browser journey and fictional fixture
-docs/superpowers/specs/      approved product specification
-docs/superpowers/plans/      implementation plans and review checkpoints
-```
+| Path | Purpose |
+| --- | --- |
+| `src/` | Dashboard, local database, email review, tracker and research UI |
+| `server/` | Loopback Gmail, secure storage, research and extension pairing |
+| `extension/` | Optional Buddy and guarded form adapters |
+| `e2e/`, `e2e-extension/` | Synthetic browser acceptance checks |
+| `scripts/` | Launcher, builds and release guards |
+| `docs/releases/` | Dated results and release checklist |
+| `docs/superpowers/` | Historical designs/plans; current direction is in ROADMAP.md |
 
-## Contributing
+## Contributing and roadmap
 
-Keep changes focused and preserve the local-first privacy boundary. Behavior changes should include focused tests and, when user-visible, an end-to-end or accessibility check. Do not add real user data or secrets to fixtures, screenshots, issues, or pull requests.
+[Contributing](CONTRIBUTING.md) explains verification and privacy requirements. [ROADMAP.md](ROADMAP.md) separates V1 blockers from proposed V2 work. Use fictional data in examples; report vulnerabilities privately via [SECURITY.md](SECURITY.md).
 
-Before opening a change, run:
+## Acknowledgements and license
 
-```bash
-npm test
-npm run typecheck
-npm run build
-npm run test:e2e
-```
-
-The product direction is documented in the [design specification](docs/superpowers/specs/2026-09-12-job-buddy-design.md), and the core implementation sequence is in the [core tracker plan](docs/superpowers/plans/2026-09-12-job-buddy-core-tracker.md).
-
-## Acknowledgements
-
-A shoutout to [JobSpy](https://github.com/speedyapply/JobSpy). We adopted several practical ideas from its approach to job-source discovery and field normalization while shaping Job Buddy. Job Buddy's code structure, data model, and local-first implementation are independently built; JobSpy is not a runtime dependency.
-
-## GitHub checklist
-
-- [x] Local-first storage with no account required
-- [x] Singapore and Hong Kong launch coverage
-- [x] CSV/XLSX migration path with review before write
-- [x] Focused unit/component tests and a browser journey
-- [ ] Gmail intelligence and daily recruiter scans
-- [ ] Salary/review research connectors
-- [ ] User-approved autofill assistant
-- [ ] Optional encrypted sync
-
-## License
-
-No license file is included yet. Until a license is added, do not assume permission to reuse or redistribute this code beyond the rights that apply to your copy.
+[JobSpy](https://github.com/speedyapply/JobSpy) inspired practical ideas around job-source discovery and field normalization; it is not a runtime dependency. Job Buddy is [MIT licensed](LICENSE).

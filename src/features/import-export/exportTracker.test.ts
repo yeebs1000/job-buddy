@@ -38,3 +38,12 @@ it("round-trips an application with all prior stage events undone", async () => 
   expect(preview.rows[0].errors).toEqual([]);
   expect(preview.rows[0].normalized).toMatchObject({ stage: null, outcome: null });
 });
+
+it.each(["csv", "xlsx"] as const)("round-trips a tag containing a semicolon in %s while keeping ordinary tags semicolon-separated", async format => {
+  const bytes = await exportTracker([{ ...application, tags: ["R&D; quant", "priority"] }], format);
+  const preview = await parseTracker(new File([bytes], `semicolon.${format}`));
+
+  expect(preview.rows[0].errors).toEqual([]);
+  expect(preview.rows[0].normalized.tags).toEqual(["R&D; quant", "priority"]);
+  if (format === "csv") expect(new TextDecoder().decode(bytes)).toContain("R%26D%3B%20quant;priority");
+});

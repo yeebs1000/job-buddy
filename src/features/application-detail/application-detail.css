@@ -26,7 +26,7 @@
 .application-detail textarea::placeholder { color: #556171; }
 .detail-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 .application-detail .button { min-height: 2.65rem; font-size: .8rem; border-radius: 6px; }
-.application-detail .button--primary { background: #263443; color: white; border-color: #263443; }
+.application-detail .button--primary { background: var(--color-action); color: white; border-color: var(--color-action); }
 .application-detail .button--primary:hover { background: #3a4b5e; }
 .application-detail :disabled { cursor: default; opacity: .65; }
 .detail-confirmation { background: #fff; border: 1px solid #929eac; border-radius: 8px; padding: 1rem; margin-top: 1rem; }
@@ -46,7 +46,19 @@
 .detail-disclosure { border-bottom: 1px solid #bbc3cc; padding: 1rem 0; font-size: .85rem; line-height: 1.6; }
 .detail-disclosure summary { font-weight: 650; cursor: pointer; }
 .detail-error { padding: .8rem; border-left: 3px solid #b42318; background: white; }
+.detail-edit-action { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; margin-bottom: .5rem; }
+.detail-edit-action[hidden] { display: none; }
+.detail-editor { background: white; border: 1px solid var(--color-border, #d6dfeb); border-radius: 12px; padding: 1.25rem; margin: .5rem 0 1.5rem; }
+.detail-editor > .detail-meta { max-width: 75ch; }
+.detail-editor h3 { font-size: .95rem; }
+.detail-editor-deadline { padding: 1rem 0; border-bottom: 1px solid #d6dfeb; }
+.detail-deadline-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .7rem; }
+.application-detail .detail-checkbox { flex-direction: row; align-items: center; margin: 0; min-height: 2.65rem; }
+.application-detail .detail-checkbox input { width: 1.1rem; height: 1.1rem; min-height: 0; padding: 0; accent-color: var(--color-action); }
+.detail-editor-error { color: #8b2118; background: #fff5f4; border: 1px solid #e2b2ab; border-radius: 6px; padding: .8rem; }
 @media (max-width: 48rem) {
+  .detail-editor .detail-form-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .detail-editor { padding: 1rem; }
   .detail-layout { grid-template-columns: 1fr; gap: .5rem; }
   .detail-progress { padding: .65rem; }
   .detail-progress .stage-rail ol { gap: .2rem; }
