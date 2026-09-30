@@ -24,7 +24,7 @@ export function MailOpportunities() {
       <p>{proposal.opportunity!.company || "Employer not specified"}</p>
       {proposal.opportunity!.location && <p>{proposal.opportunity!.location}</p>}
       <p>Recruiter: {proposal.source.fromName || proposal.source.fromAddress}</p>
-      <div className="command-center__actions"><Link to="/updates">Review email evidence</Link><Button variant="secondary" disabled={busy !== null} onClick={() => void remove(proposal.id)}>{busy === proposal.id ? "Removing…" : "Remove from Command Center"}</Button></div>
+      <div className="command-center__actions"><Link to="/updates">Review email evidence</Link><Button variant="secondary" disabled={busy !== null} onClick={() => void remove(proposal.id)}>{busy === proposal.id ? "Removing…" : "Remove from Application Hub"}</Button></div>
     </article>)}
     {error && <p role="alert">{error}</p>}
   </section>;

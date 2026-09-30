@@ -57,7 +57,7 @@ export function WebSalaryPanel({ application, initialSearch, embedded = false }:
   async function save() {
     if (!blend) return;
     setBusy(true); setError("");
-    try { await webSalaryRepository.save({ id: application.id, query: searchQuery, evidence: blend.included, currency, basis, savedAt: new Date().toISOString() }); setMessage("Saved locally. This range now appears in your Command Center."); }
+    try { await webSalaryRepository.save({ id: application.id, query: searchQuery, evidence: blend.included, currency, basis, savedAt: new Date().toISOString() }); setMessage("Saved locally. This range now appears in your Application Hub."); }
     catch { setError("Could not save research. Your previous saved estimate is unchanged."); }
     finally { setBusy(false); }
   }

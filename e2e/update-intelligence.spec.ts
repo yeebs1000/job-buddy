@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
 
 test("scans fixture mail, reviews evidence, and updates an interview deadline", async ({ page }) => {
   // Mock Gmail transport exercises the real production mail path with explicit fixture applications.
-  await expect(page.getByRole("heading", { name: "Application command center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Application Hub" })).toBeVisible();
   await page.getByRole("button", { name: "Scan last 90 days" }).click();
   await page.getByRole("link", { name: /review .*pending update/i }).click();
 

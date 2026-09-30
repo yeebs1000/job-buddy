@@ -86,15 +86,15 @@ it("creates the screenshot application from prefilled email details without rety
   await waitFor(async () => expect((await applicationRepository.list()).find(app => app.company === "BlackRock")).toMatchObject({ stage: "assessment", location: { city: "Singapore", country: "Singapore" } }));
 });
 
-it("saves outreach as an opportunity visible in Command Center without creating an application", async () => {
+it("saves outreach as an opportunity visible in Application Hub without creating an application", async () => {
   await proposal({ match: { applicationId: null, confidence: 0, reasons: ["unmatched"], conflicts: [] },
     source: { ...technicalInterviewMail, subject: "Senior Consultant opportunity - Shanghai", excerpt: "I am reaching out regarding a Senior Consultant opportunity. Your profile could be a strong fit." },
     classification: { kind: "recruiter-outreach", confidence: .7, reasons: ["personal-recruiter-outreach"], evidenceExcerpt: "Opportunity", deadlines: [], links: [], requiresApproval: true } });
   const user = userEvent.setup(); const view = inbox();
-  await user.click(await screen.findByRole("button", { name: "Save to Command Center" }));
+  await user.click(await screen.findByRole("button", { name: "Save to Application Hub" }));
   await user.type(screen.getByLabelText("Opportunity location"), "Shanghai, China");
   await user.click(screen.getByRole("button", { name: "Save opportunity" }));
-  expect(await screen.findByRole("link", { name: "Command Center opportunities" })).toBeVisible();
+  expect(await screen.findByRole("link", { name: "Application Hub opportunities" })).toBeVisible();
   expect(await applicationRepository.list()).toHaveLength(1);
   expect(await updateRepository.listPending()).toHaveLength(0);
   // Opportunities must also remain reachable for a new user with no applications.
@@ -103,7 +103,7 @@ it("saves outreach as an opportunity visible in Command Center without creating 
   render(<MemoryRouter><CommandCenterPage mailAdapter={new FixtureMailAdapter([])} /></MemoryRouter>);
   expect(await screen.findByRole("heading", { name: "Opportunities — not applied" })).toBeVisible();
   expect(await screen.findByText("Shanghai, China")).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Remove from Command Center" }));
+  await user.click(screen.getByRole("button", { name: "Remove from Application Hub" }));
   await waitFor(() => expect(screen.queryByText("Shanghai, China")).not.toBeInTheDocument());
   expect((await updateRepository.get("proposal-1"))?.status).toBe("deferred");
 });
@@ -331,7 +331,7 @@ it("rolls back a failed approval, shows safe feedback, and permits retry", async
   expect((await applicationRepository.get("application-1"))?.stage).toBe("interview");
 });
 
-it("shows scan progress and refreshes the command center deadline after unrestricted simulation", async () => {
+it("shows scan progress and refreshes the Application Hub deadline after unrestricted simulation", async () => {
   let release!: () => void;
   const gate = new Promise<void>((resolve) => { release = resolve; });
   const fixture = new FixtureMailAdapter([technicalInterviewMail]);

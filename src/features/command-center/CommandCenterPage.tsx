@@ -153,7 +153,7 @@ export function CommandCenterPage({ mailAdapter, gmailAdapter = liveMail, gmailS
   }, []);
 
   if (applications === null) {
-    return <div className="command-center"><header className="command-center__header"><div><h1 aria-label="Your application journey">Application command center</h1><p>See what needs your attention across Singapore and Hong Kong.</p></div></header><section aria-busy="true" aria-label="Loading applications"><div className="command-center__skeleton" data-testid="loading-skeleton" /><div className="command-center__skeleton" data-testid="loading-skeleton" /><div className="command-center__skeleton" data-testid="loading-skeleton" /></section></div>;
+    return <div className="command-center"><header className="command-center__header"><div><h1 aria-label="Your application journey">Application Hub</h1><p>See what needs your attention across Singapore and Hong Kong.</p></div></header><section aria-busy="true" aria-label="Loading applications"><div className="command-center__skeleton" data-testid="loading-skeleton" /><div className="command-center__skeleton" data-testid="loading-skeleton" /><div className="command-center__skeleton" data-testid="loading-skeleton" /></section></div>;
   }
 
   if (error) {
@@ -164,7 +164,7 @@ export function CommandCenterPage({ mailAdapter, gmailAdapter = liveMail, gmailS
     const selectedAdapter = mailAdapter ?? gmailAdapter;
     return <section className="command-center">
       {!isWebMode && <>
-        <header className="command-center__header"><div><h1>Application command center</h1><p>Start with your inbox. Scan Gmail, review the evidence, and keep your applications up to date.</p></div></header>
+        <header className="command-center__header"><div><h1>Application Hub</h1><p>Start with your inbox. Scan Gmail, review the evidence, and keep your applications up to date.</p></div></header>
         {integration ? <MailScanStatus adapter={selectedAdapter} onScanned={loadApplications} mode={integration.preferences.automationMode} onModeChange={(mode) => void setScanMode(mode)} gmailStatus={integration.status} preferences={integration.preferences} /> : <section className="command-center__scan command-center__scan--loading" aria-label="Loading inbox source" aria-busy="true" />}
         <MailOpportunities />
       </>}
@@ -180,7 +180,7 @@ export function CommandCenterPage({ mailAdapter, gmailAdapter = liveMail, gmailS
   return (
     <div className="command-center">
       <header className="command-center__header">
-        <div><h1>Application command center</h1><p>{isWebMode ? "See what needs your attention across Singapore, Hong Kong and the United States." : "Scan Gmail, review recruiter updates, and see what needs your attention."}</p></div>
+        <div><h1>Application Hub</h1><p>{isWebMode ? "See what needs your attention across Singapore, Hong Kong and the United States." : "Scan Gmail, review recruiter updates, and see what needs your attention."}</p></div>
         <div className="command-center__actions"><TrackerFileActions onImported={loadApplications} /><Link className={`button button--${isWebMode ? "primary" : "secondary"}`} to="/applications?new=1">Add application</Link></div>
       </header>
 

@@ -6,7 +6,7 @@ import { jobBuddyDb } from "../db/database";
 import { seedDemoData } from "../db/seed";
 
 const routes = [
-  ["/", "Application command center"],
+  ["/", "Application Hub"],
   ["/applications", "Applications"],
   ["/applications/app-aurora-applied", "Investment Analyst"],
   ["/updates", "Updates"],

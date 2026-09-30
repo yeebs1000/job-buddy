@@ -49,7 +49,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("imports, filters, updates, undoes, and exports an application", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "Application command center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Application Hub" })).toBeVisible();
   await page.getByRole("button", { name: "Import Excel" }).click();
   await page.getByLabel("Tracker file").setInputFiles("e2e/fixtures/fresh-grad-tracker.csv");
   await expect(page.getByText("Cedarline Systems")).toBeVisible();
@@ -110,7 +110,7 @@ test("imports, filters, updates, undoes, and exports an application", async ({ p
   expect(xlsxCapture.byteLength).toBeGreaterThan(0);
 });
 
-test("keeps Command Center attention actions readable without horizontal page overflow across responsive widths", async ({ page }) => {
+test("keeps Application Hub attention actions readable without horizontal page overflow across responsive widths", async ({ page }) => {
   for (const width of [390, 768, 800, 820, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");

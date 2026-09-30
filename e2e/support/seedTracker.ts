@@ -21,5 +21,5 @@ export async function seedTracker(page: Page) {
     };
   }), { applications, events });
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Application command center" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Application Hub" })).toBeVisible();
 }

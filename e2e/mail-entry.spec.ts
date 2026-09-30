@@ -33,10 +33,10 @@ test("reviews an application receipt into the tracker and saves outreach separat
   await confirmation.getByRole("button", { name: "Approve update", exact: true }).click();
   await expect(confirmation).toContainText("Review result: Update applied.");
   const opportunity = page.getByRole("article").filter({ hasText: outreach.subject });
-  await opportunity.getByRole("button", { name: "Save to Command Center" }).click();
+  await opportunity.getByRole("button", { name: "Save to Application Hub" }).click();
   await opportunity.getByLabel("Opportunity location").fill("Shanghai, China");
   await opportunity.getByRole("button", { name: "Save opportunity", exact: true }).click();
-  await opportunity.getByRole("link", { name: "Command Center opportunities" }).click();
+  await opportunity.getByRole("link", { name: "Application Hub opportunities" }).click();
   await expect(page.getByRole("heading", { name: "Opportunities — not applied" })).toBeVisible();
   await expect(page.getByText("Shanghai, China", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Morgan Stanley", exact: true })).toBeVisible();
