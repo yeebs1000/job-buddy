@@ -38,10 +38,8 @@ describe.runIf(process.platform === "win32")("development launcher lifecycle", (
     try {
       const pids = await waitForPids(pidsPath, 4);
       for (const pid of pids) spawnedPids.add(pid);
-      await new Promise((done, reject) => {
-        const timer = setTimeout(() => reject(new Error("launcher did not exit")), 5000);
-        launcher.once("exit", () => { clearTimeout(timer); done(); });
-      });
+      // Exit may precede PID discovery; inspect durable state, not a past event.
+      await expect.poll(() => launcher.exitCode, { timeout: 5000 }).toBe(23);
       await expect.poll(() => pids.filter(isRunning), { timeout: 5000 }).toEqual([]);
     } finally {
       // Recover even partial startup records before removing the temporary file.

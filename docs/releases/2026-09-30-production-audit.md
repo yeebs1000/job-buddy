@@ -23,6 +23,10 @@ Before pushing the private preview, `npm.cmd run check` initially finished with 
 
 No timeout or assertion was relaxed. Low available memory was observed, but the rerun does not prove the cause or eliminate timing flakiness. The production dependency audit still reports two moderate ExcelJS/uuid findings and no high/critical findings. Redacted staged-diff scanning found no secrets. The GitHub checks for the new push must be assessed separately; the earlier linked runs are not evidence for it.
 
+## CI follow-up before private publication
+
+Both first GitHub runs for `5fb83a8` failed one test (880/881): the PR run missed the development launcher's exit event, while the branch run timed out in the Windows DPAPI desktop-client round trip. The launcher test registered its exit listener only after asynchronous PID discovery. Forcing exit-code observation before registering that listener reproduced the false failure locally even though the process had exited with the expected code, 23. The test now polls that durable exit code with the same five-second limit and still checks that all descendants stopped. No application runtime code changed. Both affected files then passed locally (4/4); the encryption test was left unchanged, and its CI timeout is not claimed resolved by that local pass.
+
 ## Still not a public V1 download
 
 The [launch checklist](v1-launch-checklist.md) remains open. Native macOS secure storage, packaged launch/shutdown, clean install/upgrade acceptance, real connector acceptance and distribution trust are not implemented or verified by these tests. No stable release, repository visibility change or installer was produced.
